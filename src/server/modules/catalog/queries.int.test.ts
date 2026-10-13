@@ -9,6 +9,7 @@ import {
   descendantIds,
   featuredProducts,
   getProductDetail,
+  listProductsForSitemap,
   loadCategoryIndex,
   searchProducts,
   type CategoryIndex,
@@ -116,6 +117,37 @@ describe("catalogue public (PostgreSQL)", () => {
   it("présente les accessoires compatibles publiés", async () => {
     const router = await getProductDetail(db, index, "demo-routeur-wi-fi-6-double-bande");
     expect(router?.compatible.map((p) => p.slug)).toEqual(["demo-cable-ethernet-cat6-20-m"]);
+  });
+
+  it("affiche la même variante dans la liste et la fiche quand la variante par défaut est désactivée", async () => {
+    const slug = "demo-ordinateur-portable-15-pouces-pro";
+    await db.productVariant.update({ where: { sku: "DEMO-DT15P-8" }, data: { isActive: false } });
+    try {
+      const [card] = (await search({ q: "15 pouces" })).items;
+      expect(card?.price).toBe(465_000);
+      const detail = await getProductDetail(db, index, slug);
+      expect(detail?.variants.map((v) => v.sku)).toEqual(["DEMO-DT15P-16"]);
+      expect((await listProductsForSitemap(db, index)).map((p) => p.slug)).toContain(slug);
+    } finally {
+      await db.productVariant.update({ where: { sku: "DEMO-DT15P-8" }, data: { isActive: true } });
+    }
+  });
+
+  it("retire des listes, de la fiche et du sitemap un produit sans variante active", async () => {
+    const slug = "demo-cle-usb-64-go";
+    await db.productVariant.update({ where: { sku: "DEMO-USB64" }, data: { isActive: false } });
+    try {
+      expect((await search({ q: "usb" })).total).toBe(0);
+      expect(await getProductDetail(db, index, slug)).toBeNull();
+      expect((await listProductsForSitemap(db, index)).map((p) => p.slug)).not.toContain(slug);
+    } finally {
+      await db.productVariant.update({ where: { sku: "DEMO-USB64" }, data: { isActive: true } });
+    }
+  });
+
+  it("répond « introuvable » à un identifiant d'URL invalide sans interroger la base en erreur", async () => {
+    await expect(getProductDetail(db, index, "a\u0000b")).resolves.toBeNull();
+    await expect(getProductDetail(db, index, "x".repeat(500))).resolves.toBeNull();
   });
 
   it("masque un brouillon et le contenu d'une catégorie désactivée (y compris via son parent)", async () => {

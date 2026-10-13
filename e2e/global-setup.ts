@@ -6,5 +6,5 @@ import { execFileSync } from "node:child_process";
  */
 export default function globalSetup(): void {
   execFileSync("pnpm", ["-s", "db:seed"], { stdio: "inherit" });
-  execFileSync("pnpm", ["-s", "db:seed:demo"], { stdio: "inherit" });
+  execFileSync("pnpm", ["-s", "db:seed:demo"], { stdio: "inherit", env: { ...process.env, ALLOW_DEMO_SEED: "1" } });
 }

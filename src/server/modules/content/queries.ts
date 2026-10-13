@@ -1,4 +1,5 @@
 import "server-only";
+import { isValidSlug } from "@/lib/slug";
 import type { Db } from "@/server/db/client";
 
 export interface PublishedPage {
@@ -11,6 +12,7 @@ export interface PublishedPage {
 
 /** Page d'information publiée (les brouillons ne sont jamais servis). */
 export async function getPublishedPage(client: Db, slug: string): Promise<PublishedPage | null> {
+  if (!isValidSlug(slug)) return null;
   return client.page.findFirst({
     where: { slug, isPublished: true },
     select: { slug: true, title: true, body: true, seoDescription: true, updatedAt: true },

@@ -1,14 +1,14 @@
 import { Banknote } from "lucide-react";
 import Link from "next/link";
+import { getCompanySettings } from "@/server/storefront";
 import { db } from "@/server/db/client";
 import { listPublishedPages } from "@/server/modules/content/queries";
-import { getSetting } from "@/server/modules/settings/service";
 
 const linkClass = "text-sm text-white/80 hover:text-white hover:underline";
 
 /** Pied de page : liens utiles (seules les pages publiées), coordonnées, rappel du paiement en espèces. */
 export async function SiteFooter() {
-  const [company, pages] = await Promise.all([getSetting("company"), listPublishedPages(db)]);
+  const [company, pages] = await Promise.all([getCompanySettings(), listPublishedPages(db)]);
   return (
     <footer className="mt-12 bg-brand-navy text-white">
       <div className="mx-auto grid max-w-6xl gap-8 px-4 py-10 sm:grid-cols-3">

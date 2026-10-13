@@ -17,8 +17,7 @@ import { servicePriceLabel } from "@/lib/labels";
 import { db } from "@/server/db/client";
 import { featuredProducts } from "@/server/modules/catalog/queries";
 import { featuredServices } from "@/server/modules/services/queries";
-import { getSetting } from "@/server/modules/settings/service";
-import { absoluteUrl, getCategoryIndex } from "@/server/storefront";
+import { absoluteUrl, getCategoryIndex, getCompanySettings } from "@/server/storefront";
 
 const FAMILY_ICONS: Record<string, LucideIcon> = {
   informatique: Cpu,
@@ -35,7 +34,7 @@ const FEATURED_SERVICES = 4;
 export default async function HomePage() {
   const index = await getCategoryIndex();
   const [company, products, services] = await Promise.all([
-    getSetting("company"),
+    getCompanySettings(),
     featuredProducts(db, [...index.byId.keys()], FEATURED_PRODUCTS),
     featuredServices(db, FEATURED_SERVICES),
   ]);

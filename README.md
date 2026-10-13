@@ -12,7 +12,7 @@ cp .env.example .env          # puis .env.test (voir commentaires)
 pnpm db:up                    # PostgreSQL dev (5433) ; `docker compose up -d` pour la base de test (5434)
 pnpm db:migrate
 pnpm db:seed                  # rôles, catalogue §6, services §7 (idempotent)
-pnpm db:seed:demo             # produits [DÉMO] (jamais en production)
+ALLOW_DEMO_SEED=1 pnpm db:seed:demo   # produits [DÉMO] (jamais en production)
 pnpm admin:create             # premier administrateur principal (mot de passe saisi au clavier)
 pnpm dev
 ```

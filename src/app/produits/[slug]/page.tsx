@@ -73,8 +73,8 @@ function Specifications({ product }: { product: ProductDetail }) {
         Caractéristiques techniques
       </h2>
       <dl className="mt-3 grid gap-x-6 gap-y-2 sm:grid-cols-[12rem_1fr]">
-        {rows.map((row) => (
-          <div key={row.label} className="contents">
+        {rows.map((row, i) => (
+          <div key={`${i}-${row.label}`} className="contents">
             <dt className="text-sm text-ink-muted">{row.label}</dt>
             <dd className="text-sm">{row.value}</dd>
           </div>
@@ -120,12 +120,12 @@ export default async function ProductPage({ params }: Props) {
       <Breadcrumbs items={crumbs} />
       <div className="grid gap-6 md:grid-cols-2">
         <section aria-label="Photos" className="flex flex-col gap-3">
-          <ProductImage image={product.images[0] ?? null} name={product.name} />
+          <ProductImage image={product.images[0] ?? null} priority />
           {product.images.length > 1 && (
             <ul className="grid grid-cols-4 gap-2">
               {product.images.slice(1).map((image) => (
                 <li key={image.url}>
-                  <ProductImage image={image} name={product.name} />
+                  <ProductImage image={image} />
                 </li>
               ))}
             </ul>
@@ -172,8 +172,8 @@ export default async function ProductPage({ params }: Props) {
           Description
         </h2>
         <div className="mt-2 flex flex-col gap-3">
-          {toParagraphs(product.description).map((paragraph) => (
-            <p key={paragraph}>{paragraph}</p>
+          {toParagraphs(product.description).map((paragraph, i) => (
+            <p key={`${i}-${paragraph.slice(0, 20)}`}>{paragraph}</p>
           ))}
         </div>
       </section>

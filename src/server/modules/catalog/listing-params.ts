@@ -25,8 +25,9 @@ const optionalAmount = z.preprocess(
 const listingParamsSchema = z.object({
   q: z
     .string()
-    .trim()
-    .max(100)
+    // L'octet NUL est refusé par PostgreSQL : on le retire plutôt que d'échouer.
+    .transform((value) => value.replace(/\u0000/g, ""))
+    .pipe(z.string().trim().max(100))
     .optional()
     .catch(undefined)
     .transform((value) => value || undefined),

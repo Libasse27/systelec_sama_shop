@@ -61,8 +61,8 @@ export default async function ServicePage({ params }: Props) {
       </div>
 
       <section className="flex flex-col gap-3 rounded-xl border border-line bg-surface p-5">
-        {toParagraphs(service.description).map((paragraph) => (
-          <p key={paragraph}>{paragraph}</p>
+        {toParagraphs(service.description).map((paragraph, i) => (
+          <p key={`${i}-${paragraph.slice(0, 20)}`}>{paragraph}</p>
         ))}
         <dl className="grid gap-x-6 gap-y-2 text-sm sm:grid-cols-[12rem_1fr]">
           {service.estimatedDuration && (

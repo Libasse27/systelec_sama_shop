@@ -3,8 +3,7 @@ import Link from "next/link";
 import { signOutAction } from "@/app/(auth)/actions";
 import { Logo } from "@/components/brand/logo";
 import { getCurrentUser } from "@/server/auth/session";
-import { getSetting } from "@/server/modules/settings/service";
-import { getCategoryIndex } from "@/server/storefront";
+import { getCategoryIndex, getCompanySettings } from "@/server/storefront";
 
 const linkClass = "rounded-md px-3 py-2 text-sm font-medium text-white/90 hover:bg-white/10";
 
@@ -58,7 +57,7 @@ function SearchForm() {
 
 /** En-tête du site : marque, recherche, catalogue, services et accès au compte. */
 export async function SiteHeader() {
-  const [company, user] = await Promise.all([getSetting("company"), getCurrentUser()]);
+  const [company, user] = await Promise.all([getCompanySettings(), getCurrentUser()]);
   return (
     <header className="bg-brand-navy">
       <div className="mx-auto flex max-w-6xl flex-col gap-3 px-4 py-3">

@@ -34,17 +34,17 @@ export function AvailabilityBadge({ available }: { available: number }) {
   );
 }
 
-export function ProductImage({ image, name }: { image: { url: string; alt: string } | null; name: string }) {
+export function ProductImage({ image, priority = false }: { image: { url: string; alt: string } | null; priority?: boolean }) {
   if (!image) {
     return (
-      <div className="grid aspect-square place-items-center rounded-lg bg-surface-muted" role="img" aria-label={name}>
+      <div className="grid aspect-square place-items-center rounded-lg bg-surface-muted" aria-hidden>
         <Package aria-hidden className="size-10 text-ink-muted" />
       </div>
     );
   }
   return (
     // eslint-disable-next-line @next/next/no-img-element -- images administrables, domaine fixé en phase 5
-    <img src={image.url} alt={image.alt} loading="lazy" className="aspect-square w-full rounded-lg object-cover" />
+    <img src={image.url} alt={image.alt} loading={priority ? "eager" : "lazy"} className="aspect-square w-full rounded-lg object-cover" />
   );
 }
 
@@ -53,8 +53,8 @@ export function ProductCard({ product }: { product: ProductCardData }) {
   return (
     <article className="flex h-full flex-col gap-2 rounded-xl border border-line bg-surface p-3">
       <Link href={`/produits/${product.slug}`} className="flex flex-col gap-2">
-        <ProductImage image={product.image} name={product.name} />
-        <h3 className="line-clamp-2 text-sm font-semibold hover:underline">{product.name}</h3>
+        <ProductImage image={product.image} />
+        <h2 className="line-clamp-2 text-sm font-semibold hover:underline">{product.name}</h2>
       </Link>
       <p className="text-xs text-ink-muted">
         {[product.brand, product.condition !== "NEW" ? conditionLabel(product.condition) : null].filter(Boolean).join(" · ")}

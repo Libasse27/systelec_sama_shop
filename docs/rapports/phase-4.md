@@ -38,6 +38,28 @@ Critères §20 :
 
 - Un champ de prix laissé vide dans le formulaire de filtres (`max=`) était converti en 0 FCFA, et la liste devenait vide. Un champ vide signifie maintenant « pas de borne », avec un test unitaire de non-régression.
 
+## Revue de code et de sécurité
+
+Aucun point CRITICAL ni HIGH. La revue n'a trouvé ni injection SQL, ni XSS, ni fuite du prix d'achat. Corrigé dans un commit séparé, avec des tests :
+
+- **M1, M2** : variante affichée = variante par défaut si elle est active, sinon la première active. La règle est la même dans la liste, la fiche, le sitemap et les accessoires compatibles. Un produit sans variante active n'apparaît plus nulle part.
+- **M3, partiel** : l'image n'est calculée qu'après la pagination.
+- **M4** : l'octet NUL est retiré de la recherche, et les slugs invalides mènent à une 404 sans requête en base.
+- **M5** : les coordonnées de l'entreprise sont lues une fois par requête. Une valeur invalide en base fait afficher les valeurs par défaut, avec une entrée dans le journal, au lieu de rendre le site indisponible.
+- **M6** : la démo exige `ALLOW_DEMO_SEED=1` en plus du refus en production.
+- **LOW** :
+  - L1 : clé `objet` vérifiée par `Object.hasOwn` ;
+  - L2 : lien WhatsApp seulement si le numéro contient des chiffres ;
+  - L4 : `/recherche` en noindex seul, sans `Disallow` ;
+  - L5 : niveaux de titres corrigés, pictogramme masqué aux lecteurs d'écran, image principale chargée en priorité ;
+  - L6 : ordre déterministe des services mis en avant ;
+  - L7 : clés React uniques.
+
+Reporté, à décider :
+
+- **M3, suite** : la recherche n'est ni indexée (`pg_trgm`) ni limitée en débit. C'est sans risque à petit volume ; à traiter avant d'ouvrir un gros catalogue, et au plus tard en phase 10.
+- **M7, décision métier** : les 41 prestations de base sont publiées (« Sur devis ») avec une description générique. Faut-il les créer masquées jusqu'à leur relecture ?
+
 ## Points ouverts
 
 - **Images produits** : téléversement en phase 5. Un pictogramme s'affiche en attendant.

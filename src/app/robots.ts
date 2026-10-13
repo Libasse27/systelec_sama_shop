@@ -12,7 +12,6 @@ const PRIVATE_PATHS = [
   "/mot-de-passe-oublie",
   "/reinitialiser-mot-de-passe",
   "/acces-refuse",
-  "/recherche",
   "/api/",
 ];
 

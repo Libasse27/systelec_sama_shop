@@ -1,5 +1,6 @@
 import "server-only";
 import type { ServicePricingMode } from "@/generated/prisma/client";
+import { isValidSlug } from "@/lib/slug";
 import type { Db } from "@/server/db/client";
 
 export interface ServiceSummary {
@@ -54,10 +55,16 @@ export async function featuredServices(client: Db, limit: number): Promise<Servi
     select: summarySelect,
   });
   if (featured.length > 0) return featured;
-  return client.service.findMany({ where: { ...where, position: 0 }, take: limit, select: summarySelect });
+  return client.service.findMany({
+    where: { ...where, position: 0 },
+    orderBy: [{ category: { position: "asc" } }, { name: "asc" }],
+    take: limit,
+    select: summarySelect,
+  });
 }
 
 export async function getServiceDetail(client: Db, slug: string): Promise<ServiceDetail | null> {
+  if (!isValidSlug(slug)) return null;
   return client.service.findFirst({
     where: { slug, isActive: true, category: { isActive: true } },
     select: {

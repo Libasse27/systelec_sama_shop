@@ -1,6 +1,7 @@
 import "server-only";
 import { z } from "zod";
 import { Prisma, type ProductCondition } from "@/generated/prisma/client";
+import { isValidSlug } from "@/lib/slug";
 import type { Db } from "@/server/db/client";
 import { PAGE_SIZE, type ListingParams, type SortOption } from "./listing-params";
 
@@ -155,23 +156,32 @@ function filteredProducts(query: ProductQuery): Prisma.Sql {
   const fullPattern = query.q ? `%${escapeLike(query.q)}%` : "";
   const prefix = query.q ? `${escapeLike(query.q)}%` : "";
 
+  // Variante affichée : la variante par défaut si elle est active, sinon la première active
+  // (même règle que la fiche produit). Sans variante active, le produit n'est pas listé.
   return Prisma.sql`
     SELECT p.id, p.slug, p.name, p."shortDescription", p.condition, p."isFeatured", p."publishedAt", p."createdAt",
            b.name AS brand, c.name AS category, dv.price, dv."compareAtPrice",
            COALESCE((SELECT SUM(i."onHand" - i.reserved) FROM product_variants v
                      JOIN inventories i ON i."variantId" = v.id
                      WHERE v."productId" = p.id AND v."isActive"), 0)::int AS available,
-           (SELECT im.url FROM product_images im WHERE im."productId" = p.id ORDER BY im.position LIMIT 1) AS "imageUrl",
-           (SELECT im.alt FROM product_images im WHERE im."productId" = p.id ORDER BY im.position LIMIT 1) AS "imageAlt",
            CASE WHEN ${prefix} <> '' AND unaccent(p.name) ILIKE unaccent(${prefix}) THEN 3
                 WHEN ${fullPattern} <> '' AND unaccent(p.name) ILIKE unaccent(${fullPattern}) THEN 2
                 ELSE 1 END AS relevance
     FROM products p
     JOIN categories c ON c.id = p."categoryId"
     LEFT JOIN brands b ON b.id = p."brandId"
-    JOIN product_variants dv ON dv."productId" = p.id AND dv."isDefault" AND dv."isActive"
+    JOIN LATERAL (
+      SELECT v.price, v."compareAtPrice" FROM product_variants v
+      WHERE v."productId" = p.id AND v."isActive"
+      ORDER BY v."isDefault" DESC, v.position ASC, v.id ASC LIMIT 1
+    ) dv ON TRUE
     WHERE ${Prisma.join(conditions, " AND ")}`;
 }
+
+/** Image principale, calculée seulement pour les lignes de la page (après LIMIT). */
+const WITH_IMAGE = Prisma.sql`
+  (SELECT im.url FROM product_images im WHERE im."productId" = f.id ORDER BY im.position LIMIT 1) AS "imageUrl",
+  (SELECT im.alt FROM product_images im WHERE im."productId" = f.id ORDER BY im.position LIMIT 1) AS "imageAlt"`;
 
 interface ProductCardRow {
   slug: string;
@@ -225,8 +235,10 @@ export async function searchProducts(client: Db, scopeIds: readonly string[], pa
   const [countRows, rows] = await Promise.all([
     client.$queryRaw<{ total: bigint }[]>`SELECT COUNT(*) AS total FROM (${base}) f ${stockFilter}`,
     client.$queryRaw<ProductCardRow[]>`
-      SELECT * FROM (${base}) f ${stockFilter}
-      ORDER BY ${ORDER_BY[query.sort]} LIMIT ${PAGE_SIZE} OFFSET ${offset}`,
+      SELECT f.*, ${WITH_IMAGE} FROM (
+        SELECT * FROM (${base}) page ${stockFilter}
+        ORDER BY ${ORDER_BY[query.sort]} LIMIT ${PAGE_SIZE} OFFSET ${offset}
+      ) f ORDER BY ${ORDER_BY[query.sort]}`,
   ]);
   const total = Number(countRows[0]?.total ?? 0);
   return { items: rows.map(toCard), total, page: params.page, pageCount: Math.max(1, Math.ceil(total / PAGE_SIZE)) };
@@ -236,7 +248,9 @@ export async function searchProducts(client: Db, scopeIds: readonly string[], pa
 export async function featuredProducts(client: Db, scopeIds: readonly string[], limit: number): Promise<ProductCard[]> {
   const base = filteredProducts({ scopeIds, featuredOnly: true, sort: "nouveautes" });
   const rows = await client.$queryRaw<ProductCardRow[]>`
-    SELECT * FROM (${base}) f ORDER BY ${ORDER_BY.nouveautes} LIMIT ${limit}`;
+    SELECT f.*, ${WITH_IMAGE} FROM (
+      SELECT * FROM (${base}) page ORDER BY ${ORDER_BY.nouveautes} LIMIT ${limit}
+    ) f ORDER BY ${ORDER_BY.nouveautes}`;
   return rows.map(toCard);
 }
 
@@ -250,6 +264,9 @@ export async function brandsInScope(client: Db, scopeIds: readonly string[]): Pr
 }
 
 // ─── Fiche produit ───────────────────────────────────────────────────────────
+
+/** Un produit n'est présenté au public que publié et avec au moins une variante active. */
+const LISTABLE_PRODUCT = { status: "PUBLISHED", variants: { some: { isActive: true } } } as const;
 
 const specsSchema = z.array(z.object({ label: z.string(), value: z.string() })).catch([]);
 const attributesSchema = z.record(z.string(), z.string()).catch({});
@@ -292,6 +309,7 @@ export interface ProductDetail {
  * prix d'achat, marges et notes internes ne sont jamais lus.
  */
 export async function getProductDetail(client: Db, index: CategoryIndex, slug: string): Promise<ProductDetail | null> {
+  if (!isValidSlug(slug)) return null;
   const product = await client.product.findFirst({
     where: { slug, status: "PUBLISHED" },
     select: {
@@ -326,7 +344,7 @@ export async function getProductDetail(client: Db, index: CategoryIndex, slug: s
         },
       },
       compatibleWith: {
-        where: { compatibleProduct: { status: "PUBLISHED" } },
+        where: { compatibleProduct: LISTABLE_PRODUCT },
         select: { compatibleProduct: { select: { slug: true, name: true, categoryId: true } } },
       },
     },
@@ -357,7 +375,7 @@ export async function listProductsForSitemap(
   index: CategoryIndex,
 ): Promise<{ slug: string; updatedAt: Date }[]> {
   return client.product.findMany({
-    where: { status: "PUBLISHED", categoryId: { in: [...index.byId.keys()] } },
+    where: { ...LISTABLE_PRODUCT, categoryId: { in: [...index.byId.keys()] } },
     select: { slug: true, updatedAt: true },
   });
 }

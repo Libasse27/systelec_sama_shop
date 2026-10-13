@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import { Breadcrumbs } from "@/components/layout/breadcrumbs";
 import { db } from "@/server/db/client";
 import { getServiceDetail } from "@/server/modules/services/queries";
-import { getSetting } from "@/server/modules/settings/service";
+import { getCompanySettings } from "@/server/storefront";
 
 export const metadata: Metadata = {
   title: "Contact",
@@ -26,11 +26,11 @@ const SUBJECTS: Record<string, string> = { devis: "une demande de devis", interv
 const digitsOnly = (value: string) => value.replace(/\D/g, "");
 
 export default async function ContactPage({ searchParams }: Props) {
-  const [{ service: serviceSlug, objet }, company] = await Promise.all([searchParams, getSetting("company")]);
+  const [{ service: serviceSlug, objet }, company] = await Promise.all([searchParams, getCompanySettings()]);
   const service = serviceSlug ? await getServiceDetail(db, serviceSlug) : null;
   const candidates: (Channel | null)[] = [
     company.phone ? { icon: Phone, label: "Téléphone", value: company.phone, href: `tel:${company.phone.replace(/\s/g, "")}` } : null,
-    company.whatsapp
+    company.whatsapp && digitsOnly(company.whatsapp)
       ? { icon: MessageCircle, label: "WhatsApp", value: company.whatsapp, href: `https://wa.me/${digitsOnly(company.whatsapp)}` }
       : null,
     company.email ? { icon: Mail, label: "E-mail", value: company.email, href: `mailto:${company.email}` } : null,
@@ -45,7 +45,7 @@ export default async function ContactPage({ searchParams }: Props) {
       <h1 className="text-2xl font-bold">Contacter {company.companyName}</h1>
       {service && (
         <p role="status" className="rounded-xl border border-line bg-surface p-4">
-          Votre demande concerne {SUBJECTS[objet ?? ""] ?? "la prestation"} : <strong>{service.name}</strong>. Précisez
+          Votre demande concerne {objet && Object.hasOwn(SUBJECTS, objet) ? SUBJECTS[objet] : "la prestation"} : <strong>{service.name}</strong>. Précisez
           votre besoin, votre quartier et vos disponibilités lors de votre prise de contact.
         </p>
       )}

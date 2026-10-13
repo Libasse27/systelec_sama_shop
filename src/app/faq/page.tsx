@@ -27,8 +27,8 @@ export default async function FaqPage() {
         </p>
       ) : (
         <div className="flex flex-col gap-2">
-          {items.map((item) => (
-            <details key={item.question} className="rounded-xl border border-line bg-surface p-4">
+          {items.map((item, i) => (
+            <details key={`${i}-${item.question}`} className="rounded-xl border border-line bg-surface p-4">
               <summary className="cursor-pointer font-medium">{item.question}</summary>
               <p className="mt-2 text-ink-muted">{item.answer}</p>
             </details>

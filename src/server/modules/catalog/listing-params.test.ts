@@ -45,6 +45,11 @@ describe("paramètres de liste", () => {
     expect(params).toMatchObject({ min: undefined, max: undefined, dispo: true, marque: undefined });
   });
 
+  it("retire l'octet NUL de la recherche (refusé par PostgreSQL)", () => {
+    expect(parseListingParams({ q: "rou\u0000teur" }).q).toBe("routeur");
+    expect(parseListingParams({ q: "\u0000" }).q).toBeUndefined();
+  });
+
   it("prend la première valeur d'un paramètre répété", () => {
     expect(parseListingParams({ page: ["3", "9"] }).page).toBe(3);
   });

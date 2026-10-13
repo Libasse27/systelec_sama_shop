@@ -30,8 +30,8 @@ export default async function InformationPage({ params }: Props) {
       <Breadcrumbs items={[{ label: page.title, href: `/pages/${page.slug}` }]} />
       <article className="flex flex-col gap-4">
         <h1 className="text-2xl font-bold">{page.title}</h1>
-        {toParagraphs(page.body).map((paragraph) => (
-          <p key={paragraph} className="whitespace-pre-line">
+        {toParagraphs(page.body).map((paragraph, i) => (
+          <p key={`${i}-${paragraph.slice(0, 20)}`} className="whitespace-pre-line">
             {paragraph}
           </p>
         ))}

@@ -71,7 +71,7 @@ test.describe("boutique publique", () => {
     expect(sitemap).not.toContain("brouillon");
     expect(sitemap).not.toContain("/admin");
     // Hors production, rien n'est indexé.
-    expect(await (await request.get("/robots.txt")).text()).toContain("Disallow: /");
+    expect(await (await request.get("/robots.txt")).text()).toMatch(/^Disallow: \/$/m);
   });
 });
 
