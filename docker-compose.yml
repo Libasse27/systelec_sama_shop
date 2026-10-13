@@ -1,0 +1,40 @@
+# PostgreSQL pour le développement et les tests (ports hôte 5433 / 5434).
+# Les identifiants ci-dessous sont des valeurs LOCALES de développement, jamais utilisées en production.
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: systelec
+      POSTGRES_PASSWORD: systelec_dev
+      POSTGRES_DB: systelec_dev
+      TZ: UTC
+    ports:
+      - "5433:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U systelec -d systelec_dev"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  db-test:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: systelec
+      POSTGRES_PASSWORD: systelec_test
+      POSTGRES_DB: systelec_test
+      TZ: UTC
+    ports:
+      - "5434:5432"
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U systelec -d systelec_test"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  db_data:

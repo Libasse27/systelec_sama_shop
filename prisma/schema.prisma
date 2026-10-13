@@ -1,0 +1,62 @@
+// SYSTELEC SAMA-SHOP — schéma de données.
+// Les modèles sont ajoutés phase par phase (voir docs/02-modele-donnees.md).
+// Montants : Int en FCFA. Dates : timestamptz (UTC).
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── Paramètres et numérotation ──────────────────────────────────────────────
+
+/// Paramètre administrable. La valeur est validée par un schéma Zod propre à chaque clé.
+model SiteSetting {
+  key         String   @id
+  value       Json
+  updatedById String?
+  updatedAt   DateTime @updatedAt @db.Timestamptz(3)
+
+  @@map("site_settings")
+}
+
+/// Compteur de numérotation métier (CMD-2026-000001…), incrémenté dans la transaction appelante.
+model Sequence {
+  key   String
+  year  Int
+  value Int    @default(0)
+
+  @@id([key, year])
+  @@map("sequences")
+}
+
+// ─── Audit ───────────────────────────────────────────────────────────────────
+
+enum AuditResult {
+  SUCCESS
+  FAILURE
+  DENIED
+}
+
+/// Journal d'audit append-only : un trigger PostgreSQL interdit UPDATE et DELETE.
+model AuditLog {
+  id            String      @id @default(cuid())
+  actorId       String?
+  action        String
+  entityType    String?
+  entityId      String?
+  before        Json?
+  after         Json?
+  result        AuditResult @default(SUCCESS)
+  ip            String?
+  correlationId String?
+  createdAt     DateTime    @default(now()) @db.Timestamptz(3)
+
+  @@index([entityType, entityId])
+  @@index([actorId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}

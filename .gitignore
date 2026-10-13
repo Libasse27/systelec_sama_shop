@@ -1,0 +1,31 @@
+# dépendances
+node_modules/
+.pnpm-store/
+
+# build
+.next/
+out/
+build/
+*.tsbuildinfo
+next-env.d.ts
+
+# Prisma client généré
+src/generated/
+
+# environnements (seul .env.example est versionné)
+.env
+.env.*
+!.env.example
+
+# tests
+coverage/
+playwright-report/
+test-results/
+
+# fichiers téléversés en local
+storage/
+
+# outils
+graphify-out/
+.DS_Store
+*.log
