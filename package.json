@@ -20,11 +20,15 @@
     "db:deploy": "prisma migrate deploy",
     "db:generate": "prisma generate",
     "db:test:prepare": "dotenv -e .env.test -- prisma migrate reset --force",
+    "db:seed": "tsx --env-file-if-exists=.env --conditions=react-server scripts/seed-base.ts",
+    "admin:create": "tsx --env-file-if-exists=.env --conditions=react-server scripts/create-super-admin.ts",
+    "admin:reset-link": "tsx --env-file-if-exists=.env --conditions=react-server scripts/reset-link.ts",
     "postinstall": "prisma generate"
   },
   "dependencies": {
     "@prisma/adapter-pg": "7.10.0",
     "@prisma/client": "7.10.0",
+    "better-auth": "1.7.7",
     "clsx": "2.1.1",
     "lucide-react": "1.55.0",
     "next": "16.4.0",

@@ -34,7 +34,11 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: cp .env.example .env.test && sed -i "s#^DATABASE_URL=.*#DATABASE_URL=${DATABASE_URL}#; s#^APP_ENV=.*#APP_ENV=test#" .env.test
+      # Secret de session éphémère, propre à chaque exécution (jamais versionné).
+      - run: echo "AUTH_SECRET=$(openssl rand -base64 32)" >> "$GITHUB_ENV"
+      - run: |
+          cp .env.example .env.test
+          sed -i "s#^DATABASE_URL=.*#DATABASE_URL=${DATABASE_URL}#; s#^APP_ENV=.*#APP_ENV=test#; s#^AUTH_SECRET=.*#AUTH_SECRET=${AUTH_SECRET}#" .env.test
       - run: pnpm lint
       - run: pnpm typecheck
       - run: pnpm test

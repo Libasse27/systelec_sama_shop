@@ -6,5 +6,8 @@ import { db } from "@/server/db/client";
  * applicatif ne doit pas disposer du privilège TRUNCATE (voir docs).
  */
 export async function resetDatabase(): Promise<void> {
-  await db.$executeRawUnsafe("TRUNCATE site_settings, sequences, audit_logs RESTART IDENTITY CASCADE");
+  await db.$executeRawUnsafe(
+    `TRUNCATE site_settings, sequences, audit_logs, users, sessions, accounts, verifications,
+              user_roles, role_permissions, roles, permissions, login_attempts RESTART IDENTITY CASCADE`,
+  );
 }

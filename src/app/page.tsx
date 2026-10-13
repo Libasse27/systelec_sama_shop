@@ -1,5 +1,4 @@
 import { Banknote, Cctv, Cpu, Network, PlugZap, Wrench } from "lucide-react";
-import { Logo } from "@/components/brand/logo";
 import { getSetting } from "@/server/modules/settings/service";
 
 // Les paramètres administrables sont lus à chaque requête.
@@ -18,12 +17,6 @@ export default async function HomePage() {
 
   return (
     <>
-      <header className="bg-brand-navy">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
-          <Logo shopName={company.shopName} logoUrl={company.logoUrl} />
-        </div>
-      </header>
-
       <main className="mx-auto max-w-6xl px-4 py-10">
         <section className="rounded-2xl bg-brand-navy px-6 py-10 text-white sm:px-10">
           <p className="text-sm font-semibold uppercase tracking-wide text-brand-accent">Boutique en préparation</p>

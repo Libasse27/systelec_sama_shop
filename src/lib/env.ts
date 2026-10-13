@@ -7,8 +7,17 @@ const serverEnvSchema = z
     APP_ENV: z.enum(["development", "test", "production"]).default("development"),
     APP_URL: z.url().optional(),
     DATABASE_URL: z.url({ protocol: /^postgres(ql)?$/, error: "DATABASE_URL doit être une URL PostgreSQL" }),
+    AUTH_SECRET: z.string().min(32, "AUTH_SECRET doit contenir au moins 32 caractères (openssl rand -base64 32)"),
     STORAGE_DRIVER: z.enum(["local", "s3"]).default("local"),
     STORAGE_LOCAL_DIR: z.string().default("./storage"),
+    // E-mail : désactivé tant que SMTP_HOST est vide (aucun envoi simulé).
+    SMTP_HOST: z.string().optional().transform((v) => v || undefined),
+    SMTP_PORT: z.preprocess((v) => (v === "" ? undefined : v), z.coerce.number().int().min(1).max(65535).optional()),
+    // Nombre de reverse proxys de confiance devant l'application (lecture de X-Forwarded-For).
+    TRUSTED_PROXY_HOPS: z.coerce.number().int().min(0).max(5).default(1),
+    SMTP_USER: z.string().optional(),
+    SMTP_PASSWORD: z.string().optional(),
+    SMTP_FROM: z.string().optional(),
   })
   .superRefine((env, ctx) => {
     if (env.APP_ENV !== "production") return;

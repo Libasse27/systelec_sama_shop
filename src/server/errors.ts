@@ -1,4 +1,11 @@
-export type AppErrorCode = "VALIDATION" | "NOT_FOUND" | "FORBIDDEN" | "UNAUTHENTICATED" | "CONFLICT" | "INTERNAL";
+export type AppErrorCode =
+  | "VALIDATION"
+  | "NOT_FOUND"
+  | "FORBIDDEN"
+  | "UNAUTHENTICATED"
+  | "CONFLICT"
+  | "RATE_LIMITED"
+  | "INTERNAL";
 
 /** Erreur métier dont le message peut être montré à l'utilisateur. */
 export class AppError extends Error {

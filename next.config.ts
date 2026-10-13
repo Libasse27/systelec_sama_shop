@@ -7,11 +7,7 @@ const securityHeaders = [
   { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(), payment=()" },
   // Ignoré par les navigateurs en http (développement) ; actif derrière le TLS de production.
   { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains" },
-  // CSP de base sans nonce ; script-src sera durci avec des nonces quand l'auth arrivera (phase 3).
-  {
-    key: "Content-Security-Policy",
-    value: "frame-ancestors 'none'; base-uri 'self'; object-src 'none'; form-action 'self'; img-src 'self' data: https:",
-  },
+  // La Content-Security-Policy (avec nonce par requête) est posée par src/proxy.ts.
 ];
 
 const nextConfig: NextConfig = {

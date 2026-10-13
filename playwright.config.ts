@@ -9,6 +9,7 @@ const BASE_URL = `http://localhost:${PORT}`;
  */
 export default defineConfig({
   testDir: "./e2e",
+  globalSetup: "./e2e/global-setup.ts",
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
@@ -27,6 +28,8 @@ export default defineConfig({
     command: `pnpm build && pnpm start --port ${PORT}`,
     url: `${BASE_URL}/api/health`,
     reuseExistingServer: !process.env.CI,
+    // Serveur exposé directement (aucun reverse proxy) : X-Forwarded-For n'est pas fiable.
+    env: { TRUSTED_PROXY_HOPS: "0" },
     timeout: 180_000,
   },
 });

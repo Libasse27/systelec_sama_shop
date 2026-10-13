@@ -11,6 +11,143 @@ datasource db {
   provider = "postgresql"
 }
 
+// ─── Identité (tables Better Auth + champs SYSTELEC) ──────────────────────────
+
+enum UserKind {
+  STAFF
+  CUSTOMER
+}
+
+/// Utilisateur. Le mot de passe (haché) est dans Account ; il n'est jamais lisible.
+model User {
+  id            String    @id
+  name          String
+  email         String    @unique
+  emailVerified Boolean   @default(false)
+  image         String?
+  phone         String?
+  kind          UserKind  @default(CUSTOMER)
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime  @updatedAt @db.Timestamptz(3)
+  sessions      Session[]
+  accounts      Account[]
+  roles         UserRole[]
+
+  @@map("users")
+}
+
+model Session {
+  id        String   @id
+  token     String   @unique
+  expiresAt DateTime @db.Timestamptz(3)
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+model Account {
+  id                    String    @id
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime? @db.Timestamptz(3)
+  refreshTokenExpiresAt DateTime? @db.Timestamptz(3)
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt             DateTime  @updatedAt @db.Timestamptz(3)
+
+  @@index([userId])
+  @@map("accounts")
+}
+
+model Verification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime @db.Timestamptz(3)
+  createdAt  DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt  DateTime @updatedAt @db.Timestamptz(3)
+
+  @@index([identifier])
+  @@map("verifications")
+}
+
+enum LoginAttemptStatus {
+  PENDING
+  SUCCESS
+  FAILURE
+}
+
+/// Tentatives de connexion, pour la limitation de débit. Purgeable (contrairement à l'audit).
+model LoginAttempt {
+  id        String             @id @default(cuid())
+  email     String
+  ip        String?
+  status    LoginAttemptStatus @default(PENDING)
+  createdAt DateTime           @default(now()) @db.Timestamptz(3)
+
+  @@index([email, createdAt])
+  @@index([ip, createdAt])
+  @@map("login_attempts")
+}
+
+// ─── Rôles et permissions (RBAC) ─────────────────────────────────────────────
+
+/// Rôle. Les 10 rôles système sont synchronisés depuis le code (src/server/authz/roles.ts).
+model Role {
+  id          String           @id @default(cuid())
+  code        String           @unique
+  label       String
+  isSystem    Boolean          @default(true)
+  permissions RolePermission[]
+  users       UserRole[]
+
+  @@map("roles")
+}
+
+/// Permission. La liste fait foi dans le code (src/server/authz/permissions.ts).
+model Permission {
+  id    String           @id @default(cuid())
+  code  String           @unique
+  roles RolePermission[]
+
+  @@map("permissions")
+}
+
+model RolePermission {
+  roleId       String
+  permissionId String
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+model UserRole {
+  userId    String
+  roleId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      Role     @relation(fields: [roleId], references: [id], onDelete: Restrict)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  @@id([userId, roleId])
+  @@index([roleId])
+  @@map("user_roles")
+}
+
 // ─── Paramètres et numérotation ──────────────────────────────────────────────
 
 /// Paramètre administrable. La valeur est validée par un schéma Zod propre à chaque clé.
@@ -56,6 +193,8 @@ model AuditLog {
   createdAt     DateTime    @default(now()) @db.Timestamptz(3)
 
   @@index([entityType, entityId])
+  @@index([action, entityId, createdAt])
+  @@index([action, ip, createdAt])
   @@index([actorId])
   @@index([createdAt])
   @@map("audit_logs")
