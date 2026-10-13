@@ -2,7 +2,7 @@
 
 Plateforme e-commerce et de services techniques de **SYSTELEC** (Sénégal) : vente d'équipements informatiques, réseau, électroniques, électriques et de sécurité ; maintenance, réseaux, vidéosurveillance et électricité. Paiement **exclusivement hors ligne** (espèces), livraison à domicile et retrait en boutique.
 
-> Statut : Phase 3 terminée (authentification et permissions, voir [rapport](docs/rapports/phase-3.md)). Prochaine étape : Phase 4, boutique publique.
+> Statut : Phase 4 terminée (boutique publique, voir [rapport](docs/rapports/phase-4.md)). Prochaine étape : Phase 5, produits et stocks.
 
 ## Démarrage local
 
@@ -11,7 +11,8 @@ pnpm install
 cp .env.example .env          # puis .env.test (voir commentaires)
 pnpm db:up                    # PostgreSQL dev (5433) ; `docker compose up -d` pour la base de test (5434)
 pnpm db:migrate
-pnpm db:seed                  # rôles et permissions (idempotent)
+pnpm db:seed                  # rôles, catalogue §6, services §7 (idempotent)
+pnpm db:seed:demo             # produits [DÉMO] (jamais en production)
 pnpm admin:create             # premier administrateur principal (mot de passe saisi au clavier)
 pnpm dev
 ```

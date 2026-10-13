@@ -148,6 +148,221 @@ model UserRole {
   @@map("user_roles")
 }
 
+// ─── Catalogue ───────────────────────────────────────────────────────────────
+
+/// Catégorie de produits (arborescence). Une catégorie inactive masque son contenu public.
+model Category {
+  id             String     @id @default(cuid())
+  parentId       String?
+  parent         Category?  @relation("CategoryTree", fields: [parentId], references: [id], onDelete: Restrict)
+  children       Category[] @relation("CategoryTree")
+  name           String
+  slug           String     @unique
+  description    String?
+  position       Int        @default(0)
+  isActive       Boolean    @default(true)
+  seoTitle       String?
+  seoDescription String?
+  products       Product[]
+  createdAt      DateTime   @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime   @updatedAt @db.Timestamptz(3)
+
+  @@index([parentId, position])
+  @@map("categories")
+}
+
+model Brand {
+  id       String    @id @default(cuid())
+  name     String    @unique
+  slug     String    @unique
+  products Product[]
+
+  @@map("brands")
+}
+
+enum ProductCondition {
+  NEW
+  REFURBISHED
+  USED
+}
+
+/// « Épuisé » n'est pas un statut : il est calculé depuis le stock disponible.
+enum ProductStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+model Product {
+  id               String                 @id @default(cuid())
+  categoryId       String
+  category         Category               @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  brandId          String?
+  brand            Brand?                 @relation(fields: [brandId], references: [id], onDelete: SetNull)
+  name             String
+  slug             String                 @unique
+  model            String?
+  shortDescription String
+  description      String
+  condition        ProductCondition       @default(NEW)
+  warrantyMonths   Int?
+  warrantyText     String?
+  /// Caractéristiques techniques : liste de { label, value }.
+  specs            Json                   @default("[]")
+  weightGrams      Int?
+  dimensions       String?
+  status           ProductStatus          @default(DRAFT)
+  isFeatured       Boolean                @default(false)
+  seoTitle         String?
+  seoDescription   String?
+  publishedAt      DateTime?              @db.Timestamptz(3)
+  images           ProductImage[]
+  variants         ProductVariant[]
+  compatibleWith   ProductCompatibility[] @relation("ProductCompatibility")
+  compatibleFrom   ProductCompatibility[] @relation("CompatibleProduct")
+  createdAt        DateTime               @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime               @updatedAt @db.Timestamptz(3)
+
+  @@index([status, categoryId])
+  @@index([status, isFeatured])
+  @@index([brandId])
+  @@map("products")
+}
+
+model ProductImage {
+  id        String  @id @default(cuid())
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  url       String
+  alt       String
+  position  Int     @default(0)
+
+  @@index([productId, position])
+  @@map("product_images")
+}
+
+/// Tout produit a au moins une variante (par défaut) : prix et stock sont portés par la variante.
+model ProductVariant {
+  id             String     @id @default(cuid())
+  productId      String
+  product        Product    @relation(fields: [productId], references: [id], onDelete: Cascade)
+  sku            String     @unique
+  barcode        String?
+  name           String
+  /// Attributs de la variante (ex. { "Capacité": "1 To" }).
+  attributes     Json       @default("{}")
+  /// Prix de vente TTC en FCFA (entier).
+  price          Int
+  /// Prix barré facultatif (promotion affichée), en FCFA.
+  compareAtPrice Int?
+  /// Prix d'achat interne : JAMAIS exposé au public (sélecteurs explicites).
+  costPrice      Int?
+  isDefault      Boolean    @default(false)
+  isActive       Boolean    @default(true)
+  position       Int        @default(0)
+  inventory      Inventory?
+  createdAt      DateTime   @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime   @updatedAt @db.Timestamptz(3)
+
+  @@index([productId, position])
+  @@map("product_variants")
+}
+
+/// Stock d'une variante. Disponible = onHand − reserved (contraintes CHECK en base).
+model Inventory {
+  id             String         @id @default(cuid())
+  variantId      String         @unique
+  variant        ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  onHand         Int            @default(0)
+  reserved       Int            @default(0)
+  alertThreshold Int            @default(0)
+  lastCountedAt  DateTime?      @db.Timestamptz(3)
+  lastCountedQty Int?
+  updatedAt      DateTime       @updatedAt @db.Timestamptz(3)
+
+  @@map("inventories")
+}
+
+model ProductCompatibility {
+  productId           String
+  compatibleProductId String
+  product             Product @relation("ProductCompatibility", fields: [productId], references: [id], onDelete: Cascade)
+  compatibleProduct   Product @relation("CompatibleProduct", fields: [compatibleProductId], references: [id], onDelete: Cascade)
+
+  @@id([productId, compatibleProductId])
+  @@map("product_compatibilities")
+}
+
+// ─── Services techniques (catalogue) ─────────────────────────────────────────
+
+model ServiceCategory {
+  id          String    @id @default(cuid())
+  name        String
+  slug        String    @unique
+  description String?
+  position    Int       @default(0)
+  isActive    Boolean   @default(true)
+  services    Service[]
+
+  @@map("service_categories")
+}
+
+enum ServicePricingMode {
+  FIXED
+  INDICATIVE
+  QUOTE_ONLY
+}
+
+model Service {
+  id                String             @id @default(cuid())
+  categoryId        String
+  category          ServiceCategory    @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  name              String
+  slug              String             @unique
+  shortDescription  String
+  description       String
+  imageUrl          String?
+  pricingMode       ServicePricingMode @default(QUOTE_ONLY)
+  /// Tarif en FCFA ; obligatoire sauf « sur devis » (contrainte CHECK en base).
+  price             Int?
+  estimatedDuration String?
+  zonesText         String?
+  conditions        String?
+  isActive          Boolean            @default(true)
+  isFeatured        Boolean            @default(false)
+  position          Int                @default(0)
+  createdAt         DateTime           @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime           @updatedAt @db.Timestamptz(3)
+
+  @@index([categoryId, position])
+  @@map("services")
+}
+
+// ─── Contenu ─────────────────────────────────────────────────────────────────
+
+/// Page d'information (CGV, livraison, garantie, confidentialité, à propos). Texte brut par paragraphes.
+model Page {
+  id             String   @id @default(cuid())
+  slug           String   @unique
+  title          String
+  body           String
+  seoDescription String?
+  isPublished    Boolean  @default(false)
+  updatedAt      DateTime @updatedAt @db.Timestamptz(3)
+
+  @@map("pages")
+}
+
+model FaqItem {
+  id          String  @id @default(cuid())
+  question    String
+  answer      String
+  position    Int     @default(0)
+  isPublished Boolean @default(true)
+
+  @@map("faq_items")
+}
+
 // ─── Paramètres et numérotation ──────────────────────────────────────────────
 
 /// Paramètre administrable. La valeur est validée par un schéma Zod propre à chaque clé.

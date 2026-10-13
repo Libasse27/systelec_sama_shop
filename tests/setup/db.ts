@@ -8,6 +8,8 @@ import { db } from "@/server/db/client";
 export async function resetDatabase(): Promise<void> {
   await db.$executeRawUnsafe(
     `TRUNCATE site_settings, sequences, audit_logs, users, sessions, accounts, verifications,
-              user_roles, role_permissions, roles, permissions, login_attempts RESTART IDENTITY CASCADE`,
+              user_roles, role_permissions, roles, permissions, login_attempts,
+              categories, brands, products, product_images, product_variants, inventories,
+              product_compatibilities, service_categories, services, pages, faq_items RESTART IDENTITY CASCADE`,
   );
 }
