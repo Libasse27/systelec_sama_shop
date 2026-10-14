@@ -2,10 +2,15 @@ import Link from "next/link";
 import type { Permission } from "@/server/authz/permissions";
 import { getCurrentUser } from "@/server/auth/session";
 
-const NAVIGATION: { href: string; label: string; permission: Permission }[] = [
+/** Entrée visible si l'utilisateur a l'une des permissions indiquées. */
+const NAVIGATION: { href: string; label: string; permission: Permission | readonly Permission[] }[] = [
   { href: "/admin", label: "Tableau de bord", permission: "admin.access" },
   { href: "/admin/commandes", label: "Commandes", permission: "orders.read" },
   { href: "/admin/encaissements", label: "Encaissements", permission: "payments.read" },
+  { href: "/admin/demandes", label: "Demandes de devis", permission: "quotes.read" },
+  { href: "/admin/interventions", label: "Interventions", permission: ["interventions.read", "interventions.manage", "interventions.update_own"] },
+  { href: "/admin/planning", label: "Planning", permission: ["interventions.read", "interventions.manage", "interventions.update_own"] },
+  { href: "/admin/techniciens", label: "Techniciens", permission: "interventions.manage" },
   { href: "/admin/produits", label: "Produits", permission: "products.read" },
   { href: "/admin/categories", label: "Catégories", permission: "categories.manage" },
   { href: "/admin/stock", label: "Stock", permission: "inventory.read" },
@@ -16,7 +21,7 @@ const NAVIGATION: { href: string; label: string; permission: Permission }[] = [
 /** Navigation de l'administration. La garde d'accès reste dans chaque page et chaque service. */
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const user = await getCurrentUser();
-  const links = user?.permissions.has("admin.access") ? NAVIGATION.filter((item) => user.permissions.has(item.permission)) : [];
+  const links = user?.permissions.has("admin.access") ? NAVIGATION.filter((item) => [item.permission].flat().some((permission) => user.permissions.has(permission))) : [];
   return (
     <div className="mx-auto flex max-w-7xl flex-col gap-6 px-4 py-6 lg:flex-row">
       {links.length > 0 && (

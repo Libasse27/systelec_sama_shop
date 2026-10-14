@@ -54,7 +54,7 @@ test.describe("encaissements en espèces (§20 n° 15, 16 et 26)", () => {
     staff.once("dialog", (dialog) => dialog.accept());
     await staff.getByRole("button", { name: "Enregistrer l'encaissement" }).click();
     await expect(staff.getByText(/Encaissement enregistré : reçu REC-\d{4}-\d{6}\./)).toBeVisible();
-    await expect(staff.getByText("Commande soldée.")).toBeVisible();
+    await expect(staff.getByText("Soldé : il ne reste rien à encaisser.")).toBeVisible();
     const receipt = (await staff.getByText(/Encaissement enregistré/).textContent())!.match(/REC-\d{4}-\d{6}/)![0];
 
     const pdf = await staff.request.get(`/recus/${receipt}`);

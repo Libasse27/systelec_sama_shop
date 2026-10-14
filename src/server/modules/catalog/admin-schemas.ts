@@ -1,16 +1,8 @@
 import { z } from "zod";
+import { optionalText } from "@/lib/schema-text";
 import { isValidSlug, slugify } from "@/lib/slug";
 
 const MAX_PRICE = 100_000_000;
-
-const optionalText = (max: number) =>
-  z
-    .string()
-    .trim()
-    .max(max)
-    .optional()
-    .nullable()
-    .transform((value) => value || null);
 
 /** Slug saisi, ou dérivé du nom s'il est vide ; toujours au format URL. */
 const slugField = z

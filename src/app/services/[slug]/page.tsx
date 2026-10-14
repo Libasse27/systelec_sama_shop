@@ -32,7 +32,6 @@ const actionClass = "inline-flex justify-center rounded-lg px-4 py-2.5 text-sm f
 export default async function ServicePage({ params }: Props) {
   const service = await loadService((await params).slug);
   if (!service) notFound();
-  const contact = (subject: string) => `/contact?service=${service.slug}&objet=${subject}`;
 
   return (
     <main className="mx-auto flex max-w-4xl flex-col gap-6 px-4 py-6">
@@ -49,11 +48,8 @@ export default async function ServicePage({ params }: Props) {
       </header>
 
       <div className="flex flex-col gap-3 sm:flex-row">
-        <Link href={contact("devis")} className={`${actionClass} bg-brand-blue text-white hover:bg-brand-blue-dark`}>
-          Demander un devis
-        </Link>
-        <Link href={contact("intervention")} className={`${actionClass} border border-brand-blue text-brand-blue`}>
-          Réserver une intervention
+        <Link href={`/devis/demande?service=${service.slug}`} className={`${actionClass} bg-brand-blue text-white hover:bg-brand-blue-dark`}>
+          Demander un devis ou une intervention
         </Link>
         <Link href="/contact" className={`${actionClass} border border-line bg-surface`}>
           Nous contacter

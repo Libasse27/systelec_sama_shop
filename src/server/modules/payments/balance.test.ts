@@ -35,6 +35,6 @@ describe("amountRefusal (contrôle d'un encaissement)", () => {
   });
 
   it("refuse tout encaissement sur une commande soldée", () => {
-    expect(amountRefusal({ ...base, amountPaid: 10_000, amount: 1 })).toBe("Cette commande est déjà soldée.");
+    expect(amountRefusal({ ...base, amountPaid: 10_000, amount: 1 })).toBe("Déjà soldé : il ne reste rien à encaisser.");
   });
 });

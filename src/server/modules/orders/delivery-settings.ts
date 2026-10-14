@@ -1,5 +1,6 @@
 import "server-only";
 import { z } from "zod";
+import { optionalText } from "@/lib/schema-text";
 import { Prisma, type PrismaClient } from "@/generated/prisma/client";
 import { recordAudit } from "@/server/audit/audit";
 import { assertPermission, type Actor } from "@/server/authz/service";
@@ -8,15 +9,6 @@ import { AppError } from "@/server/errors";
 import { parseInput } from "@/server/validation";
 
 const MAX_FEE = 10_000_000;
-const optionalText = (max: number) =>
-  z
-    .string()
-    .trim()
-    .max(max)
-    .optional()
-    .nullable()
-    .transform((value) => value || null);
-
 export const deliveryZoneSchema = z.object({
   name: z.string().trim().min(2).max(120),
   description: optionalText(300),

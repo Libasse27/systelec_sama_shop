@@ -66,7 +66,7 @@ export default async function PaymentJournalPage({ searchParams }: { searchParam
             <thead className="bg-surface-muted text-xs uppercase text-ink-muted">
               <tr>
                 <th scope="col" className="px-3 py-2">Reçu</th>
-                <th scope="col" className="px-3 py-2">Commande</th>
+                <th scope="col" className="px-3 py-2">Document</th>
                 <th scope="col" className="px-3 py-2">Agent</th>
                 <th scope="col" className="px-3 py-2 text-right">Montant</th>
               </tr>
@@ -85,8 +85,11 @@ export default async function PaymentJournalPage({ searchParams }: { searchParam
                     </div>
                   </td>
                   <td className="px-3 py-2">
-                    <Link href={`/admin/commandes/${row.orderId}`} className="text-brand-blue underline-offset-2 hover:underline">
-                      {row.orderNumber}
+                    <Link
+                      href={`/admin/${row.document.kind === "order" ? "commandes" : "interventions"}/${row.document.id}`}
+                      className="text-brand-blue underline-offset-2 hover:underline"
+                    >
+                      {row.document.number}
                     </Link>
                   </td>
                   <td className="px-3 py-2">{row.recordedBy}</td>

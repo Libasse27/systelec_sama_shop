@@ -20,20 +20,21 @@ enum UserKind {
 
 /// Utilisateur. Le mot de passe (haché) est dans Account ; il n'est jamais lisible.
 model User {
-  id            String     @id
+  id            String      @id
   name          String
-  email         String     @unique
-  emailVerified Boolean    @default(false)
+  email         String      @unique
+  emailVerified Boolean     @default(false)
   image         String?
   phone         String?
-  kind          UserKind   @default(CUSTOMER)
-  isActive      Boolean    @default(true)
-  createdAt     DateTime   @default(now()) @db.Timestamptz(3)
-  updatedAt     DateTime   @updatedAt @db.Timestamptz(3)
+  kind          UserKind    @default(CUSTOMER)
+  isActive      Boolean     @default(true)
+  createdAt     DateTime    @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime    @updatedAt @db.Timestamptz(3)
   sessions      Session[]
   accounts      Account[]
   roles         UserRole[]
   payments      Payment[]
+  technician    Technician?
 
   @@map("users")
 }
@@ -244,29 +245,30 @@ model ProductImage {
 
 /// Tout produit a au moins une variante (par défaut) : prix et stock sont portés par la variante.
 model ProductVariant {
-  id             String          @id @default(cuid())
-  productId      String
-  product        Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
-  sku            String          @unique
-  barcode        String?
-  name           String
+  id                String             @id @default(cuid())
+  productId         String
+  product           Product            @relation(fields: [productId], references: [id], onDelete: Cascade)
+  sku               String             @unique
+  barcode           String?
+  name              String
   /// Attributs de la variante (ex. { "Capacité": "1 To" }).
-  attributes     Json            @default("{}")
+  attributes        Json               @default("{}")
   /// Prix de vente TTC en FCFA (entier).
-  price          Int
+  price             Int
   /// Prix barré facultatif (promotion affichée), en FCFA.
-  compareAtPrice Int?
+  compareAtPrice    Int?
   /// Prix d'achat interne : JAMAIS exposé au public (sélecteurs explicites).
-  costPrice      Int?
-  isDefault      Boolean         @default(false)
-  isActive       Boolean         @default(true)
-  position       Int             @default(0)
-  inventory      Inventory?
-  movements      StockMovement[]
-  cartItems      CartItem[]
-  orderItems     OrderItem[]
-  createdAt      DateTime        @default(now()) @db.Timestamptz(3)
-  updatedAt      DateTime        @updatedAt @db.Timestamptz(3)
+  costPrice         Int?
+  isDefault         Boolean            @default(false)
+  isActive          Boolean            @default(true)
+  position          Int                @default(0)
+  inventory         Inventory?
+  movements         StockMovement[]
+  cartItems         CartItem[]
+  orderItems        OrderItem[]
+  interventionParts InterventionPart[]
+  createdAt         DateTime           @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime           @updatedAt @db.Timestamptz(3)
 
   @@index([productId, position])
   @@map("product_variants")
@@ -366,6 +368,8 @@ model Service {
   isActive          Boolean            @default(true)
   isFeatured        Boolean            @default(false)
   position          Int                @default(0)
+  quoteRequests     QuoteRequest[]
+  interventions     Intervention[]
   createdAt         DateTime           @default(now()) @db.Timestamptz(3)
   updatedAt         DateTime           @updatedAt @db.Timestamptz(3)
 
@@ -520,17 +524,20 @@ enum CustomerType {
 
 /// Client : rattaché à un compte, ou invité (userId nul). Les notes internes ne sont jamais exposées.
 model Customer {
-  id            String       @id @default(cuid())
-  userId        String?      @unique
-  type          CustomerType @default(INDIVIDUAL)
+  id            String         @id @default(cuid())
+  userId        String?        @unique
+  type          CustomerType   @default(INDIVIDUAL)
   name          String
   companyName   String?
   phone         String
   email         String?
   internalNotes String?
   orders        Order[]
-  createdAt     DateTime     @default(now()) @db.Timestamptz(3)
-  updatedAt     DateTime     @updatedAt @db.Timestamptz(3)
+  quoteRequests QuoteRequest[]
+  quotes        Quote[]
+  interventions Intervention[]
+  createdAt     DateTime       @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime       @updatedAt @db.Timestamptz(3)
 
   @@index([phone])
   @@map("customers")
@@ -656,8 +663,11 @@ enum PaymentMethod {
 model Payment {
   id                String        @id @default(cuid())
   receiptNumber     String        @unique
-  orderId           String
-  order             Order         @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  /// Exactement l'un des deux : une commande ou une intervention (contrainte CHECK).
+  orderId           String?
+  order             Order?        @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  interventionId    String?
+  intervention      Intervention? @relation(fields: [interventionId], references: [id], onDelete: Restrict)
   /// > 0 : encaissement ; < 0 : contre-écriture (annulation d'un encaissement).
   amount            Int
   method            PaymentMethod @default(CASH)
@@ -678,6 +688,7 @@ model Payment {
   createdAt         DateTime      @default(now()) @db.Timestamptz(3)
 
   @@index([orderId, createdAt])
+  @@index([interventionId, createdAt])
   @@index([createdAt])
   @@index([recordedById, createdAt])
   @@map("payments")
@@ -698,18 +709,261 @@ enum NotificationStatus {
 
 /// Notifications persistées : rien n'est simulé, l'absence de fournisseur est tracée (D11).
 model Notification {
-  id        String              @id @default(cuid())
-  channel   NotificationChannel
-  template  String
-  recipient String
-  payload   Json
-  status    NotificationStatus  @default(PENDING)
-  error     String?
-  orderId   String?
-  sentAt    DateTime?           @db.Timestamptz(3)
-  createdAt DateTime            @default(now()) @db.Timestamptz(3)
+  id             String              @id @default(cuid())
+  channel        NotificationChannel
+  template       String
+  recipient      String
+  payload        Json
+  status         NotificationStatus  @default(PENDING)
+  error          String?
+  orderId        String?
+  quoteRequestId String?
+  quoteId        String?
+  interventionId String?
+  sentAt         DateTime?           @db.Timestamptz(3)
+  createdAt      DateTime            @default(now()) @db.Timestamptz(3)
 
   @@index([status, createdAt])
   @@index([orderId])
+  @@index([quoteRequestId])
+  @@index([quoteId])
+  @@index([interventionId])
   @@map("notifications")
+}
+
+// ─── Services techniques ─────────────────────────────────────────────────────
+
+enum QuoteRequestStatus {
+  NEW
+  IN_REVIEW
+  QUOTED
+  ACCEPTED
+  CANCELLED
+}
+
+enum Urgency {
+  NORMAL
+  URGENT
+}
+
+/// Demande de devis ou d'intervention, déposée par un client (compte ou invité).
+model QuoteRequest {
+  id             String             @id @default(cuid())
+  number         String             @unique
+  /// Clé envoyée par le formulaire : une double soumission ne crée qu'une demande.
+  idempotencyKey String             @unique
+  customerId     String
+  customer       Customer           @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  serviceId      String?
+  service        Service?           @relation(fields: [serviceId], references: [id], onDelete: SetNull)
+  /// Coordonnées FIGÉES au dépôt.
+  contact        Json
+  address        String
+  description    String
+  urgency        Urgency            @default(NORMAL)
+  availability   String?
+  status         QuoteRequestStatus @default(NEW)
+  /// Motif d'annulation, ou réponse sans devis.
+  closingNote    String?
+  internalNotes  String?
+  quotes         Quote[]
+  interventions  Intervention[]
+  createdAt      DateTime           @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime           @updatedAt @db.Timestamptz(3)
+
+  @@index([status, createdAt])
+  @@index([customerId, createdAt])
+  @@map("quote_requests")
+}
+
+enum QuoteStatus {
+  DRAFT
+  SENT
+  ACCEPTED
+  REFUSED
+  EXPIRED
+}
+
+/// Devis détaillé. Modifiable en brouillon seulement ; figé une fois envoyé.
+model Quote {
+  id             String        @id @default(cuid())
+  number         String        @unique
+  quoteRequestId String?
+  quoteRequest   QuoteRequest? @relation(fields: [quoteRequestId], references: [id], onDelete: Restrict)
+  customerId     String
+  customer       Customer      @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  status         QuoteStatus   @default(DRAFT)
+  /// Fin de validité (fin de journée à Dakar).
+  validUntil     DateTime      @db.Timestamptz(3)
+  subtotal       Int           @default(0)
+  total          Int           @default(0)
+  /// Conditions et remarques imprimées sur le devis.
+  notes          String?
+  createdById    String
+  sentAt         DateTime?     @db.Timestamptz(3)
+  decidedAt      DateTime?     @db.Timestamptz(3)
+  /// Qui a décidé : le client en ligne, ou un membre du personnel (accord par téléphone).
+  decidedById    String?
+  decisionNote   String?
+  items          QuoteItem[]
+  intervention   Intervention?
+  createdAt      DateTime      @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime      @updatedAt @db.Timestamptz(3)
+
+  @@index([status, validUntil])
+  @@index([customerId, createdAt])
+  @@map("quotes")
+}
+
+enum QuoteItemKind {
+  MATERIAL
+  LABOR
+  TRAVEL
+  OTHER
+}
+
+model QuoteItem {
+  id        String        @id @default(cuid())
+  quoteId   String
+  quote     Quote         @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  position  Int
+  kind      QuoteItemKind
+  label     String
+  quantity  Int
+  unitPrice Int
+  lineTotal Int
+
+  @@index([quoteId, position])
+  @@map("quote_items")
+}
+
+/// Profil d'un technicien (compte du personnel portant le rôle TECHNICIAN).
+model Technician {
+  id            String         @id @default(cuid())
+  userId        String         @unique
+  user          User           @relation(fields: [userId], references: [id], onDelete: Restrict)
+  skills        String?
+  zones         String?
+  isActive      Boolean        @default(true)
+  interventions Intervention[]
+  appointments  Appointment[]
+  createdAt     DateTime       @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime       @updatedAt @db.Timestamptz(3)
+
+  @@map("technicians")
+}
+
+enum InterventionStatus {
+  TO_SCHEDULE
+  SCHEDULED
+  IN_PROGRESS
+  DONE
+  CANCELLED
+}
+
+/// Intervention chez le client : issue d'un devis accepté, ou créée par le personnel (prix fixe).
+model Intervention {
+  id              String              @id @default(cuid())
+  number          String              @unique
+  customerId      String
+  customer        Customer            @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  quoteRequestId  String?
+  quoteRequest    QuoteRequest?       @relation(fields: [quoteRequestId], references: [id], onDelete: Restrict)
+  quoteId         String?             @unique
+  quote           Quote?              @relation(fields: [quoteId], references: [id], onDelete: Restrict)
+  serviceId       String?
+  service         Service?            @relation(fields: [serviceId], references: [id], onDelete: SetNull)
+  contact         Json
+  address         String
+  problem         String
+  technicianId    String?
+  technician      Technician?         @relation(fields: [technicianId], references: [id], onDelete: Restrict)
+  status          InterventionStatus  @default(TO_SCHEDULE)
+  /// Montant dû (FCFA) : total du devis accepté, ou prix convenu à la création.
+  amountDue       Int
+  amountPaid      Int                 @default(0)
+  paymentStatus   PaymentStatus       @default(UNPAID)
+  startedAt       DateTime?           @db.Timestamptz(3)
+  completedAt     DateTime?           @db.Timestamptz(3)
+  cancelledAt     DateTime?           @db.Timestamptz(3)
+  /// Nom de la personne qui a constaté la fin des travaux chez le client.
+  customerSignOff String?
+  cancelReason    String?
+  report          InterventionReport?
+  parts           InterventionPart[]
+  appointments    Appointment[]
+  payments        Payment[]
+  invoice         Invoice?
+  createdAt       DateTime            @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime            @updatedAt @db.Timestamptz(3)
+
+  @@index([status, createdAt])
+  @@index([technicianId, status])
+  @@index([customerId, createdAt])
+  @@map("interventions")
+}
+
+/// Créneau du planning d'un technicien. Deux créneaux d'un même technicien ne se chevauchent jamais (contrainte d'exclusion).
+model Appointment {
+  id             String       @id @default(cuid())
+  interventionId String
+  intervention   Intervention @relation(fields: [interventionId], references: [id], onDelete: Cascade)
+  technicianId   String
+  technician     Technician   @relation(fields: [technicianId], references: [id], onDelete: Restrict)
+  startsAt       DateTime     @db.Timestamptz(3)
+  endsAt         DateTime     @db.Timestamptz(3)
+  createdAt      DateTime     @default(now()) @db.Timestamptz(3)
+
+  @@index([technicianId, startsAt])
+  @@index([interventionId])
+  @@map("appointments")
+}
+
+model InterventionReport {
+  id             String       @id @default(cuid())
+  interventionId String       @unique
+  intervention   Intervention @relation(fields: [interventionId], references: [id], onDelete: Cascade)
+  diagnosis      String
+  workDone       String
+  timeSpentMin   Int
+  observations   String?
+  authorId       String
+  createdAt      DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime     @updatedAt @db.Timestamptz(3)
+
+  @@map("intervention_reports")
+}
+
+/// Pièce utilisée. Avec une référence du catalogue, sa sortie de stock est tracée.
+model InterventionPart {
+  id             String          @id @default(cuid())
+  interventionId String
+  intervention   Intervention    @relation(fields: [interventionId], references: [id], onDelete: Cascade)
+  variantId      String?
+  variant        ProductVariant? @relation(fields: [variantId], references: [id], onDelete: Restrict)
+  label          String
+  quantity       Int
+  /// Coût interne unitaire (prix d'achat) : jamais montré au client.
+  unitCost       Int?
+  createdById    String
+  createdAt      DateTime        @default(now()) @db.Timestamptz(3)
+
+  @@index([interventionId])
+  @@map("intervention_parts")
+}
+
+/// Facture (document commercial, pas une comptabilité réglementaire). Figée à l'émission, en ajout seul.
+model Invoice {
+  id             String       @id @default(cuid())
+  number         String       @unique
+  interventionId String       @unique
+  intervention   Intervention @relation(fields: [interventionId], references: [id], onDelete: Restrict)
+  issuedAt       DateTime     @default(now()) @db.Timestamptz(3)
+  /// Lignes, client et adresse FIGÉS à l'émission.
+  lines          Json
+  customer       Json
+  total          Int
+  issuedById     String
+
+  @@map("invoices")
 }

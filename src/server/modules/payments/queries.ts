@@ -1,10 +1,12 @@
 import "server-only";
 import type { Prisma } from "@/generated/prisma/client";
+import type { Permission } from "@/server/authz/permissions";
 import { assertPermission, type Actor } from "@/server/authz/service";
 import type { Db } from "@/server/db/client";
 import { guestLinkAllows } from "@/server/modules/orders/queries";
 import type { Contact } from "@/server/modules/orders/schemas";
 import { getSetting } from "@/server/modules/settings/service";
+import { targetLink, type PaymentTarget } from "./targets";
 
 // ─── Encaissements d'une commande (administration) ───────────────────────────
 
@@ -43,26 +45,40 @@ const toAdminRow = ({ recordedBy, reverses, reversedBy, ...payment }: Prisma.Pay
   reversedBy: reversedBy?.receiptNumber ?? null,
 });
 
-/** Encaissements d'une commande : visibles avec payments.read, ou payments.record (le caissier voit ce qu'il saisit). */
-export async function listOrderPayments(client: Db, actor: Actor, orderId: string): Promise<AdminPaymentRow[]> {
+/** Encaissements d'un document : visibles avec payments.read, ou payments.record (le caissier voit ce qu'il saisit). */
+export async function listPayments(client: Db, actor: Actor, target: PaymentTarget): Promise<AdminPaymentRow[]> {
   const permission = actor.permissions.has("payments.read") ? "payments.read" : "payments.record";
   await assertPermission(client, actor, permission);
   const payments = await client.payment.findMany({
-    where: { orderId },
+    where: targetLink(target),
     orderBy: [{ createdAt: "asc" }, { id: "asc" }],
     select: ADMIN_PAYMENT_SELECT,
   });
   return payments.map(toAdminRow);
 }
 
+export const listOrderPayments = (client: Db, actor: Actor, orderId: string) => listPayments(client, actor, { kind: "order", id: orderId });
+
 // ─── Journal de caisse ───────────────────────────────────────────────────────
 
 export const JOURNAL_LIMIT = 500;
 
-export interface JournalRow extends AdminPaymentRow {
-  orderId: string;
-  orderNumber: string;
+/** Document réglé par une écriture (lien vers sa fiche d'administration). */
+export interface PaymentDocument {
+  kind: "order" | "intervention";
+  id: string;
+  number: string;
 }
+
+export interface JournalRow extends AdminPaymentRow {
+  document: PaymentDocument;
+}
+
+const documentOf = (payment: { order: { id: string; number: string } | null; intervention: { id: string; number: string } | null }): PaymentDocument => {
+  if (payment.order) return { kind: "order", ...payment.order };
+  if (payment.intervention) return { kind: "intervention", ...payment.intervention };
+  throw new Error("Encaissement sans commande ni intervention");
+};
 
 export interface PaymentJournal {
   rows: JournalRow[];
@@ -82,7 +98,7 @@ export async function getPaymentJournal(client: Db, actor: Actor, range: { from:
       where,
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       take: JOURNAL_LIMIT + 1,
-      select: { ...ADMIN_PAYMENT_SELECT, order: { select: { id: true, number: true } } },
+      select: { ...ADMIN_PAYMENT_SELECT, order: { select: { id: true, number: true } }, intervention: { select: { id: true, number: true } } },
     }),
     client.payment.aggregate({ where: { ...where, amount: { gt: 0 } }, _sum: { amount: true }, _count: true }),
     client.payment.aggregate({ where: { ...where, amount: { lt: 0 } }, _sum: { amount: true }, _count: true }),
@@ -93,7 +109,7 @@ export async function getPaymentJournal(client: Db, actor: Actor, range: { from:
   const receivedTotal = received._sum.amount ?? 0;
   const voidedTotal = -(voided._sum.amount ?? 0);
   return {
-    rows: payments.slice(0, JOURNAL_LIMIT).map(({ order, ...payment }) => ({ ...toAdminRow(payment), orderId: order.id, orderNumber: order.number })),
+    rows: payments.slice(0, JOURNAL_LIMIT).map(({ order, intervention, ...payment }) => ({ ...toAdminRow(payment), document: documentOf({ order, intervention }) })),
     truncated: payments.length > JOURNAL_LIMIT,
     totals: { received: receivedTotal, voided: voidedTotal, net: receivedTotal - voidedTotal, count: received._count + voided._count },
     byRecorder: perRecorder
@@ -109,30 +125,87 @@ export interface ReceiptData {
   createdAt: Date;
   amount: number;
   balanceAfter: number;
-  orderNumber: string;
-  orderTotal: number;
+  /** Document réglé : « Commande » ou « Intervention », son numéro et son montant total. */
+  document: { label: string; number: string; total: number };
   customer: { name: string; phone: string };
   recordedBy: string;
   /** Contre-écriture : le reçu annulé et le motif. */
   reversal: { receiptNumber: string; reason: string } | null;
   /** Encaissement annulé depuis (mention sur le reçu d'origine). */
   voidedBy: string | null;
-  company: { name: string; address: string | null; phone: string | null; email: string | null; ninea: string | null; rccm: string | null };
+  company: CompanyHeader;
 }
 
-export interface ReceiptViewer {
+export interface CompanyHeader {
+  name: string;
+  address: string | null;
+  phone: string | null;
+  email: string | null;
+  ninea: string | null;
+  rccm: string | null;
+}
+
+export interface DocumentViewer {
   /** Utilisateur connecté (personnel ou client), ou null. */
   user: Actor | null;
-  /** Jeton du lien de suivi d'une commande invitée. */
+  /** Jeton du lien de suivi d'un invité (commande, ou devis pour une intervention). */
   token?: string;
 }
 
+/** En-tête société des documents imprimés (mentions légales D7 si renseignées). */
+export async function companyHeader(client: Db): Promise<CompanyHeader> {
+  const company = await getSetting("company", client);
+  return { name: company.companyName, address: company.address, phone: company.phone, email: company.email, ninea: company.ninea, rccm: company.rccm };
+}
+
+const OWNER_SELECT = { id: true, createdAt: true, contact: true, customer: { select: { userId: true } } } as const;
+
+/** Propriétaire d'un document réglé, pour décider qui peut voir ses reçus et factures. */
+export interface OwnedDocument {
+  customerUserId: string | null;
+  /** Lien de suivi invité valide pour ce jeton. */
+  guestAllows: (token: string | undefined) => boolean;
+}
+
+type LinkedDocument = { id: string; createdAt: Date } | null;
+
 /**
- * Reçu, pour qui a le droit de le voir : le personnel des encaissements, le titulaire du
- * compte de la commande, ou l'invité muni du lien de suivi de la commande. Sinon null
- * (la page répond 404, sans dire si le reçu existe). La note interne n'est jamais incluse.
+ * Commande : jeton de la commande. Intervention : jeton du devis accepté qui l'a créée, ou
+ * celui de la demande (intervention à prix fixe, sans devis).
  */
-export async function getReceipt(client: Db, viewer: ReceiptViewer, receiptNumber: string): Promise<ReceiptData | null> {
+export function ownershipOf(
+  order: { id: string; createdAt: Date; customer: { userId: string | null } } | null,
+  intervention: { customer: { userId: string | null }; quote: LinkedDocument; quoteRequest: LinkedDocument } | null,
+): OwnedDocument {
+  if (order) return { customerUserId: order.customer.userId, guestAllows: (token) => guestLinkAllows(order, token, "order") };
+  if (intervention) {
+    const { quote, quoteRequest } = intervention;
+    return {
+      customerUserId: intervention.customer.userId,
+      guestAllows: (token) =>
+        (quote !== null && guestLinkAllows(quote, token, "quote")) || (quoteRequest !== null && guestLinkAllows(quoteRequest, token, "quote_request")),
+    };
+  }
+  return { customerUserId: null, guestAllows: () => false };
+}
+
+/**
+ * Accès d'un lecteur à un document payé : le personnel autorisé (permissions données), le
+ * titulaire du compte, ou l'invité muni du lien de suivi. Les documents d'un compte ne
+ * s'ouvrent jamais avec un simple jeton.
+ */
+export function canViewDocument(viewer: DocumentViewer, owner: OwnedDocument, staffPermissions: readonly Permission[]): boolean {
+  const { user } = viewer;
+  if (user && staffPermissions.some((permission) => user.permissions.has(permission))) return true;
+  if (owner.customerUserId !== null) return user?.id === owner.customerUserId;
+  return owner.guestAllows(viewer.token);
+}
+
+/**
+ * Reçu, pour qui a le droit de le voir (sinon null : la page répond 404, sans dire si le
+ * reçu existe). La note interne n'est jamais incluse.
+ */
+export async function getReceipt(client: Db, viewer: DocumentViewer, receiptNumber: string): Promise<ReceiptData | null> {
   const payment = await client.payment.findUnique({
     where: { receiptNumber },
     select: {
@@ -144,37 +217,35 @@ export async function getReceipt(client: Db, viewer: ReceiptViewer, receiptNumbe
       recordedBy: { select: { name: true } },
       reverses: { select: { receiptNumber: true } },
       reversedBy: { select: { receiptNumber: true } },
-      order: { select: { id: true, number: true, total: true, contact: true, createdAt: true, customer: { select: { userId: true } } } },
+      order: { select: { ...OWNER_SELECT, number: true, total: true } },
+      intervention: {
+        select: {
+          number: true,
+          amountDue: true,
+          contact: true,
+          customer: { select: { userId: true } },
+          quote: { select: { id: true, createdAt: true } },
+          quoteRequest: { select: { id: true, createdAt: true } },
+        },
+      },
     },
   });
-  if (!payment || !canViewReceipt(viewer, payment.order)) return null;
-  const company = await getSetting("company", client);
-  const contact = payment.order.contact as unknown as Contact;
+  if (!payment) return null;
+  if (!canViewDocument(viewer, ownershipOf(payment.order, payment.intervention), ["payments.read", "payments.record"])) return null;
+  const document = payment.order
+    ? { label: "Commande", number: payment.order.number, total: payment.order.total, contact: payment.order.contact }
+    : { label: "Intervention", number: payment.intervention!.number, total: payment.intervention!.amountDue, contact: payment.intervention!.contact };
+  const contact = document.contact as unknown as Contact;
   return {
     receiptNumber: payment.receiptNumber,
     createdAt: payment.createdAt,
     amount: payment.amount,
     balanceAfter: payment.balanceAfter,
-    orderNumber: payment.order.number,
-    orderTotal: payment.order.total,
+    document: { label: document.label, number: document.number, total: document.total },
     customer: { name: contact.name, phone: contact.phone },
     recordedBy: payment.recordedBy.name,
     reversal: payment.reverses ? { receiptNumber: payment.reverses.receiptNumber, reason: payment.reason ?? "" } : null,
     voidedBy: payment.reversedBy?.receiptNumber ?? null,
-    company: {
-      name: company.companyName,
-      address: company.address,
-      phone: company.phone,
-      email: company.email,
-      ninea: company.ninea,
-      rccm: company.rccm,
-    },
+    company: await companyHeader(client),
   };
-}
-
-function canViewReceipt(viewer: ReceiptViewer, order: { id: string; createdAt: Date; customer: { userId: string | null } }): boolean {
-  const { user } = viewer;
-  if (user && (user.permissions.has("payments.read") || user.permissions.has("payments.record"))) return true;
-  if (user && order.customer.userId === user.id) return true;
-  return order.customer.userId === null && guestLinkAllows(order, viewer.token);
 }

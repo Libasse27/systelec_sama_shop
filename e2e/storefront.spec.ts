@@ -53,15 +53,16 @@ test.describe("boutique publique", () => {
     expect((await page.goto("/categories/inexistante"))?.status()).toBe(404);
   });
 
-  test("une prestation propose devis, réservation et contact", async ({ page }) => {
+  test("une prestation mène à la demande de devis du service, et au contact", async ({ page }) => {
     await page.goto("/services");
     await expect(page.getByRole("heading", { name: "Vidéosurveillance", level: 2 })).toBeVisible();
     await page.getByRole("link", { name: /Installation de caméras/ }).click();
     await expect(page).toHaveURL(/\/services\/installation-de-cameras$/);
     await expect(page.locator("header").getByText("Sur devis", { exact: true })).toBeVisible();
-    await expect(page.getByRole("link", { name: "Réserver une intervention" })).toBeVisible();
-    await page.getByRole("link", { name: "Demander un devis" }).click();
-    await expect(page.locator("main").getByRole("status")).toContainText("Installation de caméras");
+    await expect(page.getByRole("link", { name: "Nous contacter" })).toBeVisible();
+    await page.getByRole("link", { name: "Demander un devis ou une intervention" }).click();
+    await expect(page).toHaveURL(/\/devis\/demande\?service=installation-de-cameras$/);
+    await expect(page.locator("main")).toContainText("Service : Installation de caméras");
   });
 
   test("sitemap et robots ne publient que le contenu public", async ({ request }) => {

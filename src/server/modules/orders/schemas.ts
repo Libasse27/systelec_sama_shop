@@ -1,15 +1,7 @@
 import { z } from "zod";
+import { optionalText } from "@/lib/schema-text";
 
 const text = (min: number, max: number) => z.string().trim().min(min).max(max);
-const optionalText = (max: number) =>
-  z
-    .string()
-    .trim()
-    .max(max)
-    .optional()
-    .nullable()
-    .transform((value) => value || null);
-
 /** Téléphone : chiffres, espaces et « + » initial ; 8 à 15 chiffres (numéros sénégalais et internationaux). */
 export const phoneSchema = z
   .string()

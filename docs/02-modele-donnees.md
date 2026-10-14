@@ -67,7 +67,7 @@ Statuts (enums distincts) :
 
 | Modèle | Champs clés | Notes |
 |---|---|---|
-| `Payment` | receiptNumber (unique), orderId (interventionId ajouté en phase 8, avec `CHECK` « exactement un »), amount (> 0, ou < 0 pour une contre-écriture), method (`CASH` uniquement), balanceAfter, recordedById, idempotencyKey?, reversesPaymentId? (unique), reason?, note (interne), createdAt | Ajout seul (trigger). Annulation = contre-écriture liée ; « annulé » se lit sur l'existence de la contre-écriture (pas de colonne `status` modifiable). Date d'encaissement = createdAt. `orders.amountPaid` = Σ amount, contrôlé par un trigger différé. Remplace `PaymentReceipt` (le reçu est généré depuis cette ligne) |
+| `Payment` | receiptNumber (unique), orderId? / interventionId? (exactement un — `CHECK`), amount (> 0, ou < 0 pour une contre-écriture), method (`CASH` uniquement), balanceAfter, recordedById, idempotencyKey?, reversesPaymentId? (unique), reason?, note (interne), createdAt | Ajout seul (trigger). Annulation = contre-écriture liée ; « annulé » se lit sur l'existence de la contre-écriture (pas de colonne `status` modifiable). Date d'encaissement = createdAt. `orders.amountPaid` et `interventions.amountPaid` = Σ amount, contrôlés par un trigger différé. Remplace `PaymentReceipt` (le reçu est généré depuis cette ligne) |
 | `Invoice` | number (unique), orderId? / interventionId?, issuedAt, total, pdfUrl? | Document commercial, pas une comptabilité réglementaire |
 | `Return` | number, orderId, status, reason, restock (bool), refundAmount, processedById | |
 | `ReturnItem` | returnId, orderItemId, quantity, condition | |
@@ -88,7 +88,9 @@ Statuts (enums distincts) :
 | `InterventionReport` | interventionId, diagnosis, workDone, timeSpentMin, observations, authorId | |
 | `InterventionPart` | interventionId, variantId?, label, quantity, unitCost, unitPrice | Sortie de stock tracée si `variantId` |
 
-`InterventionStatus` : `NEW`, `TO_QUALIFY`, `VISIT_TO_SCHEDULE`, `QUOTE_IN_PROGRESS`, `QUOTE_SENT`, `ACCEPTED`, `REFUSED`, `SCHEDULED`, `IN_PROGRESS`, `DONE`, `CANCELLED`.
+`InterventionStatus` (phase 8) : `TO_SCHEDULE`, `SCHEDULED`, `IN_PROGRESS`, `DONE`, `CANCELLED`. Le cycle amont (qualification, devis, acceptation) est porté par `QuoteRequestStatus` (`NEW`, `IN_REVIEW`, `QUOTED`, `ACCEPTED`, `CANCELLED`) et `QuoteStatus`, au lieu d'être dupliqué dans l'intervention.
+
+Écarts de la phase 8 : `QuoteRequest.attachments` reporté (stockage de fichiers clients à cadrer) ; `QuoteItem.variantId` non retenu (les lignes sont libres) ; `InterventionPart.unitPrice` non retenu (la facturation suit le devis ou le montant convenu ; `unitCost` sert au coût interne) ; `Appointment` ne porte que des interventions (pas de visite technique distincte) ; `Invoice` pour les interventions seulement (factures de commandes : phase 9).
 
 ## 8. Contenu, paramètres, notifications
 

@@ -12,6 +12,8 @@ export async function resetDatabase(): Promise<void> {
               categories, brands, products, product_images, product_variants, inventories,
               product_compatibilities, service_categories, services, pages, faq_items,
               carts, cart_items, delivery_zones, pickup_points, customers, orders, order_items,
-              order_status_history, notifications, payments RESTART IDENTITY CASCADE`,
+              order_status_history, notifications, payments, quote_requests, quotes, quote_items,
+              technicians, interventions, appointments, intervention_reports, intervention_parts,
+              invoices RESTART IDENTITY CASCADE`,
   );
 }

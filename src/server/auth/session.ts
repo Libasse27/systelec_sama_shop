@@ -46,3 +46,10 @@ export async function requirePermission(permission: Permission, returnTo: string
   }
   return user;
 }
+
+/** Exige l'une des permissions (la première est celle journalisée en cas de refus). */
+export async function requireAnyPermission(permissions: readonly [Permission, ...Permission[]], returnTo: string): Promise<CurrentUser> {
+  const user = await requireUser(returnTo);
+  if (permissions.some((permission) => user.permissions.has(permission))) return user;
+  return requirePermission(permissions[0], returnTo);
+}

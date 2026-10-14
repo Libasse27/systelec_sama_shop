@@ -2,7 +2,7 @@ import "server-only";
 import type { FulfillmentMethod, OrderHistoryField, OrderStatus, PaymentStatus, Prisma } from "@/generated/prisma/client";
 import { assertPermission, type Actor } from "@/server/authz/service";
 import type { Db } from "@/server/db/client";
-import { verifyOrderAccessToken } from "./access-token";
+import { verifyAccessToken, type AccessScope } from "./access-token";
 import type { Contact, ShippingAddress } from "./schemas";
 import { allowedTransitions } from "./status";
 
@@ -99,8 +99,8 @@ export async function getCustomerOrder(client: Db, userId: string, number: strin
  * Lien de suivi invité valide : jeton signé de CETTE commande, et lien encore actif
  * (il expose des coordonnées : il ne reste pas valable indéfiniment).
  */
-export function guestLinkAllows(order: { id: string; createdAt: Date }, token: string | undefined): boolean {
-  if (!verifyOrderAccessToken(order.id, token)) return false;
+export function guestLinkAllows(order: { id: string; createdAt: Date }, token: string | undefined, scope: AccessScope = "order"): boolean {
+  if (!verifyAccessToken(scope, order.id, token)) return false;
   return Date.now() - order.createdAt.getTime() <= GUEST_LINK_DAYS * 24 * 3600 * 1000;
 }
 

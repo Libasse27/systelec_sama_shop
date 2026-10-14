@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useActionState, useContext, useEffect, useRef, useSyncExternalStore, useTransition } from "react";
+import { createContext, useActionState, useContext, useEffect, useId, useRef, useSyncExternalStore, useTransition } from "react";
 import { initialActionState, type ActionState } from "@/lib/form-state";
 import { cn } from "@/lib/utils";
 
@@ -99,7 +99,8 @@ interface FieldShellProps {
 
 function FieldShell({ name, label, required, hint, children, className }: FieldShellProps) {
   const errors = useFieldErrors(name);
-  const id = `champ-${name.replace(/\W/g, "-")}`;
+  // Unique dans la page : plusieurs formulaires peuvent avoir un champ du même nom.
+  const id = `champ-${name.replace(/\W/g, "-")}-${useId().replace(/\W/g, "")}`;
   const describedBy = [hint && `${id}-aide`, errors && `${id}-erreur`].filter(Boolean).join(" ") || undefined;
   return (
     <div className={cn("flex flex-col gap-1", className)}>
@@ -131,7 +132,7 @@ interface TextFieldProps {
   defaultValue?: string | number | null;
   required?: boolean;
   hint?: string;
-  type?: "text" | "number" | "search";
+  type?: "text" | "number" | "search" | "date" | "time" | "email" | "tel";
   inputMode?: "numeric" | "text";
   className?: string;
 }
@@ -229,7 +230,8 @@ export function SelectField({
 }
 
 export function CheckboxField({ name, label, defaultChecked }: { name: string; label: string; defaultChecked?: boolean }) {
-  const id = `champ-${name.replace(/\W/g, "-")}`;
+  // Unique dans la page : plusieurs formulaires peuvent avoir un champ du même nom.
+  const id = `champ-${name.replace(/\W/g, "-")}-${useId().replace(/\W/g, "")}`;
   return (
     <div className="flex items-center gap-2">
       <input id={id} name={name} type="checkbox" defaultChecked={defaultChecked} className="size-4" />

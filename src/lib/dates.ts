@@ -44,3 +44,23 @@ export function businessDayRange(key: string): { from: Date; to: Date } | null {
   if (businessDateKey(from) !== key) return null; // 2026-02-30, mois 13…
   return { from, to: new Date(from.getTime() + 24 * 3600 * 1000) };
 }
+
+const TIME_KEY = /^([01]\d|2[0-3]):([0-5]\d)$/;
+
+/** Instant d'une date (AAAA-MM-JJ) et d'une heure (HH:MM) à Dakar (UTC+0 toute l'année), ou null. */
+export function businessDateTime(day: string, time: string): Date | null {
+  const range = businessDayRange(day);
+  const match = TIME_KEY.exec(time);
+  if (!range || !match) return null;
+  return new Date(range.from.getTime() + (Number(match[1]) * 60 + Number(match[2])) * 60_000);
+}
+
+/** Heure à Dakar au format HH:MM. */
+export function formatTime(date: Date): string {
+  return new Intl.DateTimeFormat("fr-FR", { timeZone: BUSINESS_TIMEZONE, hour: "2-digit", minute: "2-digit" }).format(date);
+}
+
+/** Date de Dakar (AAAA-MM-JJ) dans `days` jours. */
+export function businessDateKeyIn(days: number): string {
+  return businessDateKey(new Date(Date.now() + days * 24 * 3600 * 1000));
+}

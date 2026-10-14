@@ -100,7 +100,7 @@ describe("encaissements en espèces (§20 n° 15, 16 et 26, PostgreSQL)", () => 
       const { receiptNumber } = await pay(cashier, id, 30_000);
       expect((await db.payment.findUniqueOrThrow({ where: { receiptNumber } })).balanceAfter).toBe(0);
       expect(await orderState(id)).toMatchObject({ amountPaid: TOTAL, paymentStatus: "PAID" });
-      await expect(pay(cashier, id, 1)).rejects.toThrow(/déjà soldée/);
+      await expect(pay(cashier, id, 1)).rejects.toThrow(/Déjà soldé/);
     });
 
     it("n'encaisse ni une commande non confirmée, ni une commande annulée", async () => {
@@ -247,7 +247,7 @@ describe("encaissements en espèces (§20 n° 15, 16 et 26, PostgreSQL)", () => 
 
       expect(await getReceipt(db, { user: await actorWith("TECHNICIAN") }, guestReceipt)).toBeNull();
       expect(await getReceipt(db, { user: manager }, guestReceipt)).not.toBeNull(); // payments.read
-      expect(await getReceipt(db, { user: cashier }, guestReceipt)).toMatchObject({ amount: TOTAL, balanceAfter: 0, orderNumber: guestOrder.number });
+      expect(await getReceipt(db, { user: cashier }, guestReceipt)).toMatchObject({ amount: TOTAL, balanceAfter: 0, document: { label: "Commande", number: guestOrder.number } });
       expect(await getReceipt(db, { user: owner }, accountReceipt)).not.toBeNull();
       expect(await getReceipt(db, { user: someone }, accountReceipt)).toBeNull();
       expect(await getReceipt(db, { user: null, token: orderAccessToken(accountOrder.id) }, accountReceipt)).toBeNull();

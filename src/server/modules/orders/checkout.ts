@@ -2,9 +2,11 @@ import "server-only";
 import { Prisma, type PrismaClient } from "@/generated/prisma/client";
 import { businessYear } from "@/lib/dates";
 import { recordAudit } from "@/server/audit/audit";
+import { isUniqueViolation } from "@/server/db/errors";
 import { AppError } from "@/server/errors";
 import { loadCategoryIndex } from "@/server/modules/catalog/queries";
 import type { CartOwner } from "@/server/modules/cart/service";
+import { resolveCustomer } from "@/server/modules/customers/service";
 import { lockStock, reserveStock } from "@/server/modules/inventory/reservations";
 import { nextBusinessNumber } from "@/server/modules/sequences/service";
 import { getSetting } from "@/server/modules/settings/service";
@@ -14,7 +16,7 @@ import { orderAccessToken } from "./access-token";
 import { assertOrderAllowed } from "./limits";
 import { paymentStatusFor } from "@/server/modules/payments/balance";
 import { computeOrderTotals } from "./pricing";
-import { checkoutSchema, type Contact } from "./schemas";
+import { checkoutSchema } from "./schemas";
 
 type Tx = Prisma.TransactionClient;
 
@@ -56,13 +58,6 @@ async function resolveFulfillment(tx: Tx, input: ReturnType<typeof checkoutSchem
   return { method: "PICKUP", deliveryZoneId: null, pickupPointId: point.id, delivery: null };
 }
 
-/** Client de la commande : la fiche du compte (coordonnées mises à jour), ou une fiche invitée. */
-async function resolveCustomer(tx: Tx, userId: string | null, contact: Contact): Promise<string> {
-  const data = { name: contact.name, phone: contact.phone, email: contact.email };
-  if (!userId) return (await tx.customer.create({ data, select: { id: true } })).id;
-  return (await tx.customer.upsert({ where: { userId }, create: { ...data, userId }, update: data, select: { id: true } })).id;
-}
-
 const guestCartHash = (context: CheckoutContext): string | null => ("tokenHash" in context.cart ? context.cart.tokenHash : null);
 
 /**
@@ -82,8 +77,6 @@ async function findReplay(client: PrismaClient | Tx, idempotencyKey: string, con
   if (!sameOwner) throw new AppError("CONFLICT", "Cette commande a déjà été envoyée.");
   return { id: existing.id, number: existing.number, accessToken: context.userId ? null : orderAccessToken(existing.id), replayed: true };
 }
-
-const isUniqueViolation = (error: unknown) => error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002";
 
 /**
  * Passe la commande du panier, en une transaction :

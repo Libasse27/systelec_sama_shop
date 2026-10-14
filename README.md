@@ -2,7 +2,7 @@
 
 Plateforme e-commerce et de services techniques de **SYSTELEC** (Sénégal) : vente d'équipements informatiques, réseau, électroniques, électriques et de sécurité ; maintenance, réseaux, vidéosurveillance et électricité. Paiement **exclusivement hors ligne** (espèces), livraison à domicile et retrait en boutique.
 
-> Statut : Phase 7 terminée (encaissements en espèces, voir [rapport](docs/rapports/phase-7.md)). Prochaine étape : Phase 8, services techniques.
+> Statut : Phase 8 terminée (services techniques, voir [rapport](docs/rapports/phase-8.md)). Prochaine étape : Phase 9, administration avancée.
 
 ## Démarrage local
 

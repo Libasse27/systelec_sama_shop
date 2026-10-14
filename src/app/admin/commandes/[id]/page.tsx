@@ -9,7 +9,8 @@ import { requirePermission } from "@/server/auth/session";
 import { db } from "@/server/db/client";
 import { getAdminOrder } from "@/server/modules/orders/queries";
 import { changeOrderStatusAction } from "../actions";
-import { PaymentsSection } from "./payments-section";
+import { PaymentsSection } from "@/components/admin/payments-section";
+import { PAYABLE_ORDER_STATUSES } from "@/server/modules/payments/balance";
 
 export const metadata: Metadata = { title: "Commande", robots: { index: false } };
 
@@ -71,7 +72,15 @@ export default async function AdminOrderPage({ params }: { params: Promise<{ id:
         </Section>
       )}
 
-      <PaymentsSection order={order} user={user} />
+      <PaymentsSection
+        target={{ kind: "order", id: order.id }}
+        total={order.total}
+        amountPaid={order.amountPaid}
+        paymentStatus={order.paymentStatus}
+        payable={PAYABLE_ORDER_STATUSES.includes(order.status) || (order.status === "PENDING_CONFIRMATION" ? "Confirmez la commande avant d'encaisser." : "Cette commande ne s'encaisse plus.")}
+        voidable={order.status !== "CLOSED"}
+        user={user}
+      />
 
       <OrderDetails order={{ ...order, history: undefined }} receiptHref={(receipt) => `/recus/${receipt}`} />
 

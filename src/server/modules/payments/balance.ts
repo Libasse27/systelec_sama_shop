@@ -27,7 +27,7 @@ export interface AmountCheck {
  */
 export function amountRefusal({ total, amountPaid, amount, partialPaymentEnabled }: AmountCheck): string | null {
   const balance = total - amountPaid;
-  if (balance <= 0) return "Cette commande est déjà soldée.";
+  if (balance <= 0) return "Déjà soldé : il ne reste rien à encaisser.";
   if (amount > balance) {
     return `Le montant dépasse le reste à payer (${formatFcfa(balance)}). N'encaissez que le montant dû, monnaie rendue.`;
   }

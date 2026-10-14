@@ -78,3 +78,31 @@ export const PAYMENT_STATUS_LABELS: Record<PaymentStatus, string> = {
 };
 
 export const FULFILLMENT_LABELS = { DELIVERY: "Livraison à domicile", PICKUP: "Retrait en boutique" } as const;
+
+export const QUOTE_REQUEST_STATUS_LABELS = {
+  NEW: "Nouvelle",
+  IN_REVIEW: "En cours d'étude",
+  QUOTED: "Devis envoyé",
+  ACCEPTED: "Acceptée",
+  CANCELLED: "Close sans suite",
+} as const;
+
+export const QUOTE_STATUS_LABELS = {
+  DRAFT: "Brouillon",
+  SENT: "Envoyé, en attente de réponse",
+  ACCEPTED: "Accepté",
+  REFUSED: "Refusé",
+  EXPIRED: "Expiré",
+} as const;
+
+export const QUOTE_ITEM_KIND_LABELS = { MATERIAL: "Matériel", LABOR: "Main-d'œuvre", TRAVEL: "Déplacement", OTHER: "Autre" } as const;
+
+export const URGENCY_LABELS = { NORMAL: "Normale", URGENT: "Urgente" } as const;
+
+export const INTERVENTION_STATUS_LABELS = {
+  TO_SCHEDULE: "À planifier",
+  SCHEDULED: "Planifiée",
+  IN_PROGRESS: "En cours",
+  DONE: "Terminée",
+  CANCELLED: "Annulée",
+} as const;

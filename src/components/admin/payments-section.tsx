@@ -6,36 +6,48 @@ import { PAYMENT_STATUS_LABELS } from "@/lib/labels";
 import { formatFcfa } from "@/lib/money";
 import type { CurrentUser } from "@/server/auth/session";
 import { db } from "@/server/db/client";
-import type { AdminOrder } from "@/server/modules/orders/queries";
-import { PAYABLE_ORDER_STATUSES } from "@/server/modules/payments/balance";
-import { listOrderPayments } from "@/server/modules/payments/queries";
+import type { PaymentStatus } from "@/generated/prisma/client";
+import { listPayments } from "@/server/modules/payments/queries";
+import type { PaymentTarget } from "@/server/modules/payments/targets";
 import { getSetting } from "@/server/modules/settings/service";
-import { recordPaymentAction, voidPaymentAction } from "../actions";
+import { recordPaymentAction, voidPaymentAction } from "@/app/admin/_lib/payment-actions";
 
-/** Solde, encaissement en espèces et contre-écritures d'une commande (selon les permissions). */
-export async function PaymentsSection({ order, user }: { order: AdminOrder; user: CurrentUser }) {
+export interface PaymentsSectionProps {
+  target: PaymentTarget;
+  total: number;
+  amountPaid: number;
+  paymentStatus: PaymentStatus;
+  /** Encaissement possible dans l'état actuel du document ; sinon le motif affiché. */
+  payable: true | string;
+  /** Contre-écriture possible dans l'état actuel du document. */
+  voidable: boolean;
+  user: CurrentUser;
+}
+
+/** Solde, encaissement en espèces et contre-écritures d'une commande ou d'une intervention (selon les permissions). */
+export async function PaymentsSection({ target, total, amountPaid, paymentStatus, payable, voidable, user }: PaymentsSectionProps) {
   const canRecord = user.permissions.has("payments.record");
   const canCorrect = user.permissions.has("payments.correct");
   if (!canRecord && !user.permissions.has("payments.read")) return null;
-  const [payments, commerce] = await Promise.all([listOrderPayments(db, user, order.id), getSetting("commerce", db)]);
-  const balance = order.total - order.amountPaid;
+  const [payments, commerce] = await Promise.all([listPayments(db, user, target), getSetting("commerce", db)]);
+  const balance = total - amountPaid;
 
   return (
     <Section title="Encaissements">
       <dl className="grid gap-x-6 gap-y-1 text-sm sm:grid-cols-[12rem_1fr]">
         <dt className="text-ink-muted">Statut du paiement</dt>
-        <dd className="font-semibold">{PAYMENT_STATUS_LABELS[order.paymentStatus]}</dd>
+        <dd className="font-semibold">{PAYMENT_STATUS_LABELS[paymentStatus]}</dd>
         <dt className="text-ink-muted">Total</dt>
-        <dd>{formatFcfa(order.total)}</dd>
+        <dd>{formatFcfa(total)}</dd>
         <dt className="text-ink-muted">Encaissé</dt>
-        <dd>{formatFcfa(order.amountPaid)}</dd>
+        <dd>{formatFcfa(amountPaid)}</dd>
         <dt className="text-ink-muted">Reste à payer</dt>
         <dd className="font-semibold">{formatFcfa(balance)}</dd>
       </dl>
 
-      {canRecord && PAYABLE_ORDER_STATUSES.includes(order.status) && (
+      {canRecord && payable === true && (
         // Formulaire toujours monté : le message de confirmation reste visible une fois la commande soldée.
-        <ActionForm action={recordPaymentAction.bind(null, order.id)} className="mt-4 border-t border-line pt-4">
+        <ActionForm action={recordPaymentAction.bind(null, target)} className="mt-4 border-t border-line pt-4">
           {balance > 0 ? (
             <>
               <input type="hidden" name="idempotencyKey" value={randomUUID()} />
@@ -55,11 +67,11 @@ export async function PaymentsSection({ order, user }: { order: AdminOrder; user
               </div>
             </>
           ) : (
-            <p className="text-sm text-green-800">Commande soldée.</p>
+            <p className="text-sm text-green-800">Soldé : il ne reste rien à encaisser.</p>
           )}
         </ActionForm>
       )}
-      {order.status === "PENDING_CONFIRMATION" && canRecord && <p className="mt-4 text-sm text-ink-muted">Confirmez la commande avant d&apos;encaisser.</p>}
+      {canRecord && payable !== true && balance > 0 && <p className="mt-4 text-sm text-ink-muted">{payable}</p>}
 
       {payments.length > 0 && (
         <ul className="mt-4 flex flex-col gap-3 border-t border-line pt-4 text-sm">
@@ -75,8 +87,8 @@ export async function PaymentsSection({ order, user }: { order: AdminOrder; user
                 {payment.reversedBy && <span className="text-red-800"> · annulé par {payment.reversedBy}</span>}
                 {payment.note && <div className="text-xs text-ink-muted">Note : {payment.note}</div>}
               </div>
-              {canCorrect && payment.amount > 0 && order.status !== "CLOSED" && (
-                <ActionForm action={voidPaymentAction.bind(null, order.id, payment.id)}>
+              {canCorrect && payment.amount > 0 && voidable && (
+                <ActionForm action={voidPaymentAction.bind(null, target, payment.id)}>
                   {!payment.reversedBy && (
                     <div className="flex flex-wrap items-end gap-2">
                       <TextField name="reason" label={`Motif d'annulation de ${payment.receiptNumber}`} hint="Imprimé sur le reçu d'annulation." className="min-w-56 flex-1" />

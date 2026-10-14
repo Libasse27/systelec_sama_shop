@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { businessDateKey, businessDayRange, businessYear, formatDateTime } from "./dates";
+import { businessDateKey, businessDateTime, businessDayRange, businessYear, formatDateTime } from "./dates";
 
 describe("dates (Africa/Dakar)", () => {
   it("affiche l'heure de Dakar (UTC+0, sans heure d'été)", () => {
@@ -26,5 +26,17 @@ describe("businessDayRange", () => {
 
   it("refuse une date mal formée ou inexistante", () => {
     for (const key of ["", "2026-2-1", "2026-02-30", "2026-13-01", "14/10/2026", "2026-10-14T00:00"]) expect(businessDayRange(key)).toBeNull();
+  });
+});
+
+describe("businessDateTime", () => {
+  it("combine la date et l'heure de Dakar", () => {
+    expect(businessDateTime("2026-10-20", "09:30")).toEqual(new Date("2026-10-20T09:30:00Z"));
+  });
+
+  it("refuse une heure ou une date invalide", () => {
+    for (const [day, time] of [["2026-10-20", "24:00"], ["2026-10-20", "9:30"], ["2026-10-20", "09:60"], ["2026-02-30", "10:00"]]) {
+      expect(businessDateTime(day!, time!)).toBeNull();
+    }
   });
 });
