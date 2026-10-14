@@ -3,7 +3,7 @@ import Link from "next/link";
 import { PageHeader, Section } from "@/components/admin/admin-ui";
 import { CategoryFields } from "@/components/admin/category-fields";
 import { categoryOptions } from "@/components/admin/category-options";
-import { ActionForm, SubmitButton } from "@/components/admin/form-controls";
+import { ActionForm, SubmitButton } from "@/components/forms/form-controls";
 import { requirePermission } from "@/server/auth/session";
 import { db } from "@/server/db/client";
 import { listAdminCategories } from "@/server/modules/catalog/admin-categories";

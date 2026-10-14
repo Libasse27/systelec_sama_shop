@@ -2,7 +2,7 @@
 
 Plateforme e-commerce et de services techniques de **SYSTELEC** (Sénégal) : vente d'équipements informatiques, réseau, électroniques, électriques et de sécurité ; maintenance, réseaux, vidéosurveillance et électricité. Paiement **exclusivement hors ligne** (espèces), livraison à domicile et retrait en boutique.
 
-> Statut : Phase 5 terminée (administration des produits et des stocks, voir [rapport](docs/rapports/phase-5.md)). Prochaine étape : Phase 6, panier et commandes.
+> Statut : Phase 6 terminée (panier et commandes, voir [rapport](docs/rapports/phase-6.md)). Prochaine étape : Phase 7, encaissements.
 
 ## Démarrage local
 
@@ -22,6 +22,9 @@ hors Git) : en production, ce dossier doit être un volume persistant et sauvega
 
 Sans fournisseur e-mail configuré, un lien de réinitialisation de mot de passe se génère avec
 `pnpm admin:reset-link <email>` (après vérification de l'identité du demandeur).
+
+Les commandes non confirmées libèrent leur stock après le délai de réservation (48 h par défaut) :
+planifier `pnpm orders:expire` (par exemple toutes les 15 minutes).
 
 Vérifications : `pnpm lint && pnpm typecheck && pnpm test && pnpm build && pnpm test:e2e`.
 

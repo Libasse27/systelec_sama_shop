@@ -53,3 +53,28 @@ export const MOVEMENT_TYPE_LABELS: Record<MovementType, string> = {
 };
 
 export const CONDITION_OPTIONS = Object.entries(CONDITION_LABELS).map(([value, label]) => ({ value, label }));
+
+type OrderStatus = "PENDING_CONFIRMATION" | "CONFIRMED" | "PREPARING" | "READY_FOR_PICKUP" | "READY_TO_SHIP" | "CANCELLED" | "CLOSED";
+
+export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
+  PENDING_CONFIRMATION: "En attente de confirmation",
+  CONFIRMED: "Confirmée",
+  PREPARING: "En préparation",
+  READY_FOR_PICKUP: "Prête au retrait",
+  READY_TO_SHIP: "Prête à livrer",
+  CANCELLED: "Annulée",
+  CLOSED: "Remise au client",
+};
+
+type PaymentStatus = "UNPAID" | "PARTIALLY_PAID" | "PAID" | "TO_VERIFY" | "REFUND_PENDING" | "REFUNDED";
+
+export const PAYMENT_STATUS_LABELS: Record<PaymentStatus, string> = {
+  UNPAID: "Non payée",
+  PARTIALLY_PAID: "Partiellement payée",
+  PAID: "Payée",
+  TO_VERIFY: "À vérifier",
+  REFUND_PENDING: "Remboursement en attente",
+  REFUNDED: "Remboursée",
+};
+
+export const FULFILLMENT_LABELS = { DELIVERY: "Livraison à domicile", PICKUP: "Retrait en boutique" } as const;

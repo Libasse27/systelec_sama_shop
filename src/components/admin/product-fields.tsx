@@ -1,7 +1,7 @@
-import { toLabelValueText } from "@/app/admin/_lib/form-data";
+import { toLabelValueText } from "@/lib/form-data";
 import { CONDITION_OPTIONS } from "@/lib/labels";
 import type { AdminProduct, AdminVariant } from "@/server/modules/catalog/admin-queries";
-import { CheckboxField, IntegerField, SelectField, TextAreaField, TextField } from "./form-controls";
+import { CheckboxField, IntegerField, SelectField, TextAreaField, TextField } from "@/components/forms/form-controls";
 
 const SPECS_HINT = "Une caractéristique par ligne, au format « Libellé : valeur ».";
 

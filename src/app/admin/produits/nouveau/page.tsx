@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { PageHeader, Section } from "@/components/admin/admin-ui";
 import { categoryOptions } from "@/components/admin/category-options";
-import { ActionForm, SubmitButton } from "@/components/admin/form-controls";
+import { ActionForm, SubmitButton } from "@/components/forms/form-controls";
 import { ProductFields, VariantFields } from "@/components/admin/product-fields";
 import { requirePermission } from "@/server/auth/session";
 import { db } from "@/server/db/client";

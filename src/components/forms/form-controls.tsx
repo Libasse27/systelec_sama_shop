@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useActionState, useContext, useEffect, useRef, useSyncExternalStore, useTransition } from "react";
-import { initialActionState, type ActionState } from "@/app/admin/_lib/form-state";
+import { initialActionState, type ActionState } from "@/lib/form-state";
 import { cn } from "@/lib/utils";
 
 type FormAction = (state: ActionState, formData: FormData) => Promise<ActionState>;

@@ -14,6 +14,8 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
   reporter: process.env.CI ? "github" : "list",
+  // Serveur de production partagé par tous les tests en parallèle : navigations parfois > 5 s.
+  expect: { timeout: 10_000 },
   use: {
     baseURL: BASE_URL,
     trace: "retain-on-failure",

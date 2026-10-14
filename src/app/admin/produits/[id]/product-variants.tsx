@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Section } from "@/components/admin/admin-ui";
-import { ActionForm, SubmitButton } from "@/components/admin/form-controls";
+import { ActionForm, SubmitButton } from "@/components/forms/form-controls";
 import { VariantFields } from "@/components/admin/product-fields";
 import type { AdminProduct } from "@/server/modules/catalog/admin-queries";
 import { addVariantAction, setDefaultVariantAction, updateVariantAction } from "../actions";

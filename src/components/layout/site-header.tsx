@@ -1,8 +1,11 @@
-import { ChevronDown, Search } from "lucide-react";
+import { ChevronDown, Search, ShoppingCart } from "lucide-react";
 import Link from "next/link";
 import { signOutAction } from "@/app/(auth)/actions";
 import { Logo } from "@/components/brand/logo";
 import { getCurrentUser } from "@/server/auth/session";
+import { db } from "@/server/db/client";
+import { countCartItems } from "@/server/modules/cart/service";
+import { readCartOwner } from "@/server/modules/cart/session";
 import { getCategoryIndex, getCompanySettings } from "@/server/storefront";
 
 const linkClass = "rounded-md px-3 py-2 text-sm font-medium text-white/90 hover:bg-white/10";
@@ -57,7 +60,8 @@ function SearchForm() {
 
 /** En-tête du site : marque, recherche, catalogue, services et accès au compte. */
 export async function SiteHeader() {
-  const [company, user] = await Promise.all([getCompanySettings(), getCurrentUser()]);
+  const [company, user, cartOwner] = await Promise.all([getCompanySettings(), getCurrentUser(), readCartOwner()]);
+  const cartCount = cartOwner ? await countCartItems(db, cartOwner) : 0;
   return (
     <header className="bg-brand-navy">
       <div className="mx-auto flex max-w-6xl flex-col gap-3 px-4 py-3">
@@ -65,7 +69,14 @@ export async function SiteHeader() {
           <Link href="/" aria-label={`${company.shopName}, accueil`}>
             <Logo shopName={company.shopName} logoUrl={company.logoUrl} />
           </Link>
-          <nav aria-label="Compte" className="flex items-center gap-1">
+          <nav aria-label="Compte" className="flex flex-wrap items-center justify-end gap-1">
+            <Link href="/panier" className={`${linkClass} flex items-center gap-1`}>
+              <ShoppingCart aria-hidden className="size-4" />
+              <span className="sr-only sm:not-sr-only">Panier</span>
+              {cartCount > 0 && (
+                <span className="rounded-full bg-brand-accent px-1.5 text-xs font-bold text-brand-navy">{cartCount}</span>
+              )}
+            </Link>
             {user ? (
               <>
                 {user.permissions.has("admin.access") && (

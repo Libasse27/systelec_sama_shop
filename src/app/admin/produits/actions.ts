@@ -14,8 +14,8 @@ import {
 } from "@/server/modules/catalog/admin-products";
 import { getStorage } from "@/server/storage/storage";
 import { adminAction } from "../_lib/action";
-import { checkbox, int, labelValueLines, optionalInt, text } from "../_lib/form-data";
-import type { ActionState } from "../_lib/form-state";
+import { checkbox, int, labelValueLines, optionalInt, text } from "@/lib/form-data";
+import type { ActionState } from "@/lib/form-state";
 
 const productPath = (id: string) => `/admin/produits/${id}`;
 

@@ -16,6 +16,7 @@ import {
 } from "@/server/auth/service";
 import { AppError, ValidationError } from "@/server/errors";
 import { logger } from "@/server/logger";
+import { mergeCartAfterSignIn } from "@/server/modules/cart/session";
 
 export interface FormState {
   error?: string;
@@ -45,7 +46,8 @@ const fields = (formData: FormData, names: string[]) =>
 
 export async function signUpAction(_state: FormState, formData: FormData): Promise<FormState> {
   try {
-    await signUpCustomer(getAuth(), fields(formData, ["name", "email", "phone", "password"]), await requestContext());
+    const { userId } = await signUpCustomer(getAuth(), fields(formData, ["name", "email", "phone", "password"]), await requestContext());
+    await mergeCartAfterSignIn(userId);
   } catch (error) {
     return toFormState(error);
   }
@@ -55,7 +57,8 @@ export async function signUpAction(_state: FormState, formData: FormData): Promi
 export async function signInAction(_state: FormState, formData: FormData): Promise<FormState> {
   let destination: string;
   try {
-    const { kind } = await signIn(getAuth(), fields(formData, ["email", "password"]), await requestContext());
+    const { kind, userId } = await signIn(getAuth(), fields(formData, ["email", "password"]), await requestContext());
+    await mergeCartAfterSignIn(userId);
     destination = safeRedirectPath(formData.get("suivant"), kind === "STAFF" ? "/admin" : "/compte");
   } catch (error) {
     return toFormState(error);

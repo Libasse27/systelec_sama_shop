@@ -1,5 +1,5 @@
 import { Section } from "@/components/admin/admin-ui";
-import { ActionForm, FileField, SubmitButton, TextField } from "@/components/admin/form-controls";
+import { ActionForm, FileField, SubmitButton, TextField } from "@/components/forms/form-controls";
 import type { AdminProduct } from "@/server/modules/catalog/admin-queries";
 import { MAX_IMAGES_PER_PRODUCT } from "@/server/modules/catalog/admin-images";
 import { addImageAction, deleteImageAction, moveImageAction, updateImageAltAction } from "../actions";

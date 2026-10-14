@@ -20,16 +20,16 @@ enum UserKind {
 
 /// Utilisateur. Le mot de passe (haché) est dans Account ; il n'est jamais lisible.
 model User {
-  id            String    @id
+  id            String     @id
   name          String
-  email         String    @unique
-  emailVerified Boolean   @default(false)
+  email         String     @unique
+  emailVerified Boolean    @default(false)
   image         String?
   phone         String?
-  kind          UserKind  @default(CUSTOMER)
-  isActive      Boolean   @default(true)
-  createdAt     DateTime  @default(now()) @db.Timestamptz(3)
-  updatedAt     DateTime  @updatedAt @db.Timestamptz(3)
+  kind          UserKind   @default(CUSTOMER)
+  isActive      Boolean    @default(true)
+  createdAt     DateTime   @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime   @updatedAt @db.Timestamptz(3)
   sessions      Session[]
   accounts      Account[]
   roles         UserRole[]
@@ -243,27 +243,29 @@ model ProductImage {
 
 /// Tout produit a au moins une variante (par défaut) : prix et stock sont portés par la variante.
 model ProductVariant {
-  id             String     @id @default(cuid())
+  id             String          @id @default(cuid())
   productId      String
-  product        Product    @relation(fields: [productId], references: [id], onDelete: Cascade)
-  sku            String     @unique
+  product        Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
+  sku            String          @unique
   barcode        String?
   name           String
   /// Attributs de la variante (ex. { "Capacité": "1 To" }).
-  attributes     Json       @default("{}")
+  attributes     Json            @default("{}")
   /// Prix de vente TTC en FCFA (entier).
   price          Int
   /// Prix barré facultatif (promotion affichée), en FCFA.
   compareAtPrice Int?
   /// Prix d'achat interne : JAMAIS exposé au public (sélecteurs explicites).
   costPrice      Int?
-  isDefault      Boolean    @default(false)
-  isActive       Boolean    @default(true)
-  position       Int        @default(0)
+  isDefault      Boolean         @default(false)
+  isActive       Boolean         @default(true)
+  position       Int             @default(0)
   inventory      Inventory?
   movements      StockMovement[]
-  createdAt      DateTime   @default(now()) @db.Timestamptz(3)
-  updatedAt      DateTime   @updatedAt @db.Timestamptz(3)
+  cartItems      CartItem[]
+  orderItems     OrderItem[]
+  createdAt      DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime        @updatedAt @db.Timestamptz(3)
 
   @@index([productId, position])
   @@map("product_variants")
@@ -445,4 +447,228 @@ model AuditLog {
   @@index([actorId])
   @@index([createdAt])
   @@map("audit_logs")
+}
+
+// ─── Phase 6 : panier, commandes, livraison, notifications ─────────────────────
+
+/// Panier d'un compte (userId) ou d'un visiteur (empreinte SHA-256 du jeton de cookie).
+model Cart {
+  id        String     @id @default(cuid())
+  userId    String?    @unique
+  tokenHash String?    @unique
+  items     CartItem[]
+  expiresAt DateTime   @db.Timestamptz(3)
+  createdAt DateTime   @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime   @updatedAt @db.Timestamptz(3)
+
+  @@index([expiresAt])
+  @@map("carts")
+}
+
+/// Aucun prix stocké : le prix est toujours relu en base.
+model CartItem {
+  id        String         @id @default(cuid())
+  cartId    String
+  cart      Cart           @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  variantId String
+  variant   ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  quantity  Int
+  createdAt DateTime       @default(now()) @db.Timestamptz(3)
+
+  @@unique([cartId, variantId])
+  @@map("cart_items")
+}
+
+/// Zone de livraison. Aucune zone réelle n'est inventée (D5) : saisie par SYSTELEC.
+model DeliveryZone {
+  id           String   @id @default(cuid())
+  name         String   @unique
+  description  String?
+  fee          Int
+  /// Livraison offerte à partir de ce sous-total (FCFA).
+  freeAbove    Int?
+  leadTimeText String?
+  isActive     Boolean  @default(true)
+  position     Int      @default(0)
+  orders       Order[]
+  createdAt    DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime @updatedAt @db.Timestamptz(3)
+
+  @@map("delivery_zones")
+}
+
+/// Point de retrait. Sans point actif, l'option « retrait » est masquée (D4).
+model PickupPoint {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  address   String
+  hours     String?
+  phone     String?
+  isActive  Boolean  @default(true)
+  orders    Order[]
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  @@map("pickup_points")
+}
+
+enum CustomerType {
+  INDIVIDUAL
+  BUSINESS
+}
+
+/// Client : rattaché à un compte, ou invité (userId nul). Les notes internes ne sont jamais exposées.
+model Customer {
+  id            String       @id @default(cuid())
+  userId        String?      @unique
+  type          CustomerType @default(INDIVIDUAL)
+  name          String
+  companyName   String?
+  phone         String
+  email         String?
+  internalNotes String?
+  orders        Order[]
+  createdAt     DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime     @updatedAt @db.Timestamptz(3)
+
+  @@index([phone])
+  @@map("customers")
+}
+
+enum OrderStatus {
+  PENDING_CONFIRMATION
+  CONFIRMED
+  PREPARING
+  READY_FOR_PICKUP
+  READY_TO_SHIP
+  CANCELLED
+  CLOSED
+}
+
+enum PaymentStatus {
+  UNPAID
+  PARTIALLY_PAID
+  PAID
+  TO_VERIFY
+  REFUND_PENDING
+  REFUNDED
+}
+
+enum FulfillmentMethod {
+  DELIVERY
+  PICKUP
+}
+
+model Order {
+  id                String               @id @default(cuid())
+  number            String               @unique
+  customerId        String
+  customer          Customer             @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  /// Clé d'idempotence envoyée par le formulaire : une double soumission ne crée qu'une commande.
+  idempotencyKey    String               @unique
+  /// Commande invitée : empreinte du panier d'origine. Seul ce navigateur peut rejouer la soumission.
+  guestCartHash     String?
+  status            OrderStatus          @default(PENDING_CONFIRMATION)
+  paymentStatus     PaymentStatus        @default(UNPAID)
+  fulfillmentMethod FulfillmentMethod
+  /// Coordonnées et adresse FIGÉES au moment de la commande.
+  contact           Json
+  shippingAddress   Json?
+  deliveryZoneId    String?
+  deliveryZone      DeliveryZone?        @relation(fields: [deliveryZoneId], references: [id], onDelete: Restrict)
+  pickupPointId     String?
+  pickupPoint       PickupPoint?         @relation(fields: [pickupPointId], references: [id], onDelete: Restrict)
+  subtotal          Int
+  deliveryFee       Int
+  discountTotal     Int                  @default(0)
+  total             Int
+  amountPaid        Int                  @default(0)
+  notes             String?
+  internalNotes     String?
+  /// Fin de la réservation du stock si la commande n'est pas confirmée (D3).
+  reservedUntil     DateTime?            @db.Timestamptz(3)
+  confirmedAt       DateTime?            @db.Timestamptz(3)
+  cancelledAt       DateTime?            @db.Timestamptz(3)
+  closedAt          DateTime?            @db.Timestamptz(3)
+  items             OrderItem[]
+  history           OrderStatusHistory[]
+  createdAt         DateTime             @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime             @updatedAt @db.Timestamptz(3)
+
+  @@index([customerId, createdAt])
+  @@index([status, createdAt])
+  @@index([status, reservedUntil])
+  @@map("orders")
+}
+
+/// Ligne de commande : nom, référence et prix FIGÉS.
+model OrderItem {
+  id          String         @id @default(cuid())
+  orderId     String
+  order       Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  variantId   String
+  variant     ProductVariant @relation(fields: [variantId], references: [id], onDelete: Restrict)
+  productName String
+  variantName String
+  sku         String
+  unitPrice   Int
+  quantity    Int
+  lineTotal   Int
+  /// Prix d'achat au moment de la vente (marge) : interne, jamais exposé au client.
+  unitCost    Int?
+
+  @@index([orderId])
+  @@map("order_items")
+}
+
+enum OrderHistoryField {
+  ORDER
+  DELIVERY
+  PAYMENT
+}
+
+model OrderStatusHistory {
+  id        String            @id @default(cuid())
+  orderId   String
+  order     Order             @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  field     OrderHistoryField @default(ORDER)
+  from      String?
+  to        String
+  actorId   String?
+  comment   String?
+  createdAt DateTime          @default(now()) @db.Timestamptz(3)
+
+  @@index([orderId, createdAt])
+  @@map("order_status_history")
+}
+
+enum NotificationChannel {
+  EMAIL
+  SMS
+  WHATSAPP
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  FAILED
+  SKIPPED_NO_PROVIDER
+}
+
+/// Notifications persistées : rien n'est simulé, l'absence de fournisseur est tracée (D11).
+model Notification {
+  id        String              @id @default(cuid())
+  channel   NotificationChannel
+  template  String
+  recipient String
+  payload   Json
+  status    NotificationStatus  @default(PENDING)
+  error     String?
+  orderId   String?
+  sentAt    DateTime?           @db.Timestamptz(3)
+  createdAt DateTime            @default(now()) @db.Timestamptz(3)
+
+  @@index([status, createdAt])
+  @@index([orderId])
+  @@map("notifications")
 }

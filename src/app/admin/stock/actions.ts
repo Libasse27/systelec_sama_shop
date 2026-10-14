@@ -3,8 +3,8 @@
 import { db } from "@/server/db/client";
 import { recordStockMovement, setAlertThreshold } from "@/server/modules/inventory/service";
 import { adminAction } from "../_lib/action";
-import { int, text } from "../_lib/form-data";
-import type { ActionState } from "../_lib/form-state";
+import { int, text } from "@/lib/form-data";
+import type { ActionState } from "@/lib/form-state";
 
 const MOVEMENT_MESSAGES = { IN: "Entrée enregistrée.", OUT: "Sortie enregistrée.", ADJUSTMENT: "Inventaire enregistré." } as const;
 

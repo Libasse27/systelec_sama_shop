@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useTransition } from "react";
-import { FormMessages, useHydrated } from "@/components/admin/form-controls";
+import { FormMessages, useHydrated } from "@/components/forms/form-controls";
 import { formatFcfa } from "@/lib/money";
 import type { ImportField } from "@/server/modules/catalog/csv-import-plan";
 import { importCatalogAction, type ImportState } from "./actions";

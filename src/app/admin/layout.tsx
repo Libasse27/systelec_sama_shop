@@ -4,10 +4,12 @@ import { getCurrentUser } from "@/server/auth/session";
 
 const NAVIGATION: { href: string; label: string; permission: Permission }[] = [
   { href: "/admin", label: "Tableau de bord", permission: "admin.access" },
+  { href: "/admin/commandes", label: "Commandes", permission: "orders.read" },
   { href: "/admin/produits", label: "Produits", permission: "products.read" },
   { href: "/admin/categories", label: "Catégories", permission: "categories.manage" },
   { href: "/admin/stock", label: "Stock", permission: "inventory.read" },
   { href: "/admin/import-export", label: "Import / export", permission: "products.read" },
+  { href: "/admin/livraison", label: "Livraison et retrait", permission: "deliveries.manage" },
 ];
 
 /** Navigation de l'administration. La garde d'accès reste dans chaque page et chaque service. */

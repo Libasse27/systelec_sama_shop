@@ -4,8 +4,8 @@ import { redirect } from "next/navigation";
 import { db } from "@/server/db/client";
 import { createCategory, deleteCategory, updateCategory } from "@/server/modules/catalog/admin-categories";
 import { adminAction } from "../_lib/action";
-import { checkbox, int, text } from "../_lib/form-data";
-import type { ActionState } from "../_lib/form-state";
+import { checkbox, int, text } from "@/lib/form-data";
+import type { ActionState } from "@/lib/form-state";
 
 function categoryFields(formData: FormData) {
   return {

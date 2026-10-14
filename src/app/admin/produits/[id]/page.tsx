@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { PageHeader, Section, secondaryLinkClass, StatusBadge } from "@/components/admin/admin-ui";
 import { categoryOptions } from "@/components/admin/category-options";
-import { ActionForm, SubmitButton } from "@/components/admin/form-controls";
+import { ActionForm, SubmitButton } from "@/components/forms/form-controls";
 import { ProductFields } from "@/components/admin/product-fields";
 import { formatFcfa } from "@/lib/money";
 import { requirePermission } from "@/server/auth/session";

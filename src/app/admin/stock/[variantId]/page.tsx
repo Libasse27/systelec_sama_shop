@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { PageHeader, Section } from "@/components/admin/admin-ui";
-import { ActionForm, IntegerField, SelectField, SubmitButton, TextField } from "@/components/admin/form-controls";
+import { ActionForm, IntegerField, SelectField, SubmitButton, TextField } from "@/components/forms/form-controls";
 import { MovementsTable } from "@/components/admin/movements-table";
 import { formatDateTime } from "@/lib/dates";
 import { requirePermission } from "@/server/auth/session";

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { cache } from "react";
 import { AvailabilityBadge, Price, ProductImage } from "@/components/catalog/product-card";
+import { AddToCartForm } from "@/components/cart/add-to-cart-form";
 import { Breadcrumbs } from "@/components/layout/breadcrumbs";
 import { JsonLd } from "@/components/seo/json-ld";
 import { conditionLabel } from "@/lib/labels";
@@ -157,13 +158,7 @@ export default async function ProductPage({ params }: Props) {
               </p>
             )}
           </div>
-          <p className="text-sm text-ink-muted">
-            La commande en ligne ouvre prochainement. En attendant,{" "}
-            <Link href={`/contact?produit=${product.slug}`} className="text-brand-blue underline">
-              contactez-nous
-            </Link>{" "}
-            pour réserver ce produit.
-          </p>
+          <AddToCartForm variants={product.variants} />
         </section>
       </div>
 

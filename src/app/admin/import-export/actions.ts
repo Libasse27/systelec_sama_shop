@@ -5,7 +5,7 @@ import { ValidationError } from "@/server/errors";
 import { MAX_IMPORT_BYTES, type ImportPlan } from "@/server/modules/catalog/csv-import-plan";
 import { applyCatalogImport, previewCatalogImport } from "@/server/modules/catalog/csv-transfer";
 import { adminAction } from "../_lib/action";
-import type { ActionState } from "../_lib/form-state";
+import type { ActionState } from "@/lib/form-state";
 
 export interface ImportState extends ActionState {
   plan?: ImportPlan;

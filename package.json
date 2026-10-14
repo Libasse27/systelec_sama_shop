@@ -24,6 +24,7 @@
     "db:seed:demo": "tsx --env-file-if-exists=.env --conditions=react-server scripts/seed-demo.ts",
     "admin:create": "tsx --env-file-if-exists=.env --conditions=react-server scripts/create-super-admin.ts",
     "admin:reset-link": "tsx --env-file-if-exists=.env --conditions=react-server scripts/reset-link.ts",
+    "orders:expire": "tsx --env-file-if-exists=.env --conditions=react-server scripts/expire-orders.ts",
     "postinstall": "prisma generate"
   },
   "dependencies": {

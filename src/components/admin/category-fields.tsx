@@ -1,5 +1,5 @@
 import type { AdminCategoryRow } from "@/server/modules/catalog/admin-categories";
-import { CheckboxField, IntegerField, SelectField, TextAreaField, TextField } from "./form-controls";
+import { CheckboxField, IntegerField, SelectField, TextAreaField, TextField } from "@/components/forms/form-controls";
 
 export interface CategoryDefaults extends Omit<AdminCategoryRow, "productCount"> {
   description: string | null;
