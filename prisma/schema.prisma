@@ -261,6 +261,7 @@ model ProductVariant {
   isActive       Boolean    @default(true)
   position       Int        @default(0)
   inventory      Inventory?
+  movements      StockMovement[]
   createdAt      DateTime   @default(now()) @db.Timestamptz(3)
   updatedAt      DateTime   @updatedAt @db.Timestamptz(3)
 
@@ -281,6 +282,37 @@ model Inventory {
   updatedAt      DateTime       @updatedAt @db.Timestamptz(3)
 
   @@map("inventories")
+}
+
+enum StockMovementType {
+  IN
+  OUT
+  ADJUSTMENT
+  RESERVE
+  RELEASE
+  SALE
+  RETURN
+}
+
+/// Journal IMMUABLE des mouvements de stock (trigger PostgreSQL : ni UPDATE ni DELETE).
+/// Chaque ligne enregistre la quantité signée et l'état du stock qui en résulte.
+model StockMovement {
+  id            String            @id @default(cuid())
+  variantId     String
+  variant       ProductVariant    @relation(fields: [variantId], references: [id], onDelete: Restrict)
+  type          StockMovementType
+  /// Variation signée du stock physique (IN > 0, OUT < 0…), ou du réservé pour RESERVE/RELEASE.
+  quantity      Int
+  onHandAfter   Int
+  reservedAfter Int
+  reason        String
+  actorId       String?
+  orderId       String?
+  createdAt     DateTime          @default(now()) @db.Timestamptz(3)
+
+  @@index([variantId, createdAt])
+  @@index([createdAt])
+  @@map("stock_movements")
 }
 
 model ProductCompatibility {

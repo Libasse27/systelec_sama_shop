@@ -2,7 +2,7 @@
 
 Plateforme e-commerce et de services techniques de **SYSTELEC** (Sénégal) : vente d'équipements informatiques, réseau, électroniques, électriques et de sécurité ; maintenance, réseaux, vidéosurveillance et électricité. Paiement **exclusivement hors ligne** (espèces), livraison à domicile et retrait en boutique.
 
-> Statut : Phase 4 terminée (boutique publique, voir [rapport](docs/rapports/phase-4.md)). Prochaine étape : Phase 5, produits et stocks.
+> Statut : Phase 5 terminée (administration des produits et des stocks, voir [rapport](docs/rapports/phase-5.md)). Prochaine étape : Phase 6, panier et commandes.
 
 ## Démarrage local
 
@@ -17,10 +17,17 @@ pnpm admin:create             # premier administrateur principal (mot de passe s
 pnpm dev
 ```
 
+Les images téléversées depuis l'administration sont écrites dans `STORAGE_LOCAL_DIR` (`./storage` par défaut,
+hors Git) : en production, ce dossier doit être un volume persistant et sauvegardé.
+
 Sans fournisseur e-mail configuré, un lien de réinitialisation de mot de passe se génère avec
 `pnpm admin:reset-link <email>` (après vérification de l'identité du demandeur).
 
 Vérifications : `pnpm lint && pnpm typecheck && pnpm test && pnpm build && pnpm test:e2e`.
+
+> Après une migration ou un `pnpm db:generate`, **redémarrez `pnpm dev`** : en développement, le client
+> Prisma est conservé entre les rechargements à chaud et ne connaît pas encore les nouvelles tables
+> (erreur du type `Cannot read properties of undefined (reading 'findMany')`).
 
 ## Documentation
 

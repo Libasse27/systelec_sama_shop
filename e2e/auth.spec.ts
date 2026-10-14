@@ -34,10 +34,13 @@ test.describe("routes privées (§20 n° 2)", () => {
     await grantRole(email, "CATALOG_MANAGER");
 
     await page.goto("/admin");
-    await expect(page.getByRole("heading", { name: "Administration" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Tableau de bord" })).toBeVisible();
     await expect(page.getByText("Gestionnaire de catalogue")).toBeVisible();
-    await expect(page.getByText("products.create")).toBeVisible();
-    await expect(page.getByText("payments.record")).toHaveCount(0);
+    const menu = page.getByRole("navigation", { name: "Administration" });
+    await expect(menu.getByRole("link", { name: "Produits" })).toBeVisible();
+    await expect(menu.getByRole("link", { name: "Catégories" })).toBeVisible();
+    // Menu limité aux permissions du rôle : aucun module hors catalogue et stock.
+    await expect(menu.getByRole("link")).toHaveCount(5);
   });
 
   test("un client connecté ne peut pas ouvrir l'administration", async ({ page }) => {

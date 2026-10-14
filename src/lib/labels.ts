@@ -31,3 +31,25 @@ export function servicePriceLabel(pricingMode: PricingMode, price: number | null
   if (pricingMode === "QUOTE_ONLY" || price === null) return "Sur devis";
   return pricingMode === "INDICATIVE" ? `À partir de ${formatFcfa(price)}` : formatFcfa(price);
 }
+
+type ProductStatus = "DRAFT" | "PUBLISHED" | "ARCHIVED";
+
+export const PRODUCT_STATUS_LABELS: Record<ProductStatus, string> = {
+  DRAFT: "Brouillon",
+  PUBLISHED: "Publié",
+  ARCHIVED: "Archivé",
+};
+
+type MovementType = "IN" | "OUT" | "ADJUSTMENT" | "RESERVE" | "RELEASE" | "SALE" | "RETURN";
+
+export const MOVEMENT_TYPE_LABELS: Record<MovementType, string> = {
+  IN: "Entrée",
+  OUT: "Sortie",
+  ADJUSTMENT: "Inventaire",
+  RESERVE: "Réservation",
+  RELEASE: "Libération",
+  SALE: "Vente",
+  RETURN: "Retour",
+};
+
+export const CONDITION_OPTIONS = Object.entries(CONDITION_LABELS).map(([value, label]) => ({ value, label }));

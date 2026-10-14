@@ -12,6 +12,10 @@ const securityHeaders = [
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,
+  experimental: {
+    // Téléversements de l'administration : images (5 Mo) et imports CSV (2 Mo).
+    serverActions: { bodySizeLimit: "6mb" },
+  },
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
   },
