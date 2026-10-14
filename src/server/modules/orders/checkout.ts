@@ -12,6 +12,7 @@ import { dispatchOrderNotifications, queueOrderNotifications } from "@/server/no
 import { parseInput } from "@/server/validation";
 import { orderAccessToken } from "./access-token";
 import { assertOrderAllowed } from "./limits";
+import { paymentStatusFor } from "@/server/modules/payments/balance";
 import { computeOrderTotals } from "./pricing";
 import { checkoutSchema, type Contact } from "./schemas";
 
@@ -199,6 +200,8 @@ async function createOrder(
       deliveryZoneId: fulfillment.deliveryZoneId,
       pickupPointId: fulfillment.pickupPointId,
       ...totals,
+      // Commande à 0 FCFA : rien à encaisser, elle est soldée dès sa création.
+      paymentStatus: paymentStatusFor(totals.total, 0),
       notes: checkout.notes,
       reservedUntil: new Date(Date.now() + reservationHours * HOUR_MS),
       items: {

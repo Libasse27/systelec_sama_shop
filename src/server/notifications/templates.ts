@@ -1,7 +1,7 @@
 import { formatFcfa } from "@/lib/money";
 
 /** Textes des notifications de commande (texte brut : e-mail et SMS). */
-export type OrderTemplate = "order.placed" | "order.new_staff" | "order.status";
+export type OrderTemplate = "order.placed" | "order.new_staff" | "order.status" | "order.payment";
 
 export interface OrderMessageData {
   number: string;
@@ -10,6 +10,8 @@ export interface OrderMessageData {
   fulfillment: "DELIVERY" | "PICKUP";
   statusLabel?: string;
   comment?: string | null;
+  /** Encaissement (order.payment) : montant reçu, reste à payer, numéro du reçu. */
+  payment?: { amount: number; balance: number; receiptNumber: string };
 }
 
 export function renderOrderMessage(template: OrderTemplate, data: OrderMessageData): { subject: string; text: string } {
@@ -36,5 +38,17 @@ export function renderOrderMessage(template: OrderTemplate, data: OrderMessageDa
           .filter(Boolean)
           .join("\n\n"),
       };
+    case "order.payment": {
+      const payment = data.payment;
+      if (!payment) throw new Error(`Données d'encaissement absentes (${data.number})`);
+      return {
+        subject: `Commande ${data.number} : paiement reçu`,
+        text: [
+          `Bonjour ${data.customerName},`,
+          `Nous avons reçu ${formatFcfa(payment.amount)} en espèces pour votre commande ${data.number} (reçu ${payment.receiptNumber}).`,
+          payment.balance > 0 ? `Reste à payer : ${formatFcfa(payment.balance)}.` : "Votre commande est entièrement payée. Merci !",
+        ].join("\n\n"),
+      };
+    }
   }
 }

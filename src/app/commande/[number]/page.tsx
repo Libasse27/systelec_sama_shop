@@ -15,9 +15,11 @@ export default async function OrderTrackingPage({ params, searchParams }: Props)
   const { number } = await params;
   const token = (await searchParams).jeton;
   const user = await getCurrentUser();
-  const order =
-    (user && (await getCustomerOrder(db, user.id, number))) ?? (typeof token === "string" ? await getGuestOrder(db, number, token) : null);
+  const accountOrder = user ? await getCustomerOrder(db, user.id, number) : null;
+  const order = accountOrder ?? (typeof token === "string" ? await getGuestOrder(db, number, token) : null);
   if (!order) notFound();
+  // Commande invitée : le reçu s'ouvre avec le même jeton que le lien de suivi.
+  const receiptQuery = !accountOrder && typeof token === "string" ? `?jeton=${encodeURIComponent(token)}` : "";
 
   return (
     <main className="mx-auto max-w-3xl px-4 py-8">
@@ -34,7 +36,7 @@ export default async function OrderTrackingPage({ params, searchParams }: Props)
         </p>
       )}
       <div className="mt-6">
-        <OrderDetails order={order} />
+        <OrderDetails order={order} receiptHref={(receipt) => `/recus/${receipt}${receiptQuery}`} />
       </div>
       <p className="mt-6 text-sm">
         <Link href={user ? "/compte" : "/"} className="text-brand-blue underline">

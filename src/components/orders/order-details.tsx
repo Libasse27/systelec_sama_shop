@@ -3,8 +3,15 @@ import { FULFILLMENT_LABELS, ORDER_STATUS_LABELS, PAYMENT_STATUS_LABELS } from "
 import { formatFcfa } from "@/lib/money";
 import type { OrderView } from "@/server/modules/orders/queries";
 
+interface OrderDetailsProps {
+  order: Omit<OrderView, "history"> & { history?: OrderView["history"] };
+  /** Lien vers le PDF d'un reçu (avec le jeton du lien de suivi pour un invité). */
+  receiptHref: (receiptNumber: string) => string;
+}
+
 /** Récapitulatif d'une commande (client invité, compte, administration). */
-export function OrderDetails({ order }: { order: Omit<OrderView, "history"> & { history?: OrderView["history"] } }) {
+export function OrderDetails({ order, receiptHref }: OrderDetailsProps) {
+  const balance = order.total - order.amountPaid;
   return (
     <div className="flex flex-col gap-4">
       <dl className="grid gap-x-6 gap-y-2 rounded-xl border border-line bg-surface p-4 text-sm sm:grid-cols-[12rem_1fr]">
@@ -88,9 +95,40 @@ export function OrderDetails({ order }: { order: Omit<OrderView, "history"> & { 
               <td colSpan={3} className="px-3 py-2 text-right">Total à payer en espèces</td>
               <td className="whitespace-nowrap px-3 py-2 text-right">{formatFcfa(order.total)}</td>
             </tr>
+            {order.amountPaid > 0 && (
+              <>
+                <tr>
+                  <td colSpan={3} className="px-3 py-1 text-right">Déjà payé</td>
+                  <td className="whitespace-nowrap px-3 py-1 text-right">{formatFcfa(order.amountPaid)}</td>
+                </tr>
+                <tr className="font-bold">
+                  <td colSpan={3} className="px-3 py-2 text-right">Reste à payer</td>
+                  <td className="whitespace-nowrap px-3 py-2 text-right">{formatFcfa(balance)}</td>
+                </tr>
+              </>
+            )}
           </tfoot>
         </table>
       </div>
+
+      {order.payments.length > 0 && (
+        <section aria-labelledby="recus" className="rounded-xl border border-line bg-surface p-4">
+          <h2 id="recus" className="font-semibold">
+            Reçus
+          </h2>
+          <ul className="mt-2 flex flex-col gap-1 text-sm">
+            {order.payments.map((payment) => (
+              <li key={payment.receiptNumber}>
+                <a href={receiptHref(payment.receiptNumber)} target="_blank" rel="noopener" className="text-brand-blue underline">
+                  Reçu {payment.receiptNumber} (PDF)
+                </a>{" "}
+                — {formatDateTime(payment.createdAt)} ·{" "}
+                {payment.amount > 0 ? `${formatFcfa(payment.amount)} reçus en espèces` : `annulation de ${formatFcfa(-payment.amount)}`}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       {order.history && order.history.length > 0 && (
         <section aria-labelledby="suivi" className="rounded-xl border border-line bg-surface p-4">

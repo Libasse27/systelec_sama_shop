@@ -2,12 +2,14 @@ import "server-only";
 import { z } from "zod";
 import type { OrderStatus, Prisma, PrismaClient } from "@/generated/prisma/client";
 import { ORDER_STATUS_LABELS } from "@/lib/labels";
+import { formatFcfa } from "@/lib/money";
 import { recordAudit } from "@/server/audit/audit";
 import { assertPermission, type Actor } from "@/server/authz/service";
 import { AppError } from "@/server/errors";
 import { commitSale, lockStock, releaseStock } from "@/server/modules/inventory/reservations";
 import { dispatchOrderNotifications, queueOrderNotifications } from "@/server/notifications/order-notifications";
 import { parseInput } from "@/server/validation";
+import { lockOrderRow } from "./lock";
 import type { Contact } from "./schemas";
 
 type Tx = Prisma.TransactionClient;
@@ -61,16 +63,33 @@ async function transition(
   /** Condition revérifiée SOUS le verrou de la commande ; faux = rien n'est fait. */
   guard?: (order: { status: OrderStatus; reservedUntil: Date | null }) => boolean,
 ): Promise<{ number: string; from: OrderStatus } | null> {
-  const [locked] = await tx.$queryRaw<{ id: string }[]>`SELECT id FROM orders WHERE id = ${orderId} FOR UPDATE`;
-  if (!locked) throw new AppError("NOT_FOUND", "Commande introuvable.");
+  await lockOrderRow(tx, orderId);
   const order = await tx.order.findUniqueOrThrow({
     where: { id: orderId },
-    select: { number: true, status: true, reservedUntil: true, fulfillmentMethod: true, items: { select: { variantId: true, quantity: true } } },
+    select: {
+      number: true,
+      status: true,
+      reservedUntil: true,
+      fulfillmentMethod: true,
+      total: true,
+      amountPaid: true,
+      items: { select: { variantId: true, quantity: true } },
+    },
   });
   if (guard && !guard(order)) return null;
   if (order.status === to) return null;
   if (!allowedTransitions(order.status, order.fulfillmentMethod).includes(to)) {
     throw new AppError("CONFLICT", `Passage impossible de « ${ORDER_STATUS_LABELS[order.status]} » à « ${ORDER_STATUS_LABELS[to]} ».`);
+  }
+  // Contrôlés sous le verrou de la commande, que les encaissements prennent aussi.
+  if (to === "CLOSED" && order.amountPaid < order.total) {
+    throw new AppError("CONFLICT", `Commande non soldée : encaissez le reste (${formatFcfa(order.total - order.amountPaid)}) avant la remise au client.`);
+  }
+  if (to === "CANCELLED" && order.amountPaid > 0) {
+    throw new AppError(
+      "CONFLICT",
+      `Des encaissements sont enregistrés (${formatFcfa(order.amountPaid)}) : annulez-les par contre-écriture, en rendant les espèces, avant d'annuler la commande.`,
+    );
   }
 
   if (to === "CANCELLED" || to === "CLOSED") {

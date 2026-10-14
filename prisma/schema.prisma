@@ -33,6 +33,7 @@ model User {
   sessions      Session[]
   accounts      Account[]
   roles         UserRole[]
+  payments      Payment[]
 
   @@map("users")
 }
@@ -592,6 +593,7 @@ model Order {
   closedAt          DateTime?            @db.Timestamptz(3)
   items             OrderItem[]
   history           OrderStatusHistory[]
+  payments          Payment[]
   createdAt         DateTime             @default(now()) @db.Timestamptz(3)
   updatedAt         DateTime             @updatedAt @db.Timestamptz(3)
 
@@ -640,6 +642,45 @@ model OrderStatusHistory {
 
   @@index([orderId, createdAt])
   @@map("order_status_history")
+}
+
+/// Moyens de règlement PHYSIQUES uniquement : aucun moyen électronique n'existe.
+enum PaymentMethod {
+  CASH
+}
+
+/// Encaissement en espèces, en AJOUT SEUL (trigger) : une erreur se corrige par une
+/// contre-écriture liée (montant opposé), jamais par modification ni suppression.
+/// Le statut de paiement de la commande est recalculé à chaque écriture. Le reçu est
+/// généré depuis cette ligne.
+model Payment {
+  id                String        @id @default(cuid())
+  receiptNumber     String        @unique
+  orderId           String
+  order             Order         @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  /// > 0 : encaissement ; < 0 : contre-écriture (annulation d'un encaissement).
+  amount            Int
+  method            PaymentMethod @default(CASH)
+  /// Reste à payer sur la commande juste après cette écriture (figé pour le reçu).
+  balanceAfter      Int
+  recordedById      String
+  recordedBy        User          @relation(fields: [recordedById], references: [id], onDelete: Restrict)
+  /// Clé envoyée par le formulaire : un double envoi n'encaisse qu'une fois.
+  idempotencyKey    String?       @unique
+  /// Contre-écriture : l'encaissement annulé (au plus une annulation par encaissement).
+  reversesPaymentId String?       @unique
+  reverses          Payment?      @relation("PaymentReversal", fields: [reversesPaymentId], references: [id], onDelete: Restrict)
+  reversedBy        Payment?      @relation("PaymentReversal")
+  /// Motif d'une contre-écriture (obligatoire), imprimé sur son reçu.
+  reason            String?
+  /// Note interne, jamais imprimée ni montrée au client.
+  note              String?
+  createdAt         DateTime      @default(now()) @db.Timestamptz(3)
+
+  @@index([orderId, createdAt])
+  @@index([createdAt])
+  @@index([recordedById, createdAt])
+  @@map("payments")
 }
 
 enum NotificationChannel {

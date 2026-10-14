@@ -67,7 +67,7 @@ Statuts (enums distincts) :
 
 | Modèle | Champs clés | Notes |
 |---|---|---|
-| `Payment` | receiptNumber (unique), orderId? / interventionId? (exactement un — `CHECK`), amount (> 0, ou < 0 pour une contre-écriture), method (`CASH` uniquement), receivedAt, recordedById, status (`VALID`/`VOIDED`), reversesPaymentId?, voidReason?, note | Jamais modifié : annulation = nouvel enregistrement lié. Remplace `PaymentReceipt` (le reçu est généré depuis cette ligne) |
+| `Payment` | receiptNumber (unique), orderId (interventionId ajouté en phase 8, avec `CHECK` « exactement un »), amount (> 0, ou < 0 pour une contre-écriture), method (`CASH` uniquement), balanceAfter, recordedById, idempotencyKey?, reversesPaymentId? (unique), reason?, note (interne), createdAt | Ajout seul (trigger). Annulation = contre-écriture liée ; « annulé » se lit sur l'existence de la contre-écriture (pas de colonne `status` modifiable). Date d'encaissement = createdAt. `orders.amountPaid` = Σ amount, contrôlé par un trigger différé. Remplace `PaymentReceipt` (le reçu est généré depuis cette ligne) |
 | `Invoice` | number (unique), orderId? / interventionId?, issuedAt, total, pdfUrl? | Document commercial, pas une comptabilité réglementaire |
 | `Return` | number, orderId, status, reason, restock (bool), refundAmount, processedById | |
 | `ReturnItem` | returnId, orderItemId, quantity, condition | |

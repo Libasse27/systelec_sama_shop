@@ -21,6 +21,9 @@ export const companySettingsSchema = z
     email: z.email().nullable(),
     address: optionalText(300),
     openingHours: optionalText(300),
+    // Mentions légales des reçus (D7) : absentes d'un paramètre enregistré avant leur ajout.
+    ninea: optionalText(40).default(null),
+    rccm: optionalText(60).default(null),
     socialLinks: z
       .object({
         facebook: optionalUrl,
@@ -71,6 +74,8 @@ export const settingsDefaults: { [K in SettingKey]: SettingValue<K> } = {
     email: null,
     address: null,
     openingHours: null,
+    ninea: null,
+    rccm: null,
     socialLinks: { facebook: null, instagram: null, linkedin: null, tiktok: null },
   },
   commerce: {

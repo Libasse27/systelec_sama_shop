@@ -4,13 +4,20 @@ import { PageHeader, Section } from "@/components/admin/admin-ui";
 import { ActionForm, SubmitButton, TextAreaField } from "@/components/forms/form-controls";
 import { OrderDetails } from "@/components/orders/order-details";
 import { formatDateTime } from "@/lib/dates";
-import { ORDER_STATUS_LABELS } from "@/lib/labels";
+import { ORDER_STATUS_LABELS, PAYMENT_STATUS_LABELS } from "@/lib/labels";
 import { requirePermission } from "@/server/auth/session";
 import { db } from "@/server/db/client";
 import { getAdminOrder } from "@/server/modules/orders/queries";
 import { changeOrderStatusAction } from "../actions";
+import { PaymentsSection } from "./payments-section";
 
 export const metadata: Metadata = { title: "Commande", robots: { index: false } };
+
+/** L'historique mêle statuts de commande et de paiement, distingués par leur champ. */
+function historyLabel(field: string, status: string): string {
+  if (field === "PAYMENT") return `Paiement : ${PAYMENT_STATUS_LABELS[status as keyof typeof PAYMENT_STATUS_LABELS] ?? status}`;
+  return ORDER_STATUS_LABELS[status as keyof typeof ORDER_STATUS_LABELS] ?? status;
+}
 
 const NOTIFICATION_STATUS = { PENDING: "en attente", SENT: "envoyée", FAILED: "échec", SKIPPED_NO_PROVIDER: "non envoyée (aucun fournisseur)" } as const;
 
@@ -19,7 +26,8 @@ export default async function AdminOrderPage({ params }: { params: Promise<{ id:
   const user = await requirePermission("orders.read", `/admin/commandes/${id}`);
   const order = await getAdminOrder(db, user, id);
   if (!order) notFound();
-  const canUpdate = user.permissions.has("orders.update") && order.nextStatuses.length > 0;
+  // Formulaire monté même au statut final : le message de la dernière transition reste visible.
+  const canUpdate = user.permissions.has("orders.update");
 
   return (
     <div className="flex flex-col gap-6">
@@ -33,31 +41,39 @@ export default async function AdminOrderPage({ params }: { params: Promise<{ id:
       {canUpdate && (
         <Section title="Changer le statut">
           <ActionForm action={changeOrderStatusAction.bind(null, order.id)}>
-            <TextAreaField name="comment" label="Commentaire" required={false} rows={2} hint="Obligatoire pour une annulation (motif). Visible par le client." />
-            <div className="flex flex-wrap gap-2">
-              {order.nextStatuses.map((status) => (
-                <SubmitButton
-                  key={status}
-                  name="status"
-                  value={status}
-                  variant={status === "CANCELLED" ? "danger" : status === "CLOSED" ? "primary" : "secondary"}
-                  confirm={
-                    status === "CANCELLED"
-                      ? "Annuler la commande ? Le stock réservé sera remis en vente."
-                      : status === "CLOSED"
-                        ? "Confirmer la remise au client ? Le stock sortira définitivement."
-                        : undefined
-                  }
-                >
-                  {ORDER_STATUS_LABELS[status]}
-                </SubmitButton>
-              ))}
-            </div>
+            {order.nextStatuses.length === 0 ? (
+              <p className="text-sm text-ink-muted">Statut final : plus aucun changement possible.</p>
+            ) : (
+              <>
+                <TextAreaField name="comment" label="Commentaire" required={false} rows={2} hint="Obligatoire pour une annulation (motif). Visible par le client." />
+                <div className="flex flex-wrap gap-2">
+                  {order.nextStatuses.map((status) => (
+                    <SubmitButton
+                      key={status}
+                      name="status"
+                      value={status}
+                      variant={status === "CANCELLED" ? "danger" : status === "CLOSED" ? "primary" : "secondary"}
+                      confirm={
+                        status === "CANCELLED"
+                          ? "Annuler la commande ? Le stock réservé sera remis en vente."
+                          : status === "CLOSED"
+                            ? "Confirmer la remise au client ? Le stock sortira définitivement."
+                            : undefined
+                      }
+                    >
+                      {ORDER_STATUS_LABELS[status]}
+                    </SubmitButton>
+                  ))}
+                </div>
+              </>
+            )}
           </ActionForm>
         </Section>
       )}
 
-      <OrderDetails order={{ ...order, history: undefined }} />
+      <PaymentsSection order={order} user={user} />
+
+      <OrderDetails order={{ ...order, history: undefined }} receiptHref={(receipt) => `/recus/${receipt}`} />
 
       <Section title="Client">
         <p>
@@ -70,7 +86,7 @@ export default async function AdminOrderPage({ params }: { params: Promise<{ id:
         <ol className="flex flex-col gap-1 text-sm">
           {order.history.map((entry) => (
             <li key={`${entry.to}-${entry.createdAt.toISOString()}`}>
-              {formatDateTime(entry.createdAt)} — {ORDER_STATUS_LABELS[entry.to as keyof typeof ORDER_STATUS_LABELS] ?? entry.to}
+              {formatDateTime(entry.createdAt)} — {historyLabel(entry.field, entry.to)}
               {entry.actorName && ` · ${entry.actorName}`}
               {entry.comment && <span className="text-ink-muted"> ({entry.comment})</span>}
             </li>

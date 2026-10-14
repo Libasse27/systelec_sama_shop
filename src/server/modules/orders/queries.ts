@@ -1,5 +1,5 @@
 import "server-only";
-import type { FulfillmentMethod, OrderStatus, PaymentStatus, Prisma } from "@/generated/prisma/client";
+import type { FulfillmentMethod, OrderHistoryField, OrderStatus, PaymentStatus, Prisma } from "@/generated/prisma/client";
 import { assertPermission, type Actor } from "@/server/authz/service";
 import type { Db } from "@/server/db/client";
 import { verifyOrderAccessToken } from "./access-token";
@@ -54,6 +54,8 @@ export interface OrderView {
   notes: string | null;
   createdAt: Date;
   history: { to: string; comment: string | null; createdAt: Date }[];
+  /** Reçus (montant négatif = annulation d'un encaissement). */
+  payments: { receiptNumber: string; amount: number; createdAt: Date }[];
 }
 
 /** Sélection explicite : ni prix d'achat, ni notes internes, ni auteurs des changements. */
@@ -76,6 +78,7 @@ const ORDER_VIEW_SELECT = {
   notes: true,
   createdAt: true,
   history: { where: { field: "ORDER" }, orderBy: { createdAt: "asc" }, select: { to: true, comment: true, createdAt: true } },
+  payments: { orderBy: [{ createdAt: "asc" }, { id: "asc" }], select: { receiptNumber: true, amount: true, createdAt: true } },
 } satisfies Prisma.OrderSelect;
 
 type OrderRow = Prisma.OrderGetPayload<{ select: typeof ORDER_VIEW_SELECT }>;
@@ -92,13 +95,19 @@ export async function getCustomerOrder(client: Db, userId: string, number: strin
   return order && toView(order);
 }
 
+/**
+ * Lien de suivi invité valide : jeton signé de CETTE commande, et lien encore actif
+ * (il expose des coordonnées : il ne reste pas valable indéfiniment).
+ */
+export function guestLinkAllows(order: { id: string; createdAt: Date }, token: string | undefined): boolean {
+  if (!verifyOrderAccessToken(order.id, token)) return false;
+  return Date.now() - order.createdAt.getTime() <= GUEST_LINK_DAYS * 24 * 3600 * 1000;
+}
+
 /** Commande invitée, accessible uniquement avec le jeton du lien de suivi. */
 export async function getGuestOrder(client: Db, number: string, token: string | undefined): Promise<OrderView | null> {
   const order = await client.order.findFirst({ where: { number, customer: { userId: null } }, select: ORDER_VIEW_SELECT });
-  if (!order || !verifyOrderAccessToken(order.id, token)) return null;
-  // Le lien expose des coordonnées : il ne reste pas valable indéfiniment.
-  if (Date.now() - order.createdAt.getTime() > GUEST_LINK_DAYS * 24 * 3600 * 1000) return null;
-  return toView(order);
+  return order && guestLinkAllows(order, token) ? toView(order) : null;
 }
 
 export interface OrderSummary {
@@ -137,6 +146,19 @@ export function parseOrderStatus(value: unknown): OrderStatus | undefined {
   return ORDER_STATUSES.find((status) => status === value);
 }
 
+const PAYMENT_STATUSES = Object.keys({
+  UNPAID: 1,
+  PARTIALLY_PAID: 1,
+  PAID: 1,
+  TO_VERIFY: 1,
+  REFUND_PENDING: 1,
+  REFUNDED: 1,
+} satisfies Record<PaymentStatus, 1>) as PaymentStatus[];
+
+export function parsePaymentStatus(value: unknown): PaymentStatus | undefined {
+  return PAYMENT_STATUSES.find((status) => status === value);
+}
+
 export interface AdminOrderRow {
   id: string;
   number: string;
@@ -153,12 +175,13 @@ export interface AdminOrderRow {
 export async function listAdminOrders(
   client: Db,
   actor: Actor,
-  options: { status?: OrderStatus; q?: string; page?: number } = {},
+  options: { status?: OrderStatus; paymentStatus?: PaymentStatus; q?: string; page?: number } = {},
 ): Promise<{ rows: AdminOrderRow[]; total: number; page: number; pageCount: number }> {
   await assertPermission(client, actor, "orders.read");
   const q = options.q?.trim().slice(0, 100);
   const where: Prisma.OrderWhereInput = {
     ...(options.status ? { status: options.status } : {}),
+    ...(options.paymentStatus ? { paymentStatus: options.paymentStatus } : {}),
     ...(q
       ? {
           OR: [
@@ -198,7 +221,7 @@ export interface AdminOrder extends Omit<OrderView, "history"> {
   internalNotes: string | null;
   reservedUntil: Date | null;
   nextStatuses: OrderStatus[];
-  history: { from: string | null; to: string; comment: string | null; createdAt: Date; actorName: string | null }[];
+  history: { field: OrderHistoryField; from: string | null; to: string; comment: string | null; createdAt: Date; actorName: string | null }[];
   notifications: { channel: string; template: string; recipient: string; status: string; createdAt: Date }[];
 }
 
@@ -211,7 +234,7 @@ export async function getAdminOrder(client: Db, actor: Actor, id: string): Promi
       internalNotes: true,
       reservedUntil: true,
       customer: { select: { id: true, name: true, phone: true, email: true, userId: true } },
-      history: { orderBy: { createdAt: "asc" }, select: { from: true, to: true, comment: true, createdAt: true, actorId: true } },
+      history: { orderBy: { createdAt: "asc" }, select: { field: true, from: true, to: true, comment: true, createdAt: true, actorId: true } },
     },
   });
   if (!order) return null;

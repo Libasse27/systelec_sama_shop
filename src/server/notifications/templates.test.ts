@@ -18,4 +18,13 @@ describe("messages de commande", () => {
     expect(text).toContain("Annulée");
     expect(text).toContain("Rupture fournisseur");
   });
+
+  it("confirme un encaissement avec le reçu et le reste à payer", () => {
+    const partial = renderOrderMessage("order.payment", { ...data, payment: { amount: 10_000, balance: 20_000, receiptNumber: "REC-2026-000004" } });
+    expect(partial.text).toContain("REC-2026-000004");
+    expect(partial.text).toContain(`Reste à payer : ${formatFcfa(20_000)}`);
+    const full = renderOrderMessage("order.payment", { ...data, payment: { amount: 30_000, balance: 0, receiptNumber: "REC-2026-000005" } });
+    expect(full.text).toContain("entièrement payée");
+    expect(() => renderOrderMessage("order.payment", data)).toThrow(/absentes/);
+  });
 });

@@ -1,26 +1,6 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 import { createTestProduct, grantRole, hideTestCategory, stockOf } from "./support/db";
-
-const PASSWORD = "motdepasse-e2e-solide";
-const uniqueEmail = () => `e2e-cmd-${Date.now()}-${Math.random().toString(36).slice(2, 8)}@example.sn`;
-
-async function signUp(page: Page, email: string, name = "Client E2E"): Promise<void> {
-  await page.goto("/inscription");
-  await page.getByLabel("Nom complet").fill(name);
-  await page.getByLabel("E-mail").fill(email);
-  await page.getByLabel("Mot de passe").fill(PASSWORD);
-  await page.getByRole("button", { name: "Créer mon compte" }).click();
-  await expect(page).toHaveURL(/\/compte$/);
-}
-
-async function addToCart(page: Page, slug: string, quantity: number): Promise<void> {
-  await page.goto(`/produits/${slug}`);
-  const add = page.getByRole("button", { name: "Ajouter au panier" });
-  await expect(add).toBeEnabled(); // page hydratée
-  await page.getByLabel("Quantité").fill(String(quantity));
-  await add.click();
-  await expect(page.getByText(/Ajouté au panier/)).toBeVisible();
-}
+import { addToCart, signUp, uniqueEmail } from "./support/flows";
 
 test.describe("panier et commande (§20 n° 7 à 14)", () => {
   const categories: string[] = [];

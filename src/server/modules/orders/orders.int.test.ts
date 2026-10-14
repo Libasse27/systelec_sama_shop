@@ -4,6 +4,7 @@ import type { Actor } from "@/server/authz/service";
 import { syncRolesAndPermissions } from "@/server/authz/sync";
 import { db } from "@/server/db/client";
 import { addToCart, getCartView, hashCartToken, mergeGuestCart, setCartQuantity, type CartOwner } from "@/server/modules/cart/service";
+import { recordOrderPayment } from "@/server/modules/payments/service";
 import { updateSetting } from "@/server/modules/settings/service";
 import { resetDatabase } from "../../../../tests/setup/db";
 import { actorWith } from "../../../../tests/support/actors";
@@ -241,11 +242,15 @@ describe("panier et commandes (§20 n° 7 à 14, 17 et 25, PostgreSQL)", () => {
 
     it("suit la commande jusqu'à la remise : la vente sort le stock, l'historique est complet", async () => {
       const { id } = await pickupOrder();
-      for (const status of ["CONFIRMED", "PREPARING", "READY_FOR_PICKUP", "CLOSED"]) await changeOrderStatus(db, manager, id, { status });
+      for (const status of ["CONFIRMED", "PREPARING", "READY_FOR_PICKUP"]) await changeOrderStatus(db, manager, id, { status });
+      // Payée avant remise : la remise d'une commande non soldée est refusée.
+      await expect(changeOrderStatus(db, manager, id, { status: "CLOSED" })).rejects.toThrow(/non soldée/);
+      await recordOrderPayment(db, await actorWith("FINANCE_MANAGER"), id, { amount: 50_000, idempotencyKey: randomUUID() });
+      await changeOrderStatus(db, manager, id, { status: "CLOSED" });
       expect(await stockOf("RT-01")).toMatchObject({ onHand: 3, reserved: 0 });
       const movements = await db.stockMovement.findMany({ where: { orderId: id }, orderBy: [{ createdAt: "asc" }, { id: "asc" }] });
       expect(movements.map((m) => [m.type, m.quantity])).toEqual([["RESERVE", 2], ["SALE", -2]]);
-      const history = await db.orderStatusHistory.findMany({ where: { orderId: id }, orderBy: { createdAt: "asc" } });
+      const history = await db.orderStatusHistory.findMany({ where: { orderId: id, field: "ORDER" }, orderBy: { createdAt: "asc" } });
       expect(history.map((entry) => entry.to)).toEqual(["PENDING_CONFIRMATION", "CONFIRMED", "PREPARING", "READY_FOR_PICKUP", "CLOSED"]);
       await expect(db.orderStatusHistory.delete({ where: { id: history[0]!.id } })).rejects.toThrow();
     });

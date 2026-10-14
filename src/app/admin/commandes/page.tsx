@@ -6,7 +6,7 @@ import { FULFILLMENT_LABELS, ORDER_STATUS_LABELS, PAYMENT_STATUS_LABELS } from "
 import { formatFcfa } from "@/lib/money";
 import { requirePermission } from "@/server/auth/session";
 import { db } from "@/server/db/client";
-import { listAdminOrders, parseOrderStatus } from "@/server/modules/orders/queries";
+import { listAdminOrders, parseOrderStatus, parsePaymentStatus } from "@/server/modules/orders/queries";
 
 export const metadata: Metadata = { title: "Commandes", robots: { index: false } };
 
@@ -17,7 +17,8 @@ export default async function AdminOrdersPage({ searchParams }: { searchParams: 
   const params = await searchParams;
   const q = stringParam(params.q);
   const status = parseOrderStatus(stringParam(params.statut));
-  const { rows, total, page, pageCount } = await listAdminOrders(db, user, { q, status, page: pageParam(params.page) });
+  const paymentStatus = parsePaymentStatus(stringParam(params.paiement));
+  const { rows, total, page, pageCount } = await listAdminOrders(db, user, { q, status, paymentStatus, page: pageParam(params.page) });
 
   return (
     <>
@@ -38,6 +39,19 @@ export default async function AdminOrdersPage({ searchParams }: { searchParams: 
             {Object.entries(ORDER_STATUS_LABELS).map(([value, label]) => (
               <option key={value} value={value}>
                 {label}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="flex flex-col gap-1">
+          <label htmlFor="filtre-paiement-commande" className="text-sm font-medium">
+            Paiement
+          </label>
+          <select id="filtre-paiement-commande" name="paiement" defaultValue={paymentStatus ?? ""} className="rounded-lg border border-line px-3 py-2">
+            <option value="">Tous</option>
+            {(["UNPAID", "PARTIALLY_PAID", "PAID"] as const).map((value) => (
+              <option key={value} value={value}>
+                {PAYMENT_STATUS_LABELS[value]}
               </option>
             ))}
           </select>
@@ -87,7 +101,7 @@ export default async function AdminOrdersPage({ searchParams }: { searchParams: 
           </table>
         </div>
       )}
-      <Pagination basePath="/admin/commandes" params={{ q, statut: status }} page={page} pageCount={pageCount} />
+      <Pagination basePath="/admin/commandes" params={{ q, statut: status, paiement: paymentStatus }} page={page} pageCount={pageCount} />
     </>
   );
 }
