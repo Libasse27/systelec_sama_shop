@@ -58,20 +58,26 @@ Statuts (enums distincts) :
 |---|---|---|
 | `DeliveryZone` | name, description, fee, freeAbove?, leadTimeText, isActive, position | Aucune zone réelle inventée |
 | `PickupPoint` | name, address, hours, phone, isActive | Vide tant que non renseigné → option retrait masquée |
-| `Courier` | name, phone, isActive, userId? | Livreurs |
-| `Delivery` | orderId (unique), method, courierId?, pickupPointId?, scheduledAt, deliveredAt, status, feeCharged, recipientName, recipientPhone, proofUrl?, handedOverById?, notes | |
+| `Courier` | name (unique), phone, isActive | Livreurs (phase 9) |
+| `Delivery` | orderId (unique), courierId, status, attempts, scheduledFor?, startedAt?, deliveredAt?, recipientName?, proofNote?, failureReason? | Commandes « livraison à domicile » seulement (trigger). Historique dans `OrderStatusHistory` (champ `DELIVERY`), en ajout seul |
 
-`DeliveryStatus` : `UNSCHEDULED`, `TO_PREPARE`, `IN_TRANSIT`, `DELIVERED`, `FAILED`, `RETURNING`, `RETURNED`, `READY_TO_COLLECT`, `COLLECTED`, `NOT_COLLECTED`.
+`DeliveryStatus` (phase 9) : `ASSIGNED` (livreur assigné), `IN_TRANSIT`, `DELIVERED`, `FAILED` (motif obligatoire). Le retrait en boutique reste porté par le statut de la commande (`READY_FOR_PICKUP` → `CLOSED`).
 
 ## 6. Encaissements, factures, retours
 
 | Modèle | Champs clés | Notes |
 |---|---|---|
 | `Payment` | receiptNumber (unique), orderId? / interventionId? (exactement un — `CHECK`), amount (> 0, ou < 0 pour une contre-écriture), method (`CASH` uniquement), balanceAfter, recordedById, idempotencyKey?, reversesPaymentId? (unique), reason?, note (interne), createdAt | Ajout seul (trigger). Annulation = contre-écriture liée ; « annulé » se lit sur l'existence de la contre-écriture (pas de colonne `status` modifiable). Date d'encaissement = createdAt. `orders.amountPaid` et `interventions.amountPaid` = Σ amount, contrôlés par un trigger différé. Remplace `PaymentReceipt` (le reçu est généré depuis cette ligne) |
-| `Invoice` | number (unique), orderId? / interventionId?, issuedAt, total, pdfUrl? | Document commercial, pas une comptabilité réglementaire |
-| `Return` | number, orderId, status, reason, restock (bool), refundAmount, processedById | |
-| `ReturnItem` | returnId, orderItemId, quantity, condition | |
+| `Invoice` | number (unique), orderId? / interventionId? (exactement un — `CHECK`), issuedAt, lines (json), customer (json), total, issuedById | Document commercial figé (ajout seul), pas une comptabilité réglementaire. PDF généré à la demande (pas de `pdfUrl`) |
+| `Return` | number `RET-…` (unique), orderId, idempotencyKey (unique), status, reason, itemsValue, refundAmount, restocked?, decisionNote?, createdById, decidedById?, decidedAt?, refundedAt? | Commande remise (`CLOSED`) seulement. Contenu figé, décision définitive (triggers) |
+| `ReturnItem` | returnId, orderItemId, quantity, unitPrice (figé) | Ajout seul ; quantité retournée ≤ quantité livrée, retours refusés exclus (trigger sous verrou de la ligne de commande) |
 | `Expense` | date, category, amount, label, recordedById | Module optionnel |
+
+`ReturnStatus` (phase 9) : `RECEIVED` (à vérifier), `REFUND_PENDING`, `COMPLETED`, `REJECTED`.
+
+**Remboursements (phase 9)** : un remboursement est une écriture `Payment` négative liée au retour (`returnId`, unique), distincte d'une contre-écriture (`reversesPaymentId`). `Order.refundedAmount` = somme des remboursements ; `Order.amountPaid` reste la somme de toutes les écritures (net). Contrôles en base : `amountPaid + refundedAmount ≤ total`, `amountPaid ≥ 0` (jamais plus remboursé qu'encaissé), montant égal au remboursement décidé, retour en attente de remboursement, cohérence vérifiée à la validation (trigger différé). Un remboursement ne s'annule pas.
+
+`PaymentStatus` dérivé pour une commande avec retours : `REFUND_PENDING` (remboursement à verser) > `TO_VERIFY` (retour à vérifier) > `REFUNDED` (remboursement effectué) > statut des encaissements.
 
 ## 7. Services techniques
 
@@ -96,7 +102,7 @@ Statuts (enums distincts) :
 
 | Modèle | Champs clés | Notes |
 |---|---|---|
-| `SiteSetting` | key (unique), value (json), updatedById | Valeurs validées par schéma Zod par clé ; **aucune clé de paiement électronique** |
+| `SiteSetting` | key (unique), value (json), updatedById | Valeurs validées par schéma Zod par clé ; **aucune clé de paiement électronique**. Clés : `company` (dont NINEA, RCCM, logo téléversé ou URL https), `commerce` (D1, D2, D3), `payments`, `tax` (D6, phase 9), `features` (D8, phase 9) |
 | `Page` | slug, title, body, seo, isPublished | CGV, livraison, garantie, confidentialité, à propos |
 | `FaqItem`, `Banner` | … | |
 | `Notification` | channel (`EMAIL`/`SMS`/`WHATSAPP`), template, recipient, payload, status (`PENDING`/`SENT`/`FAILED`/`SKIPPED_NO_PROVIDER`), error, sentAt | Envoi réel uniquement si fournisseur configuré |
@@ -108,3 +114,12 @@ Statuts (enums distincts) :
 - `PaymentReceipt` fusionné dans `Payment` (le reçu est une vue du paiement) — évite une relation redondante.
 - `RolePermission` ajouté (nécessaire au lien rôle ↔ permission).
 - Ajouts : `PickupPoint`, `Courier`, `InterventionPart`, `ProductCompatibility`, `ReturnItem`, `Favorite`, `SupportTicket`, `Page`, `FaqItem`, `Banner`, `Expense`, `Sequence`.
+
+## Écarts de la phase 9
+
+- `Delivery` simplifié : ni `method`, ni `pickupPointId` (le mode est sur la commande), ni `feeCharged` (frais figés sur la commande), ni `recipientPhone`, ni `handedOverById` (l'auteur de chaque étape est dans l'historique), ni `proofUrl` : la preuve est le nom de la personne qui a reçu et une observation ; la photo de preuve est reportée (stockage de photos de domicile à cadrer). `Courier.userId` non retenu.
+- `Return.processedById` remplacé par `createdById` et `decidedById` ; `restock` → `restocked` (décision motivée par `decisionNote`) ; `ReturnItem.condition` non retenu (l'état est dans le motif de la décision). Décision par retour entier : un retour mixte (un article intact, un abîmé) se saisit en deux retours.
+- `StockMovement.returnId` non ajouté : la remise en stock est un mouvement `RETURN` rattaché à la commande, motivé par le numéro du retour.
+- `Order.refundedAmount` ajouté ; `Payment.returnId` ajouté.
+- `Address` (adresses enregistrées du client) : reporté en phase 10, avec l'adaptation du formulaire de commande.
+- `Expense`, `Review`, `Banner`, `SupportTicket`, `Favorite` : non créés (hors périmètre de la phase 9).

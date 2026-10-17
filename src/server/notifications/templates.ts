@@ -1,7 +1,7 @@
 import { formatFcfa } from "@/lib/money";
 
 /** Textes des notifications de commande (texte brut : e-mail et SMS). */
-export type OrderTemplate = "order.placed" | "order.new_staff" | "order.status" | "order.payment";
+export type OrderTemplate = "order.placed" | "order.new_staff" | "order.status" | "order.payment" | "order.refund";
 
 export interface OrderMessageData {
   number: string;
@@ -12,6 +12,8 @@ export interface OrderMessageData {
   comment?: string | null;
   /** Encaissement (order.payment) : montant reçu, reste à payer, numéro du reçu. */
   payment?: { amount: number; balance: number; receiptNumber: string };
+  /** Remboursement d'un retour (order.refund). */
+  refund?: { amount: number; returnNumber: string; receiptNumber: string };
 }
 
 export function renderOrderMessage(template: OrderTemplate, data: OrderMessageData): { subject: string; text: string } {
@@ -47,6 +49,17 @@ export function renderOrderMessage(template: OrderTemplate, data: OrderMessageDa
           `Bonjour ${data.customerName},`,
           `Nous avons reçu ${formatFcfa(payment.amount)} en espèces pour votre commande ${data.number} (reçu ${payment.receiptNumber}).`,
           payment.balance > 0 ? `Reste à payer : ${formatFcfa(payment.balance)}.` : "Votre commande est entièrement payée. Merci !",
+        ].join("\n\n"),
+      };
+    }
+    case "order.refund": {
+      const refund = data.refund;
+      if (!refund) throw new Error(`Données de remboursement absentes (${data.number})`);
+      return {
+        subject: `Commande ${data.number} : remboursement de ${formatFcfa(refund.amount)}`,
+        text: [
+          `Bonjour ${data.customerName},`,
+          `Suite à votre retour ${refund.returnNumber}, nous vous avons remboursé ${formatFcfa(refund.amount)} en espèces (reçu ${refund.receiptNumber}).`,
         ].join("\n\n"),
       };
     }

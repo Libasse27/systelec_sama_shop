@@ -33,7 +33,7 @@ export default async function AccountOrderPage({ params, searchParams }: Props) 
         </p>
       )}
       <div className="mt-6">
-        <OrderDetails order={order} receiptHref={(receipt) => `/recus/${receipt}`} />
+        <OrderDetails order={order} receiptHref={(receipt) => `/recus/${receipt}`} invoiceHref={(invoice) => `/factures/${invoice}`} />
       </div>
       {order.status === "PENDING_CONFIRMATION" && (
         <ActionForm action={cancelOwnOrderAction.bind(null, order.number)} className="mt-6">

@@ -27,4 +27,12 @@ describe("messages de commande", () => {
     expect(full.text).toContain("entièrement payée");
     expect(() => renderOrderMessage("order.payment", data)).toThrow(/absentes/);
   });
+
+  it("annonce un remboursement avec le retour et le reçu", () => {
+    const { subject, text } = renderOrderMessage("order.refund", { ...data, refund: { amount: 25_000, returnNumber: "RET-2026-000001", receiptNumber: "REC-2026-000009" } });
+    expect(subject).toContain(formatFcfa(25_000));
+    expect(text).toContain("RET-2026-000001");
+    expect(text).toContain("REC-2026-000009");
+    expect(() => renderOrderMessage("order.refund", data)).toThrow(/absentes/);
+  });
 });

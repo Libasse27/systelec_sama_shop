@@ -15,7 +15,10 @@ import { recordPaymentAction, voidPaymentAction } from "@/app/admin/_lib/payment
 export interface PaymentsSectionProps {
   target: PaymentTarget;
   total: number;
+  /** Net des remboursements. */
   amountPaid: number;
+  /** Remboursé suite à des retours (commandes). */
+  refundedAmount?: number;
   paymentStatus: PaymentStatus;
   /** Encaissement possible dans l'état actuel du document ; sinon le motif affiché. */
   payable: true | string;
@@ -25,12 +28,12 @@ export interface PaymentsSectionProps {
 }
 
 /** Solde, encaissement en espèces et contre-écritures d'une commande ou d'une intervention (selon les permissions). */
-export async function PaymentsSection({ target, total, amountPaid, paymentStatus, payable, voidable, user }: PaymentsSectionProps) {
+export async function PaymentsSection({ target, total, amountPaid, refundedAmount = 0, paymentStatus, payable, voidable, user }: PaymentsSectionProps) {
   const canRecord = user.permissions.has("payments.record");
   const canCorrect = user.permissions.has("payments.correct");
   if (!canRecord && !user.permissions.has("payments.read")) return null;
   const [payments, commerce] = await Promise.all([listPayments(db, user, target), getSetting("commerce", db)]);
-  const balance = total - amountPaid;
+  const balance = total - amountPaid - refundedAmount;
 
   return (
     <Section title="Encaissements">
@@ -40,7 +43,13 @@ export async function PaymentsSection({ target, total, amountPaid, paymentStatus
         <dt className="text-ink-muted">Total</dt>
         <dd>{formatFcfa(total)}</dd>
         <dt className="text-ink-muted">Encaissé</dt>
-        <dd>{formatFcfa(amountPaid)}</dd>
+        <dd>{formatFcfa(amountPaid + refundedAmount)}</dd>
+        {refundedAmount > 0 && (
+          <>
+            <dt className="text-ink-muted">Remboursé (retours)</dt>
+            <dd>{formatFcfa(refundedAmount)}</dd>
+          </>
+        )}
         <dt className="text-ink-muted">Reste à payer</dt>
         <dd className="font-semibold">{formatFcfa(balance)}</dd>
       </dl>
@@ -81,7 +90,7 @@ export async function PaymentsSection({ target, total, amountPaid, paymentStatus
                 <a href={`/recus/${payment.receiptNumber}`} target="_blank" rel="noopener" className="font-medium text-brand-blue underline">
                   {payment.receiptNumber}
                 </a>{" "}
-                — {formatDateTime(payment.createdAt)} · {payment.amount > 0 ? "encaissement" : "contre-écriture"}{" "}
+                — {formatDateTime(payment.createdAt)} · {payment.amount > 0 ? "encaissement" : payment.refundOf ? `remboursement du retour ${payment.refundOf}` : "contre-écriture"}{" "}
                 <span className={payment.amount < 0 ? "text-red-800" : undefined}>{formatFcfa(payment.amount)}</span> · {payment.recordedBy}
                 {payment.reverses && <span className="text-ink-muted"> · annule {payment.reverses} ({payment.reason})</span>}
                 {payment.reversedBy && <span className="text-red-800"> · annulé par {payment.reversedBy}</span>}

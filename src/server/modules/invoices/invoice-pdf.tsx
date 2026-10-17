@@ -13,13 +13,15 @@ function InvoiceDocument({ invoice }: { invoice: InvoiceData }) {
         <PdfCompanyHeader company={company} />
         <Text style={pdfStyles.title}>Facture {invoice.number}</Text>
         <Text>
-          {pdfText(`Émise le ${formatDate(invoice.issuedAt)} · Intervention ${invoice.interventionNumber}`)}
+          {pdfText(`Émise le ${formatDate(invoice.issuedAt)} · ${invoice.document.label} ${invoice.document.number}`)}
           {invoice.quoteNumber && pdfText(` · Devis ${invoice.quoteNumber}`)}
         </Text>
         <Text style={pdfStyles.muted}>
           {pdfText(`Client : ${customer.name} · ${customer.phone}${customer.email ? ` · ${customer.email}` : ""}`)}
         </Text>
-        <Text style={pdfStyles.muted}>{pdfText(`Lieu d'intervention : ${customer.address}`)}</Text>
+        {customer.address && (
+          <Text style={pdfStyles.muted}>{pdfText(invoice.document.label === "Intervention" ? `Lieu d'intervention : ${customer.address}` : customer.address)}</Text>
+        )}
 
         <View style={pdfStyles.table}>
           {invoice.lines.map((line, index) => (
@@ -30,7 +32,9 @@ function InvoiceDocument({ invoice }: { invoice: InvoiceData }) {
             />
           ))}
           <PdfLine label="Total TTC" value={pdfMoney(invoice.total)} strong />
-          <PdfLine label="Réglé en espèces à ce jour" value={pdfMoney(invoice.amountPaid)} />
+          {invoice.vat && <PdfLine label={`Dont TVA (${invoice.vat.rate} %)`} value={pdfMoney(invoice.vat.amount)} />}
+          <PdfLine label="Réglé en espèces" value={pdfMoney(invoice.amountPaid)} />
+          {invoice.refunded > 0 && <PdfLine label="Remboursé depuis (retour d'articles)" value={pdfMoney(invoice.refunded)} />}
           <PdfLine label="Reste à payer" value={pdfMoney(balance)} strong />
         </View>
 

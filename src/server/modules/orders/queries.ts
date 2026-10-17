@@ -1,5 +1,5 @@
 import "server-only";
-import type { FulfillmentMethod, OrderHistoryField, OrderStatus, PaymentStatus, Prisma } from "@/generated/prisma/client";
+import type { DeliveryStatus, FulfillmentMethod, OrderHistoryField, OrderStatus, PaymentStatus, Prisma } from "@/generated/prisma/client";
 import { assertPermission, type Actor } from "@/server/authz/service";
 import type { Db } from "@/server/db/client";
 import { verifyAccessToken, type AccessScope } from "./access-token";
@@ -50,12 +50,16 @@ export interface OrderView {
   deliveryFee: number;
   discountTotal: number;
   total: number;
+  /** Net des remboursements : le client a réglé amountPaid + refundedAmount. */
   amountPaid: number;
+  refundedAmount: number;
   notes: string | null;
   createdAt: Date;
   history: { to: string; comment: string | null; createdAt: Date }[];
-  /** Reçus (montant négatif = annulation d'un encaissement). */
-  payments: { receiptNumber: string; amount: number; createdAt: Date }[];
+  /** Reçus (montant négatif = annulation d'un encaissement, ou remboursement d'un retour). */
+  payments: { receiptNumber: string; amount: number; createdAt: Date; isRefund: boolean }[];
+  invoiceNumber: string | null;
+  deliveryStatus: DeliveryStatus | null;
 }
 
 /** Sélection explicite : ni prix d'achat, ni notes internes, ni auteurs des changements. */
@@ -75,18 +79,24 @@ const ORDER_VIEW_SELECT = {
   discountTotal: true,
   total: true,
   amountPaid: true,
+  refundedAmount: true,
   notes: true,
   createdAt: true,
   history: { where: { field: "ORDER" }, orderBy: { createdAt: "asc" }, select: { to: true, comment: true, createdAt: true } },
-  payments: { orderBy: [{ createdAt: "asc" }, { id: "asc" }], select: { receiptNumber: true, amount: true, createdAt: true } },
+  payments: { orderBy: [{ createdAt: "asc" }, { id: "asc" }], select: { receiptNumber: true, amount: true, createdAt: true, returnId: true } },
+  invoice: { select: { number: true } },
+  delivery: { select: { status: true } },
 } satisfies Prisma.OrderSelect;
 
 type OrderRow = Prisma.OrderGetPayload<{ select: typeof ORDER_VIEW_SELECT }>;
 
-const toView = (order: OrderRow): OrderView => ({
+const toView = ({ invoice, delivery, payments, ...order }: OrderRow): OrderView => ({
   ...order,
   contact: order.contact as unknown as Contact,
   shippingAddress: order.shippingAddress as unknown as ShippingAddress | null,
+  payments: payments.map(({ returnId, ...payment }) => ({ ...payment, isRefund: returnId !== null })),
+  invoiceNumber: invoice?.number ?? null,
+  deliveryStatus: delivery?.status ?? null,
 });
 
 /** Commande d'un compte (jamais celle d'un autre client). */

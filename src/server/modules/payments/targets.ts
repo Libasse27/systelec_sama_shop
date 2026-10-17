@@ -69,8 +69,9 @@ async function lockOrderTarget(tx: Tx, orderId: string): Promise<LockedTarget> {
     amountPaid: order.amountPaid,
     paymentStatus: order.paymentStatus,
     notPayable: PAYABLE_ORDER_STATUSES.includes(order.status) ? null : (ORDER_NOT_PAYABLE[order.status] ?? "Cette commande ne s'encaisse pas."),
-    // Commande remise : stock sorti et commande soldée ; la correction passera par un retour (phase 9).
-    notVoidable: order.status === "CLOSED" ? "Commande déjà remise au client : un encaissement ne s'y annule plus." : null,
+    // Commande remise : stock sorti et commande soldée ; elle se corrige par un retour et son remboursement.
+    notVoidable:
+      order.status === "CLOSED" ? "Commande déjà remise au client : enregistrez un retour, puis remboursez-le, au lieu d'annuler l'encaissement." : null,
     async apply(amount, actorId, comment) {
       const amountPaid = order.amountPaid + amount;
       const paymentStatus = paymentStatusFor(order.total, amountPaid);

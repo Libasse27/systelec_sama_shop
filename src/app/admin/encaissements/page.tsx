@@ -41,6 +41,8 @@ export default async function PaymentJournalPage({ searchParams }: { searchParam
           <dd>{formatFcfa(journal.totals.received)}</dd>
           <dt className="text-ink-muted">Annulé (contre-écritures)</dt>
           <dd>{formatFcfa(journal.totals.voided)}</dd>
+          <dt className="text-ink-muted">Remboursé (retours)</dt>
+          <dd>{formatFcfa(journal.totals.refunded)}</dd>
           <dt className="text-ink-muted">Net de la journée</dt>
           <dd className="font-semibold">{formatFcfa(journal.totals.net)}</dd>
         </dl>
@@ -82,6 +84,7 @@ export default async function PaymentJournalPage({ searchParams }: { searchParam
                       {formatDateTime(row.createdAt)}
                       {row.reverses && ` · annule ${row.reverses}`}
                       {row.reversedBy && ` · annulé par ${row.reversedBy}`}
+                      {row.refundOf && ` · remboursement du retour ${row.refundOf}`}
                     </div>
                   </td>
                   <td className="px-3 py-2">

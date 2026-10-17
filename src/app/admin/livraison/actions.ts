@@ -1,6 +1,7 @@
 "use server";
 
 import { db } from "@/server/db/client";
+import { saveCourier } from "@/server/modules/deliveries/service";
 import { saveDeliveryZone, savePickupPoint } from "@/server/modules/orders/delivery-settings";
 import { checkbox, int, optionalInt, text } from "@/lib/form-data";
 import type { ActionState } from "@/lib/form-state";
@@ -31,5 +32,12 @@ export async function savePickupPointAction(id: string | null, _state: ActionSta
       isActive: checkbox(formData, "isActive"),
     });
     return id ? "Point de retrait enregistré." : "Point de retrait créé.";
+  });
+}
+
+export async function saveCourierAction(id: string | null, _state: ActionState, formData: FormData): Promise<ActionState> {
+  return adminAction("/admin/livraison", async (actor) => {
+    await saveCourier(db, actor, id, { name: text(formData, "name"), phone: text(formData, "phone"), isActive: checkbox(formData, "isActive") });
+    return id ? "Livreur enregistré." : "Livreur ajouté.";
   });
 }

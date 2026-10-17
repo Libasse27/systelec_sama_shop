@@ -49,3 +49,15 @@ const fcfaFormatter = new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 0 
 export function formatFcfa(amount: Fcfa): string {
   return `${fcfaFormatter.format(assertFcfa(amount))} ${CURRENCY_LABEL}`;
 }
+
+/**
+ * TVA incluse dans un prix TTC (prix saisis TTC, D6) : TTC × taux / (100 + taux), arrondie
+ * selon la règle unique. Exemple : 118 000 FCFA à 18 % contiennent 18 000 FCFA de TVA.
+ */
+export function includedVat(totalTtc: Fcfa, ratePercent: number): Fcfa {
+  assertFcfa(totalTtc);
+  if (!Number.isFinite(ratePercent) || ratePercent < 0 || ratePercent > 100) {
+    throw new RangeError(`Taux de TVA hors limites (0–100) : ${ratePercent}`);
+  }
+  return roundFcfa((totalTtc * ratePercent) / (100 + ratePercent));
+}

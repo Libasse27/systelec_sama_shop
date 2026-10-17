@@ -13,6 +13,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ key
       "Content-Type": IMAGE_TYPES[extension],
       "Cache-Control": "public, max-age=31536000, immutable",
       "Content-Security-Policy": "default-src 'none'; sandbox",
+      "X-Content-Type-Options": "nosniff",
     },
   });
 }

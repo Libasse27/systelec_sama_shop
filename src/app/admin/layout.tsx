@@ -6,7 +6,10 @@ import { getCurrentUser } from "@/server/auth/session";
 const NAVIGATION: { href: string; label: string; permission: Permission | readonly Permission[] }[] = [
   { href: "/admin", label: "Tableau de bord", permission: "admin.access" },
   { href: "/admin/commandes", label: "Commandes", permission: "orders.read" },
+  { href: "/admin/livraisons", label: "Livraisons", permission: "deliveries.manage" },
+  { href: "/admin/retours", label: "Retours", permission: "orders.read" },
   { href: "/admin/encaissements", label: "Encaissements", permission: "payments.read" },
+  { href: "/admin/rapports", label: "Rapports", permission: "reports.read" },
   { href: "/admin/demandes", label: "Demandes de devis", permission: "quotes.read" },
   { href: "/admin/interventions", label: "Interventions", permission: ["interventions.read", "interventions.manage", "interventions.update_own"] },
   { href: "/admin/planning", label: "Planning", permission: ["interventions.read", "interventions.manage", "interventions.update_own"] },
@@ -16,6 +19,10 @@ const NAVIGATION: { href: string; label: string; permission: Permission | readon
   { href: "/admin/stock", label: "Stock", permission: "inventory.read" },
   { href: "/admin/import-export", label: "Import / export", permission: "products.read" },
   { href: "/admin/livraison", label: "Livraison et retrait", permission: "deliveries.manage" },
+  { href: "/admin/contenu", label: "Contenu", permission: "content.manage" },
+  { href: "/admin/utilisateurs", label: "Utilisateurs", permission: "users.manage" },
+  { href: "/admin/parametres", label: "Paramètres", permission: "settings.manage" },
+  { href: "/admin/audit", label: "Journal d'audit", permission: "audit.read" },
 ];
 
 /** Navigation de l'administration. La garde d'accès reste dans chaque page et chaque service. */

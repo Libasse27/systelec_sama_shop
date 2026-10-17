@@ -110,6 +110,14 @@ describe("RBAC (PostgreSQL)", () => {
     await expect(revokeRole(db, admin, target, SUPER_ADMIN)).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
 
+  it("un administrateur ne modifie pas les rôles du compte d'un administrateur principal", async () => {
+    const target = await createUser([SUPER_ADMIN]);
+    await createUser([SUPER_ADMIN]);
+    const admin = await actorFor(await createUser(["ADMIN"]));
+    await expect(assignRole(db, admin, target, "STOCK_MANAGER")).rejects.toMatchObject({ code: "FORBIDDEN" });
+    expect((await loadAccess(db, target)).roles).toEqual([SUPER_ADMIN]);
+  });
+
   it("permet de retirer le rôle d'un administrateur principal désactivé", async () => {
     const active = await createUser([SUPER_ADMIN]);
     const inactive = await createUser([SUPER_ADMIN], false);
@@ -117,18 +125,29 @@ describe("RBAC (PostgreSQL)", () => {
     expect((await db.userRole.count({ where: { userId: inactive } }))).toBe(0);
   });
 
-  it("refuse de retirer le dernier administrateur principal actif", async () => {
+  it("interdit l'auto-rétrogradation, refus journalisé", async () => {
+    const admin = await createUser(["ADMIN"]);
+    await expect(revokeRole(db, await actorFor(admin), admin, "ADMIN")).rejects.toMatchObject({ code: "FORBIDDEN" });
+    expect((await loadAccess(db, admin)).roles).toEqual(["ADMIN"]);
+    expect(await db.auditLog.count({ where: { action: "authz.denied", entityType: "User", entityId: admin, result: "DENIED" } })).toBe(1);
+
     const onlySuperAdmin = await createUser([SUPER_ADMIN]);
-    const actor = await actorFor(onlySuperAdmin);
-    await expect(revokeRole(db, actor, onlySuperAdmin, SUPER_ADMIN)).rejects.toMatchObject({ code: "CONFLICT" });
+    await expect(revokeRole(db, await actorFor(onlySuperAdmin), onlySuperAdmin, SUPER_ADMIN)).rejects.toMatchObject({ code: "FORBIDDEN" });
     expect((await loadAccess(db, onlySuperAdmin)).roles).toContain(SUPER_ADMIN);
+  });
 
-    // Un second administrateur principal désactivé ne compte pas.
-    await createUser([SUPER_ADMIN], false);
-    await expect(revokeRole(db, actor, onlySuperAdmin, SUPER_ADMIN)).rejects.toMatchObject({ code: "CONFLICT" });
-
+  it("refuse de retirer le dernier administrateur principal actif, même par retraits croisés simultanés", async () => {
+    const first = await createUser([SUPER_ADMIN]);
     const second = await createUser([SUPER_ADMIN]);
-    await revokeRole(db, actor, second, SUPER_ADMIN);
-    expect((await loadAccess(db, second)).roles).toEqual([]);
+    // Un administrateur principal désactivé ne compte pas.
+    await createUser([SUPER_ADMIN], false);
+    const results = await Promise.allSettled([
+      revokeRole(db, await actorFor(first), second, SUPER_ADMIN),
+      revokeRole(db, await actorFor(second), first, SUPER_ADMIN),
+    ]);
+    expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+    const rejected = results.find((result) => result.status === "rejected");
+    expect(rejected?.status === "rejected" && rejected.reason).toMatchObject({ code: "CONFLICT" });
+    expect(await db.userRole.count({ where: { role: { code: SUPER_ADMIN }, user: { isActive: true } } })).toBe(1);
   });
 });

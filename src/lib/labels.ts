@@ -74,7 +74,7 @@ export const PAYMENT_STATUS_LABELS: Record<PaymentStatus, string> = {
   PAID: "Payée",
   TO_VERIFY: "À vérifier",
   REFUND_PENDING: "Remboursement en attente",
-  REFUNDED: "Remboursée",
+  REFUNDED: "Remboursement effectué",
 };
 
 export const FULFILLMENT_LABELS = { DELIVERY: "Livraison à domicile", PICKUP: "Retrait en boutique" } as const;
@@ -105,4 +105,18 @@ export const INTERVENTION_STATUS_LABELS = {
   IN_PROGRESS: "En cours",
   DONE: "Terminée",
   CANCELLED: "Annulée",
+} as const;
+
+export const DELIVERY_STATUS_LABELS = {
+  ASSIGNED: "Livreur assigné",
+  IN_TRANSIT: "En cours de livraison",
+  DELIVERED: "Livrée",
+  FAILED: "Échec de livraison",
+} as const;
+
+export const RETURN_STATUS_LABELS = {
+  RECEIVED: "À vérifier",
+  REFUND_PENDING: "Remboursement à verser",
+  COMPLETED: "Traité",
+  REJECTED: "Refusé",
 } as const;

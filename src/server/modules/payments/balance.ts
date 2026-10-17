@@ -1,9 +1,9 @@
-import type { OrderStatus, PaymentStatus } from "@/generated/prisma/client";
+import type { OrderStatus, PaymentStatus, ReturnStatus } from "@/generated/prisma/client";
 import { formatFcfa } from "@/lib/money";
 
 /**
  * Statuts où une commande s'encaisse : confirmée, jamais annulée. Une commande remise au
- * client est forcément soldée ; sa correction passera par un retour (phase 9).
+ * client est forcément soldée ; elle se corrige par un retour et son remboursement (returns/).
  */
 export const PAYABLE_ORDER_STATUSES: readonly OrderStatus[] = ["CONFIRMED", "PREPARING", "READY_FOR_PICKUP", "READY_TO_SHIP"];
 
@@ -11,6 +11,18 @@ export const PAYABLE_ORDER_STATUSES: readonly OrderStatus[] = ["CONFIRMED", "PRE
 export function paymentStatusFor(total: number, amountPaid: number): PaymentStatus {
   if (amountPaid <= 0) return total === 0 ? "PAID" : "UNPAID";
   return amountPaid >= total ? "PAID" : "PARTIALLY_PAID";
+}
+
+/**
+ * Statut de paiement d'une commande, retours compris : un remboursement à verser prime, puis un
+ * retour à vérifier, puis un remboursement effectué ; sinon le statut des encaissements.
+ * `amountPaid` est net des remboursements : le montant réglé par le client est amountPaid + refundedAmount.
+ */
+export function orderPaymentStatus(input: { total: number; amountPaid: number; refundedAmount: number; returns: readonly ReturnStatus[] }): PaymentStatus {
+  if (input.returns.includes("REFUND_PENDING")) return "REFUND_PENDING";
+  if (input.returns.includes("RECEIVED")) return "TO_VERIFY";
+  if (input.refundedAmount > 0) return "REFUNDED";
+  return paymentStatusFor(input.total, input.amountPaid + input.refundedAmount);
 }
 
 export interface AmountCheck {

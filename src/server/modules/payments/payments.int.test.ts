@@ -201,10 +201,10 @@ describe("encaissements en espèces (§20 n° 15, 16 et 26, PostgreSQL)", () => 
 
     it("le montant encaissé d'une commande égale toujours la somme de ses écritures (contrôle différé)", async () => {
       const { id } = await order();
-      await expect(db.order.update({ where: { id }, data: { amountPaid: 10_000 } })).rejects.toThrow(/différent de la somme/);
+      await expect(db.order.update({ where: { id }, data: { amountPaid: 10_000 } })).rejects.toThrow(/différents des écritures/);
       await expect(
         db.payment.create({ data: { receiptNumber: "REC-TEST-3", orderId: id, amount: 10_000, balanceAfter: 40_000, recordedById: cashier.id } }),
-      ).rejects.toThrow(/différent de la somme/);
+      ).rejects.toThrow(/différents des écritures/);
       expect(await orderState(id)).toMatchObject({ amountPaid: 0 });
       expect(await db.payment.count()).toBe(0);
     });
@@ -287,7 +287,7 @@ describe("encaissements en espèces (§20 n° 15, 16 et 26, PostgreSQL)", () => 
       await recordOrderPayment(db, cashier, id, { amount: 20_000, idempotencyKey: randomUUID(), note: "Remis au livreur" });
       const view = await getCustomerOrder(db, userId, number);
       expect(view).toMatchObject({ amountPaid: 20_000, paymentStatus: "PARTIALLY_PAID" });
-      expect(view!.payments).toEqual([{ receiptNumber: expect.stringMatching(/^REC-/), amount: 20_000, createdAt: expect.any(Date) }]);
+      expect(view!.payments).toEqual([{ receiptNumber: expect.stringMatching(/^REC-/), amount: 20_000, createdAt: expect.any(Date), isRefund: false }]);
       expect(JSON.stringify(view)).not.toContain("Remis au livreur");
     });
 
@@ -302,7 +302,7 @@ describe("encaissements en espèces (§20 n° 15, 16 et 26, PostgreSQL)", () => 
       await voidPayment(db, cashier, voided.id, { reason: "Erreur de montant" });
 
       const journal = await getPaymentJournal(db, cashier, { from: new Date(Date.now() - 3600_000), to: new Date(Date.now() + 3600_000) });
-      expect(journal.totals).toEqual({ received: 65_000, voided: 20_000, net: 45_000, count: 4 });
+      expect(journal.totals).toEqual({ received: 65_000, voided: 20_000, refunded: 0, net: 45_000, count: 4 });
       expect(journal.rows).toHaveLength(4);
       expect(journal.truncated).toBe(false);
       expect(journal.byRecorder).toEqual([

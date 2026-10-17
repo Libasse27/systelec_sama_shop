@@ -10,7 +10,9 @@ function ReceiptDocument({ receipt }: { receipt: ReceiptData }) {
     <Document title={`Reçu ${receipt.receiptNumber}`} author={company.name} creator={company.name}>
       <Page size="A5" style={pdfStyles.page}>
         <PdfCompanyHeader company={company} />
-        <Text style={pdfStyles.title}>{receipt.reversal ? "Reçu d'annulation d'encaissement" : "Reçu de paiement en espèces"}</Text>
+        <Text style={pdfStyles.title}>
+          {receipt.refund ? "Reçu de remboursement en espèces" : receipt.reversal ? "Reçu d'annulation d'encaissement" : "Reçu de paiement en espèces"}
+        </Text>
         <Text>
           N° {receipt.receiptNumber} — {pdfText(formatDateTime(receipt.createdAt))}
         </Text>
@@ -20,7 +22,12 @@ function ReceiptDocument({ receipt }: { receipt: ReceiptData }) {
           <PdfLine label={receipt.document.label} value={receipt.document.number} />
           <PdfLine label="Client" value={`${receipt.customer.name} · ${receipt.customer.phone}`} />
           <PdfLine label="Montant total" value={pdfMoney(receipt.document.total)} />
-          {receipt.reversal ? (
+          {receipt.refund ? (
+            <>
+              <PdfLine label="Retour" value={receipt.refund.returnNumber} />
+              <PdfLine label="Montant remboursé en espèces" value={pdfMoney(-receipt.amount)} strong />
+            </>
+          ) : receipt.reversal ? (
             <>
               <PdfLine label="Reçu annulé" value={receipt.reversal.receiptNumber} />
               <PdfLine label="Motif" value={receipt.reversal.reason} />
@@ -29,7 +36,7 @@ function ReceiptDocument({ receipt }: { receipt: ReceiptData }) {
           ) : (
             <PdfLine label="Montant reçu en espèces" value={pdfMoney(receipt.amount)} strong />
           )}
-          <PdfLine label="Reste à payer après ce reçu" value={pdfMoney(receipt.balanceAfter)} />
+          {!receipt.refund && <PdfLine label="Reste à payer après ce reçu" value={pdfMoney(receipt.balanceAfter)} />}
           <PdfLine label="Enregistré par" value={receipt.recordedBy} />
         </View>
 

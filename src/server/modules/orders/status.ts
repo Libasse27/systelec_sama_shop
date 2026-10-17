@@ -53,8 +53,10 @@ const changeSchema = z
 /**
  * Applique un changement de statut sur une commande verrouillée. Annulation : le stock réservé
  * est libéré. Clôture (remise au client) : le stock réservé sort définitivement (vente).
+ * Une commande suivie par une livraison se clôt en marquant la livraison effectuée
+ * (`viaDelivery`), et ne s'annule pas tant que le livreur est en route.
  */
-async function transition(
+export async function applyOrderTransition(
   tx: Tx,
   orderId: string,
   to: OrderStatus,
@@ -62,6 +64,7 @@ async function transition(
   comment: string | null,
   /** Condition revérifiée SOUS le verrou de la commande ; faux = rien n'est fait. */
   guard?: (order: { status: OrderStatus; reservedUntil: Date | null }) => boolean,
+  viaDelivery = false,
 ): Promise<{ number: string; from: OrderStatus } | null> {
   await lockOrderRow(tx, orderId);
   const order = await tx.order.findUniqueOrThrow({
@@ -80,6 +83,15 @@ async function transition(
   if (order.status === to) return null;
   if (!allowedTransitions(order.status, order.fulfillmentMethod).includes(to)) {
     throw new AppError("CONFLICT", `Passage impossible de « ${ORDER_STATUS_LABELS[order.status]} » à « ${ORDER_STATUS_LABELS[to]} ».`);
+  }
+  if (to === "CLOSED" || to === "CANCELLED") {
+    const delivery = await tx.delivery.findUnique({ where: { orderId }, select: { status: true } });
+    if (to === "CANCELLED" && delivery?.status === "IN_TRANSIT") {
+      throw new AppError("CONFLICT", "Livraison en cours : enregistrez d'abord son résultat (livrée ou échec).");
+    }
+    if (to === "CLOSED" && delivery && !viaDelivery) {
+      throw new AppError("CONFLICT", "Cette commande est suivie par une livraison : la remise se fait en marquant la livraison effectuée.");
+    }
   }
   // Contrôlés sous le verrou de la commande, que les encaissements prennent aussi.
   if (to === "CLOSED" && order.amountPaid < order.total) {
@@ -114,14 +126,15 @@ async function transition(
   return { number: order.number, from: order.status };
 }
 
-async function notifyCustomer(tx: Tx, orderId: string, to: OrderStatus, comment: string | null): Promise<void> {
+/** Notifie le client d'un nouvel état de sa commande (libellé libre : statut ou étape de livraison). */
+export async function notifyOrderCustomer(tx: Tx, orderId: string, statusLabel: string, comment: string | null): Promise<void> {
   const order = await tx.order.findUniqueOrThrow({ where: { id: orderId }, select: { number: true, total: true, contact: true, fulfillmentMethod: true } });
   const contact = order.contact as Contact;
   await queueOrderNotifications(
     tx,
     orderId,
     "order.status",
-    { number: order.number, customerName: contact.name, total: order.total, fulfillment: order.fulfillmentMethod, statusLabel: ORDER_STATUS_LABELS[to], comment },
+    { number: order.number, customerName: contact.name, total: order.total, fulfillment: order.fulfillmentMethod, statusLabel, comment },
     { email: contact.email, phone: contact.phone },
   );
 }
@@ -131,9 +144,9 @@ export async function changeOrderStatus(client: PrismaClient, actor: Actor, orde
   await assertPermission(client, actor, "orders.update");
   const { status, comment } = parseInput(changeSchema, input, "Changement de statut");
   const changed = await client.$transaction(async (tx) => {
-    const result = await transition(tx, orderId, status, actor.id, comment);
+    const result = await applyOrderTransition(tx, orderId, status, actor.id, comment);
     if (!result) return false;
-    await notifyCustomer(tx, orderId, status, comment);
+    await notifyOrderCustomer(tx, orderId, ORDER_STATUS_LABELS[status], comment);
     await recordAudit(tx, {
       actorId: actor.id,
       action: "order.status",
@@ -156,7 +169,7 @@ export async function cancelOwnOrder(client: PrismaClient, userId: string, order
   }
   await client.$transaction(async (tx) => {
     const comment = "Annulée par le client";
-    const result = await transition(tx, order.id, "CANCELLED", userId, comment, (current) => current.status === "PENDING_CONFIRMATION");
+    const result = await applyOrderTransition(tx, order.id, "CANCELLED", userId, comment, (current) => current.status === "PENDING_CONFIRMATION");
     if (!result) throw new AppError("CONFLICT", "Cette commande ne peut plus être annulée en ligne : contactez-nous.");
     await recordAudit(tx, { actorId: userId, action: "order.cancel_by_customer", entityType: "Order", entityId: order.id });
   });
@@ -177,11 +190,11 @@ export async function expireStaleOrders(client: PrismaClient, now: Date = new Da
     const number = await client.$transaction(async (tx) => {
       const comment = "Réservation expirée sans confirmation";
       // Revérifié sous verrou : une commande confirmée entre-temps n'est jamais annulée.
-      const result = await transition(tx, id, "CANCELLED", null, comment, (order) =>
+      const result = await applyOrderTransition(tx, id, "CANCELLED", null, comment, (order) =>
         order.status === "PENDING_CONFIRMATION" && order.reservedUntil !== null && order.reservedUntil < now,
       );
       if (!result) return null;
-      await notifyCustomer(tx, id, "CANCELLED", comment);
+      await notifyOrderCustomer(tx, id, ORDER_STATUS_LABELS.CANCELLED, comment);
       await recordAudit(tx, { actorId: null, action: "order.expire", entityType: "Order", entityId: id });
       return result.number;
     });

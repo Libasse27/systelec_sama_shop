@@ -242,7 +242,7 @@ describe("interventions techniques (§20 n° 20 et 21, PostgreSQL)", () => {
       expect(number).toMatch(/^FAC-\d{4}-000001$/);
       await expect(issueInvoice(db, manager, intervention.id)).rejects.toThrow(/déjà émise/);
       const invoice = await getInvoice(db, { user: manager }, number);
-      expect(invoice).toMatchObject({ total: QUOTE_TOTAL, interventionNumber: intervention.number, customer: { name: "Fatou Sow" } });
+      expect(invoice).toMatchObject({ total: QUOTE_TOTAL, document: { label: "Intervention", number: intervention.number }, customer: { name: "Fatou Sow" } });
       expect(invoice!.lines.map((line) => line.lineTotal)).toEqual([140_000, 40_000]);
       const pdf = await renderInvoicePdf(invoice!);
       expect(pdf.subarray(0, 5).toString()).toBe("%PDF-");

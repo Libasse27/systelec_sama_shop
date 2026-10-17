@@ -23,6 +23,8 @@ export interface AdminPaymentRow {
   reverses: string | null;
   /** Contre-écriture qui annule cet encaissement. */
   reversedBy: string | null;
+  /** Remboursement : le retour remboursé. */
+  refundOf: string | null;
 }
 
 const ADMIN_PAYMENT_SELECT = {
@@ -36,13 +38,15 @@ const ADMIN_PAYMENT_SELECT = {
   recordedBy: { select: { name: true } },
   reverses: { select: { receiptNumber: true } },
   reversedBy: { select: { receiptNumber: true } },
+  return: { select: { number: true } },
 } satisfies Prisma.PaymentSelect;
 
-const toAdminRow = ({ recordedBy, reverses, reversedBy, ...payment }: Prisma.PaymentGetPayload<{ select: typeof ADMIN_PAYMENT_SELECT }>) => ({
+const toAdminRow = ({ recordedBy, reverses, reversedBy, return: refunded, ...payment }: Prisma.PaymentGetPayload<{ select: typeof ADMIN_PAYMENT_SELECT }>) => ({
   ...payment,
   recordedBy: recordedBy.name,
   reverses: reverses?.receiptNumber ?? null,
   reversedBy: reversedBy?.receiptNumber ?? null,
+  refundOf: refunded?.number ?? null,
 });
 
 /** Encaissements d'un document : visibles avec payments.read, ou payments.record (le caissier voit ce qu'il saisit). */
@@ -84,7 +88,8 @@ export interface PaymentJournal {
   rows: JournalRow[];
   /** Vrai si la journée compte plus de lignes que la limite affichée (les totaux restent complets). */
   truncated: boolean;
-  totals: { received: number; voided: number; net: number; count: number };
+  /** Encaissé, annulé (contre-écritures), remboursé (retours) et net en caisse. */
+  totals: { received: number; voided: number; refunded: number; net: number; count: number };
   /** Net encaissé par agent : ce que chacun doit remettre en caisse. */
   byRecorder: { name: string; net: number; count: number }[];
 }
@@ -93,7 +98,7 @@ export interface PaymentJournal {
 export async function getPaymentJournal(client: Db, actor: Actor, range: { from: Date; to: Date }): Promise<PaymentJournal> {
   await assertPermission(client, actor, "payments.read");
   const where: Prisma.PaymentWhereInput = { createdAt: { gte: range.from, lt: range.to } };
-  const [payments, received, voided, perRecorder] = await Promise.all([
+  const [payments, received, voided, refunded, perRecorder] = await Promise.all([
     client.payment.findMany({
       where,
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
@@ -101,17 +106,26 @@ export async function getPaymentJournal(client: Db, actor: Actor, range: { from:
       select: { ...ADMIN_PAYMENT_SELECT, order: { select: { id: true, number: true } }, intervention: { select: { id: true, number: true } } },
     }),
     client.payment.aggregate({ where: { ...where, amount: { gt: 0 } }, _sum: { amount: true }, _count: true }),
-    client.payment.aggregate({ where: { ...where, amount: { lt: 0 } }, _sum: { amount: true }, _count: true }),
+    client.payment.aggregate({ where: { ...where, amount: { lt: 0 }, returnId: null }, _sum: { amount: true }, _count: true }),
+    client.payment.aggregate({ where: { ...where, returnId: { not: null } }, _sum: { amount: true }, _count: true }),
     client.payment.groupBy({ by: ["recordedById"], where, _sum: { amount: true }, _count: true }),
   ]);
   const recorders = await client.user.findMany({ where: { id: { in: perRecorder.map((row) => row.recordedById) } }, select: { id: true, name: true } });
   const names = new Map(recorders.map((user) => [user.id, user.name]));
   const receivedTotal = received._sum.amount ?? 0;
-  const voidedTotal = -(voided._sum.amount ?? 0);
+  // « 0 - » et non « - » : une somme vide doit donner 0, pas -0 (affiché « -0 FCFA »).
+  const voidedTotal = 0 - (voided._sum.amount ?? 0);
+  const refundedTotal = 0 - (refunded._sum.amount ?? 0);
   return {
     rows: payments.slice(0, JOURNAL_LIMIT).map(({ order, intervention, ...payment }) => ({ ...toAdminRow(payment), document: documentOf({ order, intervention }) })),
     truncated: payments.length > JOURNAL_LIMIT,
-    totals: { received: receivedTotal, voided: voidedTotal, net: receivedTotal - voidedTotal, count: received._count + voided._count },
+    totals: {
+      received: receivedTotal,
+      voided: voidedTotal,
+      refunded: refundedTotal,
+      net: receivedTotal - voidedTotal - refundedTotal,
+      count: received._count + voided._count + refunded._count,
+    },
     byRecorder: perRecorder
       .map((row) => ({ name: names.get(row.recordedById) ?? "Inconnu", net: row._sum.amount ?? 0, count: row._count }))
       .sort((a, b) => a.name.localeCompare(b.name, "fr")),
@@ -131,6 +145,8 @@ export interface ReceiptData {
   recordedBy: string;
   /** Contre-écriture : le reçu annulé et le motif. */
   reversal: { receiptNumber: string; reason: string } | null;
+  /** Remboursement d'un retour : son numéro et le motif. */
+  refund: { returnNumber: string; reason: string } | null;
   /** Encaissement annulé depuis (mention sur le reçu d'origine). */
   voidedBy: string | null;
   company: CompanyHeader;
@@ -217,6 +233,7 @@ export async function getReceipt(client: Db, viewer: DocumentViewer, receiptNumb
       recordedBy: { select: { name: true } },
       reverses: { select: { receiptNumber: true } },
       reversedBy: { select: { receiptNumber: true } },
+      return: { select: { number: true } },
       order: { select: { ...OWNER_SELECT, number: true, total: true } },
       intervention: {
         select: {
@@ -245,6 +262,7 @@ export async function getReceipt(client: Db, viewer: DocumentViewer, receiptNumb
     customer: { name: contact.name, phone: contact.phone },
     recordedBy: payment.recordedBy.name,
     reversal: payment.reverses ? { receiptNumber: payment.reverses.receiptNumber, reason: payment.reason ?? "" } : null,
+    refund: payment.return ? { returnNumber: payment.return.number, reason: payment.reason ?? "" } : null,
     voidedBy: payment.reversedBy?.receiptNumber ?? null,
     company: await companyHeader(client),
   };

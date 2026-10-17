@@ -591,6 +591,8 @@ model Order {
   discountTotal     Int                  @default(0)
   total             Int
   amountPaid        Int                  @default(0)
+  /// Somme remboursée en espèces suite à des retours (positive). amountPaid l'a déjà déduite.
+  refundedAmount    Int                  @default(0)
   notes             String?
   internalNotes     String?
   /// Fin de la réservation du stock si la commande n'est pas confirmée (D3).
@@ -601,6 +603,9 @@ model Order {
   items             OrderItem[]
   history           OrderStatusHistory[]
   payments          Payment[]
+  delivery          Delivery?
+  returns           Return[]
+  invoice           Invoice?
   createdAt         DateTime             @default(now()) @db.Timestamptz(3)
   updatedAt         DateTime             @updatedAt @db.Timestamptz(3)
 
@@ -625,6 +630,7 @@ model OrderItem {
   lineTotal   Int
   /// Prix d'achat au moment de la vente (marge) : interne, jamais exposé au client.
   unitCost    Int?
+  returnItems ReturnItem[]
 
   @@index([orderId])
   @@map("order_items")
@@ -668,7 +674,7 @@ model Payment {
   order             Order?        @relation(fields: [orderId], references: [id], onDelete: Restrict)
   interventionId    String?
   intervention      Intervention? @relation(fields: [interventionId], references: [id], onDelete: Restrict)
-  /// > 0 : encaissement ; < 0 : contre-écriture (annulation d'un encaissement).
+  /// > 0 : encaissement ; < 0 : contre-écriture (annulation d'un encaissement) ou remboursement d'un retour.
   amount            Int
   method            PaymentMethod @default(CASH)
   /// Reste à payer sur la commande juste après cette écriture (figé pour le reçu).
@@ -681,7 +687,10 @@ model Payment {
   reversesPaymentId String?       @unique
   reverses          Payment?      @relation("PaymentReversal", fields: [reversesPaymentId], references: [id], onDelete: Restrict)
   reversedBy        Payment?      @relation("PaymentReversal")
-  /// Motif d'une contre-écriture (obligatoire), imprimé sur son reçu.
+  /// Remboursement en espèces d'un retour (montant < 0, au plus un par retour).
+  returnId          String?       @unique
+  return            Return?       @relation(fields: [returnId], references: [id], onDelete: Restrict)
+  /// Motif d'une contre-écriture ou d'un remboursement (obligatoire), imprimé sur son reçu.
   reason            String?
   /// Note interne, jamais imprimée ni montrée au client.
   note              String?
@@ -954,11 +963,14 @@ model InterventionPart {
 
 /// Facture (document commercial, pas une comptabilité réglementaire). Figée à l'émission, en ajout seul.
 model Invoice {
-  id             String       @id @default(cuid())
-  number         String       @unique
-  interventionId String       @unique
-  intervention   Intervention @relation(fields: [interventionId], references: [id], onDelete: Restrict)
-  issuedAt       DateTime     @default(now()) @db.Timestamptz(3)
+  id             String        @id @default(cuid())
+  number         String        @unique
+  /// Exactement l'un des deux : une intervention ou une commande (contrainte CHECK).
+  interventionId String?       @unique
+  intervention   Intervention? @relation(fields: [interventionId], references: [id], onDelete: Restrict)
+  orderId        String?       @unique
+  order          Order?        @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  issuedAt       DateTime      @default(now()) @db.Timestamptz(3)
   /// Lignes, client et adresse FIGÉS à l'émission.
   lines          Json
   customer       Json
@@ -966,4 +978,109 @@ model Invoice {
   issuedById     String
 
   @@map("invoices")
+}
+
+// ─── Phase 9 : livraisons détaillées, retours et remboursements ──────────────
+
+/// Livreur (interne ou prestataire). Un livreur désactivé ne reçoit plus de livraison.
+model Courier {
+  id         String     @id @default(cuid())
+  name       String     @unique
+  phone      String
+  isActive   Boolean    @default(true)
+  deliveries Delivery[]
+  createdAt  DateTime   @default(now()) @db.Timestamptz(3)
+  updatedAt  DateTime   @updatedAt @db.Timestamptz(3)
+
+  @@map("couriers")
+}
+
+/// Statut d'une livraison à domicile. Le retrait en boutique n'a pas de livraison.
+enum DeliveryStatus {
+  ASSIGNED
+  IN_TRANSIT
+  DELIVERED
+  FAILED
+}
+
+/// Livraison d'une commande « livraison à domicile ». L'historique est dans order_status_history (champ DELIVERY).
+model Delivery {
+  id            String         @id @default(cuid())
+  orderId       String         @unique
+  order         Order          @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  courierId     String
+  courier       Courier        @relation(fields: [courierId], references: [id], onDelete: Restrict)
+  status        DeliveryStatus @default(ASSIGNED)
+  /// Tentatives de livraison (départs).
+  attempts      Int            @default(0)
+  scheduledFor  DateTime?      @db.Timestamptz(3)
+  startedAt     DateTime?      @db.Timestamptz(3)
+  deliveredAt   DateTime?      @db.Timestamptz(3)
+  /// Preuve de livraison : nom de la personne qui a reçu le colis, et observations.
+  recipientName String?
+  proofNote     String?
+  /// Motif du dernier échec.
+  failureReason String?
+  createdAt     DateTime       @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime       @updatedAt @db.Timestamptz(3)
+
+  @@index([status, updatedAt])
+  @@index([courierId, status])
+  @@map("deliveries")
+}
+
+/// RECEIVED : articles rapportés, à vérifier ; REFUND_PENDING : accepté, remboursement à verser ;
+/// COMPLETED : traité (remboursé ou sans remboursement) ; REJECTED : refusé, articles rendus au client.
+enum ReturnStatus {
+  RECEIVED
+  REFUND_PENDING
+  COMPLETED
+  REJECTED
+}
+
+/// Retour d'articles d'une commande remise au client. Quantités et montants contrôlés en base.
+model Return {
+  id             String       @id @default(cuid())
+  number         String       @unique
+  orderId        String
+  order          Order        @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  /// Clé envoyée par le formulaire : un double envoi n'enregistre qu'un retour.
+  idempotencyKey String       @unique
+  status         ReturnStatus @default(RECEIVED)
+  /// Motif du client.
+  reason         String
+  /// Valeur des articles retournés (prix figés de la commande).
+  itemsValue     Int
+  /// Montant à rembourser décidé (≤ valeur des articles).
+  refundAmount   Int          @default(0)
+  /// Décision : articles remis en stock ou non, avec son motif.
+  restocked      Boolean?
+  decisionNote   String?
+  createdById    String
+  decidedById    String?
+  decidedAt      DateTime?    @db.Timestamptz(3)
+  refundedAt     DateTime?    @db.Timestamptz(3)
+  items          ReturnItem[]
+  refund         Payment?
+  createdAt      DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime     @updatedAt @db.Timestamptz(3)
+
+  @@index([orderId, createdAt])
+  @@index([status, createdAt])
+  @@map("returns")
+}
+
+/// Ligne d'un retour (ajout seul) : quantité retournée d'une ligne de commande, au prix figé.
+model ReturnItem {
+  id          String    @id @default(cuid())
+  returnId    String
+  return      Return    @relation(fields: [returnId], references: [id], onDelete: Restrict)
+  orderItemId String
+  orderItem   OrderItem @relation(fields: [orderItemId], references: [id], onDelete: Restrict)
+  quantity    Int
+  unitPrice   Int
+
+  @@unique([returnId, orderItemId])
+  @@index([orderItemId])
+  @@map("return_items")
 }

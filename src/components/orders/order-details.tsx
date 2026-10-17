@@ -1,5 +1,5 @@
 import { formatDateTime } from "@/lib/dates";
-import { FULFILLMENT_LABELS, ORDER_STATUS_LABELS, PAYMENT_STATUS_LABELS } from "@/lib/labels";
+import { DELIVERY_STATUS_LABELS, FULFILLMENT_LABELS, ORDER_STATUS_LABELS, PAYMENT_STATUS_LABELS } from "@/lib/labels";
 import { formatFcfa } from "@/lib/money";
 import type { OrderView } from "@/server/modules/orders/queries";
 
@@ -7,11 +7,15 @@ interface OrderDetailsProps {
   order: Omit<OrderView, "history"> & { history?: OrderView["history"] };
   /** Lien vers le PDF d'un reçu (avec le jeton du lien de suivi pour un invité). */
   receiptHref: (receiptNumber: string) => string;
+  /** Lien vers le PDF de la facture (même jeton). */
+  invoiceHref: (invoiceNumber: string) => string;
 }
 
 /** Récapitulatif d'une commande (client invité, compte, administration). */
-export function OrderDetails({ order, receiptHref }: OrderDetailsProps) {
-  const balance = order.total - order.amountPaid;
+export function OrderDetails({ order, receiptHref, invoiceHref }: OrderDetailsProps) {
+  // Réglé par le client = encaissé net + remboursé ; le reste à payer n'en tient pas compte deux fois.
+  const settled = order.amountPaid + order.refundedAmount;
+  const balance = order.total - settled;
   return (
     <div className="flex flex-col gap-4">
       <dl className="grid gap-x-6 gap-y-2 rounded-xl border border-line bg-surface p-4 text-sm sm:grid-cols-[12rem_1fr]">
@@ -21,6 +25,12 @@ export function OrderDetails({ order, receiptHref }: OrderDetailsProps) {
         <dd>
           {PAYMENT_STATUS_LABELS[order.paymentStatus]} — en espèces {order.fulfillmentMethod === "DELIVERY" ? "à la livraison" : "au retrait"}
         </dd>
+        {order.deliveryStatus && (
+          <>
+            <dt className="text-ink-muted">Livraison</dt>
+            <dd>{DELIVERY_STATUS_LABELS[order.deliveryStatus]}</dd>
+          </>
+        )}
         <dt className="text-ink-muted">Passée le</dt>
         <dd>{formatDateTime(order.createdAt)}</dd>
         <dt className="text-ink-muted">Mode</dt>
@@ -95,12 +105,18 @@ export function OrderDetails({ order, receiptHref }: OrderDetailsProps) {
               <td colSpan={3} className="px-3 py-2 text-right">Total à payer en espèces</td>
               <td className="whitespace-nowrap px-3 py-2 text-right">{formatFcfa(order.total)}</td>
             </tr>
-            {order.amountPaid > 0 && (
+            {settled > 0 && (
               <>
                 <tr>
                   <td colSpan={3} className="px-3 py-1 text-right">Déjà payé</td>
-                  <td className="whitespace-nowrap px-3 py-1 text-right">{formatFcfa(order.amountPaid)}</td>
+                  <td className="whitespace-nowrap px-3 py-1 text-right">{formatFcfa(settled)}</td>
                 </tr>
+                {order.refundedAmount > 0 && (
+                  <tr>
+                    <td colSpan={3} className="px-3 py-1 text-right">Remboursé (retour)</td>
+                    <td className="whitespace-nowrap px-3 py-1 text-right">{formatFcfa(order.refundedAmount)}</td>
+                  </tr>
+                )}
                 <tr className="font-bold">
                   <td colSpan={3} className="px-3 py-2 text-right">Reste à payer</td>
                   <td className="whitespace-nowrap px-3 py-2 text-right">{formatFcfa(balance)}</td>
@@ -111,11 +127,18 @@ export function OrderDetails({ order, receiptHref }: OrderDetailsProps) {
         </table>
       </div>
 
-      {order.payments.length > 0 && (
+      {(order.payments.length > 0 || order.invoiceNumber) && (
         <section aria-labelledby="recus" className="rounded-xl border border-line bg-surface p-4">
           <h2 id="recus" className="font-semibold">
-            Reçus
+            Reçus et facture
           </h2>
+          {order.invoiceNumber && (
+            <p className="mt-2 text-sm">
+              <a href={invoiceHref(order.invoiceNumber)} target="_blank" rel="noopener" className="text-brand-blue underline">
+                Facture {order.invoiceNumber} (PDF)
+              </a>
+            </p>
+          )}
           <ul className="mt-2 flex flex-col gap-1 text-sm">
             {order.payments.map((payment) => (
               <li key={payment.receiptNumber}>
@@ -123,7 +146,11 @@ export function OrderDetails({ order, receiptHref }: OrderDetailsProps) {
                   Reçu {payment.receiptNumber} (PDF)
                 </a>{" "}
                 — {formatDateTime(payment.createdAt)} ·{" "}
-                {payment.amount > 0 ? `${formatFcfa(payment.amount)} reçus en espèces` : `annulation de ${formatFcfa(-payment.amount)}`}
+                {payment.amount > 0
+                  ? `${formatFcfa(payment.amount)} reçus en espèces`
+                  : payment.isRefund
+                    ? `remboursement de ${formatFcfa(-payment.amount)} en espèces`
+                    : `annulation de ${formatFcfa(-payment.amount)}`}
               </li>
             ))}
           </ul>

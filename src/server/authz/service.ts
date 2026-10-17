@@ -46,10 +46,21 @@ export async function assertPermission(client: Db, actor: Actor, permission: Per
   await deny(client, actor.id, "Permission", permission, "Vous n'avez pas l'autorisation d'effectuer cette action.");
 }
 
-async function assertCanManageRole(client: Db, actor: Actor, roleCode: string): Promise<string> {
+/** Vérifie l'une des permissions ; un refus journalise la première (DENIED) puis lève FORBIDDEN. */
+export async function assertAnyPermission(client: Db, actor: Actor, permissions: readonly [Permission, ...Permission[]]): Promise<void> {
+  if (permissions.some((permission) => actor.permissions.has(permission))) return;
+  await assertPermission(client, actor, permissions[0]);
+}
+
+async function assertCanManageRole(client: Db, actor: Actor, roleCode: string, userId: string): Promise<string> {
   await assertPermission(client, actor, "roles.manage");
   if (roleCode === SUPER_ADMIN && !actor.roles.includes(SUPER_ADMIN)) {
     await deny(client, actor.id, "Role", SUPER_ADMIN, "Seul un administrateur principal peut gérer ce rôle.");
+  }
+  // Le compte d'un administrateur principal n'est modifiable que par un administrateur principal.
+  if (!actor.roles.includes(SUPER_ADMIN)) {
+    const targetIsSuperAdmin = await client.userRole.count({ where: { userId, role: { code: SUPER_ADMIN } } });
+    if (targetIsSuperAdmin > 0) await deny(client, actor.id, "User", userId, "Seul un administrateur principal peut modifier le compte d'un administrateur principal.");
   }
   const role = await client.role.findUnique({ where: { code: roleCode }, select: { id: true } });
   if (!role) throw new AppError("NOT_FOUND", `Rôle inconnu : ${roleCode}`);
@@ -58,7 +69,7 @@ async function assertCanManageRole(client: Db, actor: Actor, roleCode: string): 
 
 /** Attribue un rôle (idempotent), avec audit. Le compte devient un compte du personnel (STAFF). */
 export async function assignRole(client: PrismaClient, actor: Actor, userId: string, roleCode: string): Promise<void> {
-  const roleId = await assertCanManageRole(client, actor, roleCode);
+  const roleId = await assertCanManageRole(client, actor, roleCode, userId);
   await client.$transaction(async (tx) => {
     const user = await tx.user.findUnique({ where: { id: userId }, select: { id: true } });
     if (!user) throw new AppError("NOT_FOUND", "Utilisateur introuvable.");
@@ -77,11 +88,14 @@ export async function assignRole(client: PrismaClient, actor: Actor, userId: str
 }
 
 /**
- * Retire un rôle, avec audit. Refuse de retirer le dernier administrateur principal actif ;
- * le verrou consultatif sérialise les retraits concurrents d'un même rôle.
+ * Retire un rôle, avec audit. Refuse l'auto-rétrogradation et le retrait du dernier
+ * administrateur principal actif ; le verrou consultatif sérialise les retraits concurrents
+ * d'un même rôle (et les désactivations de comptes, voir users/service.ts).
  */
 export async function revokeRole(client: PrismaClient, actor: Actor, userId: string, roleCode: string): Promise<void> {
-  const roleId = await assertCanManageRole(client, actor, roleCode);
+  const roleId = await assertCanManageRole(client, actor, roleCode, userId);
+  // Pas d'auto-rétrogradation : un autre administrateur doit retirer le rôle (refus journalisé).
+  if (userId === actor.id) await deny(client, actor.id, "User", userId, "Vous ne pouvez pas retirer vos propres rôles.");
   await client.$transaction(async (tx) => {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`role:${roleCode}`}))`;
     const assignment = await tx.userRole.findUnique({

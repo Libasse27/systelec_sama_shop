@@ -34,7 +34,7 @@ Navigateur ──► Next.js (RSC / Server Actions / Route Handlers)
 | Autorisation | RBAC maison (Role / Permission / UserRole) vérifiée dans chaque service | Exigence de permissions granulaires |
 | Tests unitaires / intégration | Vitest + base PostgreSQL de test réelle (Docker) | Les transactions et contraintes doivent être testées sur PostgreSQL, pas sur un mock |
 | Tests E2E | Playwright (mobile + desktop) | Parcours critiques, responsive |
-| Exports | CSV natif, Excel (`exceljs`), PDF (`@react-pdf/renderer`) | Bons, reçus, rapports |
+| Exports | CSV natif, Excel (`write-excel-file`, écriture seule), PDF (`@react-pdf/renderer`) | Reçus, factures, rapports. Phase 9 : `write-excel-file` 4.1.1 retenu plutôt qu'`exceljs` (non publié depuis 2024, dépendances `tmp`, `archiver`, `unzipper`, `uuid@8`) : une seule dépendance (`fflate`), maintenue, aucune vulnérabilité connue ; le texte n'est jamais écrit comme formule |
 | E-mail | Adaptateur SMTP (`nodemailer`), inactif sans configuration | Pas de clé inventée, pas d'envoi simulé |
 | Paquets | pnpm (version figée via corepack) | |
 | CI | GitHub Actions : lint, typecheck, tests, build | |

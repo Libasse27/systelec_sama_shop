@@ -4,19 +4,22 @@ import { PageHeader, Section } from "@/components/admin/admin-ui";
 import { ActionForm, SubmitButton, TextAreaField } from "@/components/forms/form-controls";
 import { OrderDetails } from "@/components/orders/order-details";
 import { formatDateTime } from "@/lib/dates";
-import { ORDER_STATUS_LABELS, PAYMENT_STATUS_LABELS } from "@/lib/labels";
+import { DELIVERY_STATUS_LABELS, ORDER_STATUS_LABELS, PAYMENT_STATUS_LABELS } from "@/lib/labels";
 import { requirePermission } from "@/server/auth/session";
 import { db } from "@/server/db/client";
 import { getAdminOrder } from "@/server/modules/orders/queries";
-import { changeOrderStatusAction } from "../actions";
+import { changeOrderStatusAction, issueOrderInvoiceAction } from "../actions";
+import { DeliverySection } from "./delivery-section";
+import { ReturnsSection } from "./returns-section";
 import { PaymentsSection } from "@/components/admin/payments-section";
 import { PAYABLE_ORDER_STATUSES } from "@/server/modules/payments/balance";
 
 export const metadata: Metadata = { title: "Commande", robots: { index: false } };
 
-/** L'historique mêle statuts de commande et de paiement, distingués par leur champ. */
+/** L'historique mêle statuts de commande, de paiement et de livraison, distingués par leur champ. */
 function historyLabel(field: string, status: string): string {
   if (field === "PAYMENT") return `Paiement : ${PAYMENT_STATUS_LABELS[status as keyof typeof PAYMENT_STATUS_LABELS] ?? status}`;
+  if (field === "DELIVERY") return `Livraison : ${DELIVERY_STATUS_LABELS[status as keyof typeof DELIVERY_STATUS_LABELS] ?? status}`;
   return ORDER_STATUS_LABELS[status as keyof typeof ORDER_STATUS_LABELS] ?? status;
 }
 
@@ -76,13 +79,39 @@ export default async function AdminOrderPage({ params }: { params: Promise<{ id:
         target={{ kind: "order", id: order.id }}
         total={order.total}
         amountPaid={order.amountPaid}
+        refundedAmount={order.refundedAmount}
         paymentStatus={order.paymentStatus}
         payable={PAYABLE_ORDER_STATUSES.includes(order.status) || (order.status === "PENDING_CONFIRMATION" ? "Confirmez la commande avant d'encaisser." : "Cette commande ne s'encaisse plus.")}
         voidable={order.status !== "CLOSED"}
         user={user}
       />
 
-      <OrderDetails order={{ ...order, history: undefined }} receiptHref={(receipt) => `/recus/${receipt}`} />
+      {order.fulfillmentMethod === "DELIVERY" && <DeliverySection orderId={order.id} orderStatus={order.status} user={user} />}
+
+      <ReturnsSection orderId={order.id} orderStatus={order.status} user={user} />
+
+      {(canUpdate || user.permissions.has("payments.correct")) && (
+        <Section title="Facture">
+          {/* Formulaire toujours monté : le message d'émission reste visible. */}
+          <ActionForm action={issueOrderInvoiceAction.bind(null, order.id)}>
+            {order.invoiceNumber ? (
+              <p className="text-sm">
+                <a href={`/factures/${order.invoiceNumber}`} target="_blank" rel="noopener" className="font-medium text-brand-blue underline">
+                  Facture {order.invoiceNumber} (PDF)
+                </a>
+              </p>
+            ) : order.status !== "CANCELLED" && order.amountPaid + order.refundedAmount >= order.total ? (
+              <div>
+                <SubmitButton confirm="Émettre la facture ? Elle ne pourra plus être modifiée.">Émettre la facture</SubmitButton>
+              </div>
+            ) : (
+              <p className="text-sm text-ink-muted">La facture s&apos;émet une fois la commande soldée.</p>
+            )}
+          </ActionForm>
+        </Section>
+      )}
+
+      <OrderDetails order={{ ...order, history: undefined }} receiptHref={(receipt) => `/recus/${receipt}`} invoiceHref={(invoice) => `/factures/${invoice}`} />
 
       <Section title="Client">
         <p>

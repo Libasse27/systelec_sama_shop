@@ -11,11 +11,16 @@ const optionalText = (max: number) => z.string().trim().min(1).max(max).nullable
 // http(s) uniquement : ces liens sont rendus en <img src> et <a href> (pas de javascript:, data:…).
 const optionalUrl = z.url({ protocol: /^https?$/ }).max(500).nullable();
 
+/** Logo téléversé depuis l'administration (servi par /medias/identite/…), forme stricte. */
+export const UPLOADED_LOGO_PATTERN = /^\/medias\/identite\/logo-[a-f0-9-]{36}\.(?:jpg|png|webp)$/;
+// Logo : lien http(s) ou fichier téléversé (D13).
+const logoUrl = z.union([z.string().regex(UPLOADED_LOGO_PATTERN), z.url({ protocol: /^https?$/ }).max(500)]).nullable();
+
 export const companySettingsSchema = z
   .object({
     companyName: z.string().trim().min(1).max(120),
     shopName: z.string().trim().min(1).max(120),
-    logoUrl: optionalUrl,
+    logoUrl,
     phone: optionalText(30),
     whatsapp: optionalText(30),
     email: z.email().nullable(),
@@ -51,10 +56,27 @@ export const paymentSettingsSchema = z
   })
   .strict();
 
+/** TVA (D6) : prix saisis et affichés TTC ; détail sur les factures désactivé tant que non validé. */
+export const taxSettingsSchema = z
+  .object({
+    vatDetailEnabled: z.boolean(),
+    vatRate: z.number().int().min(0).max(100),
+  })
+  .strict();
+
+/** Fonctions activables (D8 : avis clients désactivés au lancement). */
+export const featureSettingsSchema = z
+  .object({
+    reviewsEnabled: z.boolean(),
+  })
+  .strict();
+
 export const settingsSchemas = {
   company: companySettingsSchema,
   commerce: commerceSettingsSchema,
   payments: paymentSettingsSchema,
+  tax: taxSettingsSchema,
+  features: featureSettingsSchema,
 } as const;
 
 export type SettingKey = keyof typeof settingsSchemas;
@@ -88,4 +110,6 @@ export const settingsDefaults: { [K in SettingKey]: SettingValue<K> } = {
   payments: {
     enabledMethods: ["CASH_ON_DELIVERY", "CASH_ON_PICKUP", "CASH_AFTER_SERVICE"],
   },
+  tax: { vatDetailEnabled: false, vatRate: 18 },
+  features: { reviewsEnabled: false },
 };

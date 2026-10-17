@@ -28,6 +28,10 @@ describe("paramètres : schémas", () => {
     expect(withLogo("https://cdn.example.sn/logo.png")).toBe(true);
     expect(withLogo("javascript:alert(1)")).toBe(false);
     expect(withLogo("data:image/svg+xml,<svg/>")).toBe(false);
+    expect(withLogo("/medias/identite/logo-0b6c1c55-6f9c-4b0b-9a43-5b3f0e4f7d11.png")).toBe(true);
+    expect(withLogo("/medias/../../etc/passwd")).toBe(false);
+    expect(withLogo("/medias/produits/x/logo.png")).toBe(false);
+    expect(withLogo("//evil.example/logo.png")).toBe(false);
 
     const socialLinks = { ...company.socialLinks, facebook: "javascript:alert(1)" };
     expect(settingsSchemas.company.safeParse({ ...company, socialLinks }).success).toBe(false);
@@ -36,5 +40,12 @@ describe("paramètres : schémas", () => {
   it("impose la devise XOF et le fuseau Africa/Dakar", () => {
     expect(settingsSchemas.commerce.safeParse({ ...settingsDefaults.commerce, currency: "EUR" }).success).toBe(false);
     expect(settingsSchemas.commerce.safeParse({ ...settingsDefaults.commerce, timezone: "UTC" }).success).toBe(false);
+  });
+
+  it("TVA (D6) et avis (D8) : désactivés par défaut, taux borné", () => {
+    expect(settingsDefaults.tax).toEqual({ vatDetailEnabled: false, vatRate: 18 });
+    expect(settingsDefaults.features.reviewsEnabled).toBe(false);
+    expect(settingsSchemas.tax.safeParse({ vatDetailEnabled: true, vatRate: 101 }).success).toBe(false);
+    expect(settingsSchemas.tax.safeParse({ vatDetailEnabled: true, vatRate: 18.5 }).success).toBe(false);
   });
 });

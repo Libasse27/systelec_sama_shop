@@ -18,7 +18,7 @@ export default async function OrderTrackingPage({ params, searchParams }: Props)
   const accountOrder = user ? await getCustomerOrder(db, user.id, number) : null;
   const order = accountOrder ?? (typeof token === "string" ? await getGuestOrder(db, number, token) : null);
   if (!order) notFound();
-  // Commande invitée : le reçu s'ouvre avec le même jeton que le lien de suivi.
+  // Commande invitée : reçus et facture s'ouvrent avec le même jeton que le lien de suivi.
   const receiptQuery = !accountOrder && typeof token === "string" ? `?jeton=${encodeURIComponent(token)}` : "";
 
   return (
@@ -36,7 +36,11 @@ export default async function OrderTrackingPage({ params, searchParams }: Props)
         </p>
       )}
       <div className="mt-6">
-        <OrderDetails order={order} receiptHref={(receipt) => `/recus/${receipt}${receiptQuery}`} />
+        <OrderDetails
+          order={order}
+          receiptHref={(receipt) => `/recus/${receipt}${receiptQuery}`}
+          invoiceHref={(invoice) => `/factures/${invoice}${receiptQuery}`}
+        />
       </div>
       <p className="mt-6 text-sm">
         <Link href={user ? "/compte" : "/"} className="text-brand-blue underline">

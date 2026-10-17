@@ -49,7 +49,7 @@ export default async function AdminOrdersPage({ searchParams }: { searchParams: 
           </label>
           <select id="filtre-paiement-commande" name="paiement" defaultValue={paymentStatus ?? ""} className="rounded-lg border border-line px-3 py-2">
             <option value="">Tous</option>
-            {(["UNPAID", "PARTIALLY_PAID", "PAID"] as const).map((value) => (
+            {(["UNPAID", "PARTIALLY_PAID", "PAID", "TO_VERIFY", "REFUND_PENDING", "REFUNDED"] as const).map((value) => (
               <option key={value} value={value}>
                 {PAYMENT_STATUS_LABELS[value]}
               </option>

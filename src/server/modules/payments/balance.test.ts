@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { amountRefusal, paymentStatusFor } from "./balance";
+import { amountRefusal, orderPaymentStatus, paymentStatusFor } from "./balance";
 
 describe("paymentStatusFor (statut dérivé des encaissements)", () => {
   it("non payée, partiellement payée, payée", () => {
@@ -10,6 +10,22 @@ describe("paymentStatusFor (statut dérivé des encaissements)", () => {
 
   it("une commande à 0 FCFA n'a rien à encaisser", () => {
     expect(paymentStatusFor(0, 0)).toBe("PAID");
+  });
+});
+
+describe("orderPaymentStatus (retours et remboursements)", () => {
+  const paid = { total: 50_000, amountPaid: 50_000, refundedAmount: 0 };
+
+  it("sans retour : statut des encaissements", () => {
+    expect(orderPaymentStatus({ ...paid, returns: [] })).toBe("PAID");
+    expect(orderPaymentStatus({ ...paid, returns: ["REJECTED", "COMPLETED"] })).toBe("PAID");
+  });
+
+  it("retour à vérifier, puis remboursement à verser, puis remboursement effectué", () => {
+    expect(orderPaymentStatus({ ...paid, returns: ["RECEIVED"] })).toBe("TO_VERIFY");
+    expect(orderPaymentStatus({ ...paid, returns: ["RECEIVED", "REFUND_PENDING"] })).toBe("REFUND_PENDING");
+    expect(orderPaymentStatus({ total: 50_000, amountPaid: 25_000, refundedAmount: 25_000, returns: ["COMPLETED"] })).toBe("REFUNDED");
+    expect(orderPaymentStatus({ total: 50_000, amountPaid: 25_000, refundedAmount: 25_000, returns: ["COMPLETED", "RECEIVED"] })).toBe("TO_VERIFY");
   });
 });
 

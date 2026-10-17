@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { assertFcfa, formatFcfa, lineTotal, percentOf, roundFcfa, sumFcfa } from "./money";
+import { assertFcfa, formatFcfa, includedVat, lineTotal, percentOf, roundFcfa, sumFcfa } from "./money";
 
 const normalizeSpaces = (text: string) => text.replace(/[  ]/g, " ");
 
@@ -30,5 +30,12 @@ describe("money (FCFA entiers)", () => {
 
   it("formate en FCFA", () => {
     expect(normalizeSpaces(formatFcfa(1_250_000))).toBe("1 250 000 FCFA");
+  });
+
+  it("calcule la TVA incluse dans un prix TTC (D6)", () => {
+    expect(includedVat(118_000, 18)).toBe(18_000);
+    expect(includedVat(10_000, 18)).toBe(1_525); // 1 525,42 arrondi
+    expect(includedVat(10_000, 0)).toBe(0);
+    expect(() => includedVat(10_000, 120)).toThrow(RangeError);
   });
 });

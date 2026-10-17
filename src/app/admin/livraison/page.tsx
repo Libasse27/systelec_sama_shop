@@ -3,8 +3,9 @@ import { PageHeader, Section } from "@/components/admin/admin-ui";
 import { ActionForm, CheckboxField, IntegerField, SubmitButton, TextField } from "@/components/forms/form-controls";
 import { requirePermission } from "@/server/auth/session";
 import { db } from "@/server/db/client";
+import { listCouriers, type CourierRow } from "@/server/modules/deliveries/queries";
 import { listDeliverySettings } from "@/server/modules/orders/delivery-settings";
-import { savePickupPointAction, saveZoneAction } from "./actions";
+import { saveCourierAction, savePickupPointAction, saveZoneAction } from "./actions";
 
 export const metadata: Metadata = { title: "Livraison et retrait", robots: { index: false } };
 
@@ -47,9 +48,24 @@ function PickupForm({ point }: { point?: Point }) {
   );
 }
 
+function CourierForm({ courier }: { courier?: CourierRow }) {
+  return (
+    <ActionForm action={saveCourierAction.bind(null, courier?.id ?? null)} resetOnSuccess={!courier}>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <TextField name="name" label="Nom du livreur" defaultValue={courier?.name} />
+        <TextField name="phone" label="Téléphone" type="tel" defaultValue={courier?.phone} />
+      </div>
+      <CheckboxField name="isActive" label="Disponible pour les livraisons" defaultChecked={courier?.isActive ?? true} />
+      <div>
+        <SubmitButton>{courier ? "Enregistrer" : "Ajouter le livreur"}</SubmitButton>
+      </div>
+    </ActionForm>
+  );
+}
+
 export default async function DeliverySettingsPage() {
   const user = await requirePermission("deliveries.manage", "/admin/livraison");
-  const { zones, pickupPoints } = await listDeliverySettings(db, user);
+  const [{ zones, pickupPoints }, couriers] = await Promise.all([listDeliverySettings(db, user), listCouriers(db, user)]);
 
   return (
     <div className="flex flex-col gap-6">
@@ -71,6 +87,22 @@ export default async function DeliverySettingsPage() {
           ))}
           <h3 className="font-semibold">Nouvelle zone</h3>
           <ZoneForm />
+        </div>
+      </Section>
+      <Section title="Livreurs">
+        <div className="flex flex-col gap-4">
+          {couriers.map((courier) => (
+            <details key={courier.id} className="rounded-lg border border-line p-3">
+              <summary className="cursor-pointer font-medium">
+                {courier.name} · {courier.activeDeliveries} livraison(s) en cours {!courier.isActive && <span className="text-sm text-ink-muted">(indisponible)</span>}
+              </summary>
+              <div className="mt-3">
+                <CourierForm courier={courier} />
+              </div>
+            </details>
+          ))}
+          <h3 className="font-semibold">Nouveau livreur</h3>
+          <CourierForm />
         </div>
       </Section>
       <Section title="Points de retrait">
