@@ -1,12 +1,12 @@
-import { config } from "dotenv";
 import { Client } from "pg";
+import { resolveE2eDatabaseUrl } from "./database-guard";
 
-// Même base que le serveur testé : .env en local, variables d'environnement en CI.
-config({ path: ".env", quiet: true });
+// Même base que le serveur testé : la base E2E dédiée, vérifiée (jamais la base de développement).
+const DATABASE_URL = resolveE2eDatabaseUrl();
 
 /** Attribue un rôle du personnel à un compte de test (équivalent d'une action d'administration). */
 export async function grantRole(email: string, roleCode: string): Promise<void> {
-  const client = new Client({ connectionString: process.env.DATABASE_URL });
+  const client = new Client({ connectionString: DATABASE_URL });
   await client.connect();
   try {
     await client.query(
@@ -21,7 +21,7 @@ export async function grantRole(email: string, roleCode: string): Promise<void> 
 }
 
 async function withClient<T>(run: (client: Client) => Promise<T>): Promise<T> {
-  const client = new Client({ connectionString: process.env.DATABASE_URL });
+  const client = new Client({ connectionString: DATABASE_URL });
   await client.connect();
   try {
     return await run(client);

@@ -24,6 +24,7 @@ test-results/
 
 # fichiers téléversés en local
 storage/
+storage-e2e/
 
 # outils
 graphify-out/

@@ -1,7 +1,11 @@
 import { defineConfig, devices } from "@playwright/test";
+import { E2E_STORAGE_DIR, resolveE2eDatabaseUrl } from "./e2e/support/database-guard";
 
 const PORT = 3100;
 const BASE_URL = `http://localhost:${PORT}`;
+
+/** Base E2E dédiée, vérifiée avant tout (jamais la base de développement) : voir e2e/support/database-guard.ts. */
+const E2E_DATABASE_URL = resolveE2eDatabaseUrl();
 
 /**
  * Tests de bout en bout. Le serveur de production est construit puis démarré
@@ -27,11 +31,16 @@ export default defineConfig({
     { name: "mobile", use: { ...devices["Pixel 7"] } },
   ],
   webServer: {
-    command: `pnpm build && pnpm start --port ${PORT}`,
+    // Base E2E préparée (vérifiée, migrée, données de démonstration) AVANT la construction, qui la lit.
+    command: `pnpm exec tsx e2e/prepare-database.ts && pnpm build && pnpm start --port ${PORT}`,
     url: `${BASE_URL}/api/health`,
-    reuseExistingServer: !process.env.CI,
+    // Jamais de réutilisation : un serveur déjà lancé pourrait viser la base de développement.
+    reuseExistingServer: false,
     // Serveur exposé directement (aucun reverse proxy) : X-Forwarded-For n'est pas fiable.
-    env: { TRUSTED_PROXY_HOPS: "0" },
-    timeout: 180_000,
+    // Même base et même dossier de fichiers que la préparation globale (les variables du processus
+    // l'emportent sur .env pour Next.js, Prisma et les scripts).
+    env: { TRUSTED_PROXY_HOPS: "0", DATABASE_URL: E2E_DATABASE_URL, STORAGE_LOCAL_DIR: E2E_STORAGE_DIR },
+    // Préparation de la base E2E, construction puis démarrage.
+    timeout: 300_000,
   },
 });

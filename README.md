@@ -33,6 +33,11 @@ planifier `pnpm orders:expire` (par exemple toutes les 15 minutes).
 
 Vérifications : `pnpm lint && pnpm typecheck && pnpm test && pnpm build && pnpm test:e2e`.
 
+Les tests d'intégration et E2E utilisent le PostgreSQL de test (`docker compose up -d db-test`, port 5434) :
+`systelec_test` pour l'intégration, `systelec_e2e` (créée au besoin) pour les E2E. Les E2E vérifient
+l'identité de leur base avant toute écriture et s'arrêtent en cas de doute ; ils ne touchent jamais la base
+de développement (`.env`) et téléversent dans `storage-e2e/`.
+
 > Après une migration ou un `pnpm db:generate`, **redémarrez `pnpm dev`** : en développement, le client
 > Prisma est conservé entre les rechargements à chaud et ne connaît pas encore les nouvelles tables
 > (erreur du type `Cannot read properties of undefined (reading 'findMany')`).
