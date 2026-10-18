@@ -50,6 +50,7 @@ de développement (`.env`) et téléversent dans `storage-e2e/`.
 - [Architecture](docs/01-architecture.md)
 - [Modèle de données](docs/02-modele-donnees.md)
 - [Plan par phases et décisions à valider](docs/03-plan-et-decisions.md)
+- [Mise en service et exploitation](docs/04-mise-en-service.md) : image Docker, déploiement, sauvegarde et restauration, performance
 
 ## Stack
 

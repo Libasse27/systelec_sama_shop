@@ -2,7 +2,7 @@
 
 **Branche :** `feat/phase-10-retours-livraisons` (depuis `fix/phase-9-decisions`, commit `7ecdedf`) · **Date :** 2026-10-18 · décisions détaillées dans `docs/03-plan-et-decisions.md` (§ 4).
 
-Les travaux de stabilisation prévus en phase 10 (§ 1 du plan : performance, Dockerfile de production, sauvegarde et restauration, guides de mise en service) ne sont **pas** couverts par ce rapport et restent à faire.
+Ce rapport couvre les décisions du propriétaire (première partie) et la stabilisation de production (section « Stabilisation », branche `feat/phase-10-stabilisation`).
 
 ## Analyse préalable
 
@@ -68,7 +68,7 @@ Démonstration exécutée :
 | `prisma migrate diff` / `migrate status` (base de dev ↔ schéma) | aucun écart |
 | Contre-épreuve du quota : verrou et recomptage retirés temporairement | les 3 tests de concurrence échouent ; ils passent une fois le code restauré |
 
-Non exécuté : tests de performance, construction d'une image Docker de production, sauvegarde et restauration (travaux de stabilisation non commencés).
+Image Docker, sauvegarde et restauration, performance : voir la section « Stabilisation ».
 
 Nouveaux tests :
 
@@ -134,9 +134,52 @@ Contrôles des commits intermédiaires (arbre de travail séparé, client Prisma
 4. Contrôler : le livreur, connecté, voit « Mes livraisons » et seulement ses livraisons. Les écrans Commandes, Encaissements et Retours lui sont refusés. Le journal d'audit trace ses départs, encaissements et livraisons à son nom.
 5. Un livreur qui quitte l'entreprise : désactiver sa fiche (son compte ne peut plus agir sur ses livraisons) et son compte utilisateur.
 
+## Stabilisation
+
+**Branche :** `feat/phase-10-stabilisation` (depuis `feat/phase-10-retours-livraisons`, `dbf8564`). Guide d'exploitation : `docs/04-mise-en-service.md`. Toutes les vérifications ci-dessous ont été exécutées sur ce poste (8 cœurs, 7 Go), dans des projets Docker et des bases **jetables** : pile de production `sama-prodtest`, bases `systelec_smoke`, `systelec_e2e`. La base de développement n'a pas été touchée.
+
+### Livré
+
+| Chantier | Élément | Fichiers |
+|---|---|---|
+| Image | Construction en plusieurs étapes, image de base épinglée par empreinte. Cible `app` : serveur `standalone`, utilisateur non-root (uid 1001), code en lecture seule, sonde de santé, npm et corepack retirés, paquets Alpine mis à jour (329 Mo). Cible `tools` : migrations, données de base, administrateur, tâche planifiée. Aucun secret dans l'image, droits des sources normalisés (indépendants de l'hôte). | `Dockerfile`, `.dockerignore`, `next.config.ts` |
+| Déploiement | `docker-compose.prod.yml` : base sans port publié ; application en lecture seule, sans capacité Linux, écoutant seulement en local ; services `migrate` (propriétaire) et `tasks` (rôle restreint). Modèle de configuration fourni. | `docker-compose.prod.yml`, `.env.production.example` |
+| Base | Rôle PostgreSQL restreint de l'application : lecture et écriture, sans vidage de table, sans droits sur le schéma, sans accès à l'historique des migrations ; droits automatiques sur les tables futures. | `scripts/ops/app-role.sql` |
+| Sauvegarde | Sauvegarde (dump PostgreSQL et fichiers, empreintes SHA-256, contrôle de lisibilité), restauration vers une base et un dossier neufs (aucun écrasement), comparaison table par table. | `scripts/ops/{backup,restore,verify-restore}.sh` |
+| Performance | Volume de test (garde-fou par nom de base), scénario k6 avec seuils d'acceptation. Correctif issu de la mesure : réserve de connexions (connexions inactives conservées 5 min, attente bornée à 10 s, taille configurable `DATABASE_POOL_MAX`), `UV_THREADPOOL_SIZE=16`. | `scripts/perf/*`, `src/server/db/client.ts`, `src/lib/env.ts` |
+| CI | Tâche `image` : construction des deux cibles et analyse Trivy (vulnérabilités et secrets) bloquante au niveau élevé ou critique. | `.github/workflows/ci.yml` |
+| Dépôt | `/sauvegardes/` et `*.dump` ignorés (un dossier de sauvegarde de la base de développement s'y trouvait, non suivi) ; modèle `.env.production.example` versionnable. | `.gitignore` |
+
+### Vérifications réellement exécutées
+
+| Vérification | Résultat |
+|---|---|
+| Construction des cibles `app` et `tools` sans base de données | OK (toutes les pages rendues à la demande, aucune donnée figée) |
+| Image `app` en production (`systelec_smoke`) | santé `ok`, `healthy` ; en-têtes CSP avec nonce, HSTS, `X-Frame-Options`, `nosniff`, `Referrer-Policy`, `Permissions-Policy` ; uid 1001 ; code en lecture seule ; photos privées en 404 |
+| Pile `docker-compose.prod.yml` complète (projet jetable) | migrations (propriétaire), rôle restreint, données de base, application `healthy` (racine en lecture seule, `cap_drop: ALL`), tâche planifiée OK, base sans port publié |
+| Rôle restreint | application, tâche planifiée et données de base OK ; migrations refusées (voulu) ; vidage du journal d'audit refusé ; suppression dans le journal bloquée par son trigger ; création, modification et suppression de tables refusées ; historique des migrations inaccessible ; table créée ensuite accordée automatiquement, sans vidage possible |
+| Exercice sauvegarde et restauration | sauvegarde (51 tables, 19 migrations, empreintes) ; restauration dans une base neuve ; **contenu identique (51 tables, 312 lignes, MD5 par table)** ; fichier témoin restauré ; écrasement refusé (base existante, base en service) ; application démarrée sur la base restaurée (santé `ok`) ; triggers actifs dans la copie ; contre-épreuve : une ligne ajoutée est détectée (code de sortie 1) |
+| `shellcheck` 0.10 (scripts d'exploitation) | aucun avertissement |
+| Test de charge k6, 5 000 produits, 30 utilisateurs, 2 min 15 s | **avant correctif** : 4 échecs, maximum 56 s (résolution DNS du service `db` à chaque reconnexion) ; **après** : 9 224 requêtes, 0 échec, 68 requêtes/s, 95e centile de 360 à 579 ms selon la page, maximum 693 ms. Tous les seuils sont tenus. |
+| Trivy (image `app`) | avant : 8 vulnérabilités élevées (npm de l'image de base) et 1 moyenne (zlib) ; **après : aucune vulnérabilité**, aucun secret ; Dockerfile sans erreur de configuration |
+| `pnpm audit` | 3 alertes élevées et 1 moyenne, dans les outils seulement : `mysql2` et `deepmerge-ts` via la ligne de commande Prisma (versions épinglées par Prisma, absentes de l'image `app`), `braces` via ESLint |
+| Lint, typecheck, `prisma validate`, `git diff --check` | OK |
+| `pnpm test` | 63 fichiers, 440 tests réussis |
+| `pnpm test:e2e` (base isolée) | 90 tests réussis ; base de développement inchangée |
+
+Non exécuté : reverse proxy TLS avec un vrai domaine ; recopie des fichiers restaurés dans le volume en service et bascule `POSTGRES_DB` (étapes 4 et 5 de la restauration d'incident, documentées) ; copie des sauvegardes hors serveur (outil à choisir) ; charge des écrans d'administration (connexion requise) ; tâche CI `image` (sera exécutée au premier push).
+
+### Risques résiduels
+
+- `no-new-privileges` n'a pas pu être activé : sur ce poste, l'option empêche tout démarrage de conteneur, même pour les images officielles (interaction noyau, AppArmor et Docker). Elle est documentée, à tester puis activer sur le serveur cible.
+- Dépendances d'outillage signalées par `pnpm audit` (voir ci-dessus) : à suivre avec les mises à jour de Prisma et d'ESLint.
+- Le test de charge porte sur les pages publiques, avec un seul processus applicatif sur une machine partagée ; les écrans d'administration n'ont pas été mesurés.
+- Pas de copie automatique hors serveur ni de rotation automatique : volontairement laissées à l'outil choisi à l'installation.
+- L'image `tools` est volumineuse (environ 2,3 Go, dépendances de développement incluses) : acceptable pour un usage ponctuel.
+
 ## Reste à décider ou à faire
 
-- **La phase 10 n'est pas terminée.** Travaux de stabilisation restant à faire : Dockerfile de production, sauvegarde **et restauration testée**, tests de performance, revue finale de sécurité et de non-régression, procédure de mise en service.
+- **Stabilisation réalisée et vérifiée** sur poste (section ci-dessus). Avant la mise en production réelle : installation sur le serveur cible selon `docs/04-mise-en-service.md` (TLS, sauvegarde copiée hors serveur, exercice de restauration sur le serveur, test `no-new-privileges`), puis recette par le propriétaire.
 - Trancher la divergence d'horaires (phase 9 contre proposition de phase 10).
 - Retrait des données de test de la base de développement (voir ci-dessus).
 - Envoi SMS ou WhatsApp des notifications : aucun fournisseur n'est configuré (D11).

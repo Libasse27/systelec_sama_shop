@@ -78,7 +78,7 @@ Déclaration : le **personnel déclare le retour au nom du client** (fiche de la
 
 ## 4. Décisions du propriétaire (phase 10)
 
-Questions restées ouvertes après les correctifs de la phase 9 (« Reste à décider » de `docs/rapports/phase-9.md`), tranchées par le propriétaire et appliquées sur la branche `feat/phase-10-retours-livraisons`. Détail, tests et limites : `docs/rapports/phase-10.md`. Les travaux de stabilisation prévus en phase 10 (§ 1 : E2E complets, performance, Dockerfile, sauvegarde) restent à mener.
+Questions restées ouvertes après les correctifs de la phase 9 (« Reste à décider » de `docs/rapports/phase-9.md`), tranchées par le propriétaire et appliquées sur la branche `feat/phase-10-retours-livraisons`. Détail, tests et limites : `docs/rapports/phase-10.md`. Les travaux de stabilisation prévus en phase 10 (§ 1) ont été menés sur la branche `feat/phase-10-stabilisation` : image Docker de production, rôle PostgreSQL restreint, sauvegarde et restauration testées, test de charge, analyse de vulnérabilités, guide `docs/04-mise-en-service.md`. L'installation sur le serveur cible et la recette restent à faire.
 
 | # | Question | Décision finale | Mise en œuvre |
 |---|---|---|---|
