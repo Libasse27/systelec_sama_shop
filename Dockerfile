@@ -41,6 +41,8 @@ CMD ["pnpm", "db:deploy"]
 FROM ${NODE_IMAGE} AS app
 WORKDIR /app
 ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 PORT=3000 HOSTNAME=0.0.0.0 STORAGE_LOCAL_DIR=/app/storage
+# Résolution DNS et hachage des mots de passe partagent la réserve de fils de libuv (4 par défaut).
+ENV UV_THREADPOOL_SIZE=16
 # npm et corepack (fournis avec l'image Node) ne servent pas à l'exécution : retirés, ils ne portent plus
 # leurs dépendances vulnérables (analyse Trivy, phase 10). Paquets Alpine mis à jour (correctifs de sécurité).
 RUN apk upgrade --no-cache \

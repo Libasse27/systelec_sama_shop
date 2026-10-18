@@ -8,6 +8,8 @@ const serverEnvSchema = z
     APP_URL: z.url().optional(),
     DATABASE_URL: z.url({ protocol: /^postgres(ql)?$/, error: "DATABASE_URL doit être une URL PostgreSQL" }),
     AUTH_SECRET: z.string().min(32, "AUTH_SECRET doit contenir au moins 32 caractères (openssl rand -base64 32)"),
+    // Connexions PostgreSQL simultanées par processus (réserve de l'application, rôle restreint).
+    DATABASE_POOL_MAX: z.coerce.number().int().min(1).max(100).default(10),
     STORAGE_DRIVER: z.enum(["local", "s3"]).default("local"),
     STORAGE_LOCAL_DIR: z.string().default("./storage"),
     // E-mail : désactivé tant que SMTP_HOST est vide (aucun envoi simulé).

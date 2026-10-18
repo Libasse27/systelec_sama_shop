@@ -26,6 +26,13 @@ describe("configuration serveur", () => {
     expect(parseServerEnv({ ...base, SMTP_HOST: "", SMTP_PORT: "" }).SMTP_HOST).toBeUndefined();
   });
 
+  it("réserve de connexions PostgreSQL : 10 par défaut, bornée", () => {
+    expect(parseServerEnv(base).DATABASE_POOL_MAX).toBe(10);
+    expect(parseServerEnv({ ...base, DATABASE_POOL_MAX: "20" }).DATABASE_POOL_MAX).toBe(20);
+    expect(() => parseServerEnv({ ...base, DATABASE_POOL_MAX: "0" })).toThrow(/DATABASE_POOL_MAX/);
+    expect(() => parseServerEnv({ ...base, DATABASE_POOL_MAX: "500" })).toThrow(/DATABASE_POOL_MAX/);
+  });
+
   it("exige en production une APP_URL explicite, en https, sans slash final", () => {
     const prod = { ...base, APP_ENV: "production" };
     expect(() => parseServerEnv(prod)).toThrow(/APP_URL/);

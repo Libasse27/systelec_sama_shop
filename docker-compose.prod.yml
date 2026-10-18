@@ -15,6 +15,7 @@ x-app-env: &app-env
   AUTH_SECRET: ${AUTH_SECRET:?AUTH_SECRET requis (openssl rand -base64 32)}
   # Rôle RESTREINT (scripts/ops/app-role.sql) : jamais le propriétaire de la base.
   DATABASE_URL: postgresql://${APP_DB_USER:-systelec_app}:${APP_DB_PASSWORD:?APP_DB_PASSWORD requis}@db:5432/${POSTGRES_DB:-systelec}
+  DATABASE_POOL_MAX: ${DATABASE_POOL_MAX:-10}
   STORAGE_DRIVER: local
   STORAGE_LOCAL_DIR: /app/storage
   TRUSTED_PROXY_HOPS: ${TRUSTED_PROXY_HOPS:-1}
