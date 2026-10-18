@@ -51,3 +51,15 @@ jobs:
           name: playwright-report
           path: test-results/
           retention-days: 7
+
+  # Image de production (phase 10) : les deux cibles se construisent, et l'image servie ne contient aucune
+  # vulnérabilité connue de gravité élevée ou critique (sinon l'intégration échoue).
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build --target app -t systelec-sama-shop:ci .
+      - run: docker build --target tools -t systelec-sama-shop-tools:ci .
+      - run: >-
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:0.67.2
+          image --quiet --scanners vuln,secret --severity HIGH,CRITICAL --exit-code 1 systelec-sama-shop:ci
