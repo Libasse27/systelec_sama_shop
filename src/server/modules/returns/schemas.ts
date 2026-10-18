@@ -14,12 +14,21 @@ export const createReturnSchema = z.object({
     .refine((items) => new Set(items.map((item) => item.orderItemId)).size === items.length, "Article en double"),
 });
 
+export const RETURN_EXCEPTION_GROUNDS = ["WARRANTY", "HIDDEN_DEFECT", "LEGAL_OBLIGATION", "OTHER"] as const;
+export const RETURN_VERIFICATION_KINDS = ["INSPECTION", "PHOTOS", "INVOICE", "INFORMATION"] as const;
+
 export const decideReturnSchema = z.discriminatedUnion("decision", [
   z.object({
     decision: z.literal("ACCEPT"),
     restock: z.boolean(),
     refundAmount: z.number({ error: "Montant à rembourser requis" }).int("Montant en francs CFA entiers").min(0).max(MAX_PAYMENT_AMOUNT),
     note: z.string().trim().min(3, "Motivez la décision (état des articles, remise en stock ou non)").max(500),
+    // Retour déclaré hors délai : exception motivée (garantie, vice caché, obligation légale…), exigée par le service.
+    exceptionGround: z.preprocess(
+      (value) => (value === "" ? null : value),
+      z.enum(RETURN_EXCEPTION_GROUNDS, { error: "Fondement de l'exception invalide" }).optional().nullable(),
+    ),
+    exceptionNote: optionalText(500),
   }),
   z.object({
     decision: z.literal("REJECT"),
@@ -30,4 +39,15 @@ export const decideReturnSchema = z.discriminatedUnion("decision", [
 export const refundReturnSchema = z.object({
   idempotencyKey: z.uuid(),
   note: optionalText(300),
+});
+
+/** Demande de vérification avant la décision : nature et précisions (photos attendues, points à inspecter…). */
+export const requestVerificationSchema = z.object({
+  kind: z.enum(RETURN_VERIFICATION_KINDS, { error: "Choisissez la nature de la vérification" }),
+  request: z.string().trim().min(3, "Précisez la demande").max(500),
+});
+
+/** Réponse ou résultat de la vérification demandée. */
+export const answerVerificationSchema = z.object({
+  response: z.string().trim().min(3, "Indiquez la réponse ou le résultat de la vérification").max(1_000),
 });

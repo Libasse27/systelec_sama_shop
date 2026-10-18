@@ -16,6 +16,7 @@ import { JsonLd } from "@/components/seo/json-ld";
 import { servicePriceLabel } from "@/lib/labels";
 import { db } from "@/server/db/client";
 import { featuredProducts } from "@/server/modules/catalog/queries";
+import { listActivePartners } from "@/server/modules/partners/queries";
 import { featuredServices } from "@/server/modules/services/queries";
 import { absoluteUrl, getCategoryIndex, getCompanySettings } from "@/server/storefront";
 
@@ -33,10 +34,11 @@ const FEATURED_SERVICES = 4;
 
 export default async function HomePage() {
   const index = await getCategoryIndex();
-  const [company, products, services] = await Promise.all([
+  const [company, products, services, partners] = await Promise.all([
     getCompanySettings(),
     featuredProducts(db, [...index.byId.keys()], FEATURED_PRODUCTS),
     featuredServices(db, FEATURED_SERVICES),
+    listActivePartners(db),
   ]);
   const families = index.children.get(null) ?? [];
 
@@ -123,6 +125,32 @@ export default async function HomePage() {
                 </Link>
               </li>
             ))}
+          </ul>
+        </section>
+      )}
+      {partners.length > 0 && (
+        <section aria-labelledby="partenaires">
+          <h2 id="partenaires" className="text-xl font-semibold">
+            Nos partenaires
+          </h2>
+          <ul className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-6">
+            {partners.map((partner) => {
+              const logo = (
+                // eslint-disable-next-line @next/next/no-img-element -- logo téléversé, servi par /medias
+                <img src={partner.logoUrl} alt={partner.name} loading="lazy" className="h-12 w-full object-contain" />
+              );
+              return (
+                <li key={partner.id} className="flex items-center justify-center rounded-xl border border-line bg-white p-3">
+                  {partner.websiteUrl ? (
+                    <a href={partner.websiteUrl} target="_blank" rel="noopener noreferrer nofollow" className="block w-full" title={partner.name}>
+                      {logo}
+                    </a>
+                  ) : (
+                    logo
+                  )}
+                </li>
+              );
+            })}
           </ul>
         </section>
       )}

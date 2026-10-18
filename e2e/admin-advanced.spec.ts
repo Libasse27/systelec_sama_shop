@@ -75,15 +75,47 @@ test.describe("administration avancée (phase 9)", () => {
     expect(pdf.status()).toBe(200);
     expect((await pdf.body()).subarray(0, 5).toString()).toBe("%PDF-");
 
-    // Retour d'un article : à vérifier, accepté avec remise en stock, remboursé.
+    // Retour d'un article déclaré au nom du client : à vérifier.
     await staff.getByLabel(/Quantité retournée/).fill("1");
     await staff.getByLabel("Motif du client").fill("Ne convient pas");
     await submit(staff, "Enregistrer le retour", /Retour RET-\d{4}-\d{6} enregistré : à vérifier\./);
-    await expect(staff.getByText("À vérifier").first()).toBeVisible();
-    await staff.getByLabel("Motif de la décision").fill("Article intact, emballage d'origine");
-    await submit(staff, "Accepter le retour", "Retour accepté.", true);
+    const returnNumber = (await staff.getByText(/Retour RET-\d{4}-\d{6} enregistré/).textContent())!.match(/RET-\d{4}-\d{6}/)![0];
+    await staff.getByRole("link", { name: returnNumber }).click();
+    await expect(staff.getByRole("heading", { name: `Retour ${returnNumber}` })).toBeVisible();
+    // Validation indépendante : la personne qui a déclaré ne peut pas décider.
+    await expect(staff.getByText("Vous avez déclaré ce retour : un autre responsable doit l'accepter ou le refuser")).toBeVisible();
+    await expect(staff.getByRole("button", { name: "Accepter le retour" })).toHaveCount(0);
+    const returnUrl = staff.url();
+
+    // Un second responsable demande des photos, enregistre la réponse, puis accepte.
+    const reviewer = await browser.newPage();
+    await staffPage(reviewer, ["ORDER_MANAGER"], "Responsable retours E2E");
+    await reviewer.goto(returnUrl);
+    await reviewer.getByLabel("Nature de la vérification").selectOption({ label: "Photos" });
+    await reviewer.getByLabel("Précisions demandées").fill("Photos de l'article et de l'emballage");
+    await submit(reviewer, "Demander la vérification", "Vérification demandée.");
+    await expect(reviewer.getByText("Vérification demandée").first()).toBeVisible();
+    await reviewer.getByLabel("Réponse ou résultat de la vérification").fill("Photos reçues : article intact, emballage d'origine");
+    await submit(reviewer, "Enregistrer la réponse", "Réponse à la vérification enregistrée.");
+    await reviewer.getByLabel("Motif de la décision").fill("Article intact, emballage d'origine");
+    await submit(reviewer, "Accepter le retour", "Retour accepté.", true);
     expect(await stockOf(product.sku)).toEqual({ onHand: 4, reserved: 0 });
+    // Jamais versé automatiquement : le remboursement attend la validation des finances.
+    await expect(reviewer.getByText("Remboursement à valider et verser par une personne autorisée (finances).")).toBeVisible();
+    const overflow = await reviewer.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+    expect(overflow).toBeLessThanOrEqual(0);
+    await reviewer.close();
+
+    // Les finances valident et versent le remboursement ; l'historique du retour est complet.
+    await staff.reload();
     await submit(staff, /^Rembourser .+ en espèces$/, /Remboursement versé : reçu REC-/, true);
+    const history = staff.getByRole("region", { name: "Historique du retour" });
+    for (const step of ["Retour déclaré", "Vérification demandée", "Réponse à la vérification", "Retour accepté", "Remboursement versé"]) {
+      await expect(history.getByText(step, { exact: true })).toBeVisible();
+    }
+    await expect(history.getByText(/Responsable retours E2E/).first()).toBeVisible();
+    await staff.goto(`/admin/commandes?q=${number}`);
+    await staff.getByRole("link", { name: number }).click();
     await expect(staff.getByText("Remboursement effectué").first()).toBeVisible();
     await expect(staff.getByText(/remboursement du retour RET-/).first()).toBeVisible();
 
@@ -123,6 +155,9 @@ test.describe("administration avancée (phase 9)", () => {
     await submit(staff, "Assigner le livreur", "Livreur assigné.");
     await submit(staff, "En préparation", "Commande passée à « En préparation ».");
     await submit(staff, "Prête à livrer", "Commande passée à « Prête à livrer ».");
+    // Décision 5 : une commande à livrer n'est jamais remise à la main.
+    await expect(staff.getByRole("button", { name: "Remise au client", exact: true })).toHaveCount(0);
+    await expect(staff.getByText("Commande à livrer : elle est remise au client uniquement par un livreur")).toBeVisible();
     await submit(staff, "Départ en livraison", "Départ en livraison enregistré.");
     await expect(staff.getByText("En cours de livraison").first()).toBeVisible();
 
@@ -203,6 +238,42 @@ test.describe("administration avancée (phase 9)", () => {
 
     await page.goto(`/admin/audit?action=settings.update&acteur=${encodeURIComponent("Paramètres E2E")}`);
     await expect(page.getByText("settings.update").first()).toBeVisible();
+  });
+
+  test("partenaires (décision 4) : logo téléversé, affichage sur l'accueil, désactivation ; aucun logo externe", async ({ page }) => {
+    await staffPage(page, ["ADMIN"], "Partenaires E2E");
+    // Le logo du site ne se saisit plus par adresse externe.
+    await page.goto("/admin/parametres");
+    await expect(page.getByLabel(/Adresse d'un logo/)).toHaveCount(0);
+
+    const name = `Partenaire E2E ${unique()}`;
+    const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0]);
+    await page.goto("/admin/contenu");
+    const partners = page.getByRole("region", { name: "Partenaires" });
+    await partners.getByLabel("Nom du partenaire").last().fill(name);
+    await partners.getByLabel(/Site du partenaire/).last().fill("http://non-securise.example");
+    await partners.getByLabel("Logo du partenaire").setInputFiles({ name: "logo.png", mimeType: "image/png", buffer: png });
+    await partners.getByRole("button", { name: "Ajouter le partenaire" }).click();
+    await expect(page.getByText("Adresse https:// requise")).toBeVisible();
+    await partners.getByLabel(/Site du partenaire/).last().fill("https://partenaire.example");
+    await partners.getByLabel("Logo du partenaire").setInputFiles({ name: "logo.png", mimeType: "image/png", buffer: png });
+    await submit(page, "Ajouter le partenaire", "Partenaire ajouté.");
+
+    await page.goto("/");
+    const logo = page.getByRole("img", { name, exact: true });
+    await expect(page.getByRole("heading", { name: "Nos partenaires" })).toBeVisible();
+    await expect(logo).toHaveAttribute("src", /^\/medias\/partenaires\/partenaire-[a-f0-9-]{36}\.png$/);
+    await expect(page.getByRole("link", { name })).toHaveAttribute("href", "https://partenaire.example");
+
+    // Désactivé : retiré de la boutique.
+    await page.goto("/admin/contenu");
+    await partners.getByText(name).click();
+    const form = partners.locator("details", { hasText: name });
+    await form.getByLabel("Actif (affiché sur la boutique)").uncheck();
+    await form.getByRole("button", { name: "Enregistrer le partenaire" }).click();
+    await expect(page.getByText("Partenaire enregistré.")).toBeVisible();
+    await page.goto("/");
+    await expect(page.getByRole("img", { name, exact: true })).toHaveCount(0);
   });
 
   test("rapports financiers et exports CSV, Excel et PDF ; tableau de bord selon le rôle", async ({ page, browser }) => {

@@ -71,8 +71,29 @@ describe("administration des paramètres (PostgreSQL)", () => {
     expect(await storage.read(keyFromMediaUrl(logoUrl)!)).not.toBeNull();
     expect((await getSetting("company")).logoUrl).toBe(logoUrl);
 
+    // L'identité ne change pas le logo : une adresse soumise (même externe) est ignorée.
+    await saveSettings(db, admin, "company", { ...settingsDefaults.company, logoUrl: "https://cdn.example.sn/logo.png", ninea: "123" });
+    expect((await getSetting("company")).logoUrl).toBe(logoUrl);
+
     await removeLogo(db, admin);
     expect((await getSetting("company")).logoUrl).toBeNull();
     await expect(removeLogo(db, admin)).rejects.toMatchObject({ code: "CONFLICT" });
+  });
+
+  it("décision 4 : un logo externe est refusé, y compris directement en base", async () => {
+    await saveSettings(db, admin, "company", { ...settingsDefaults.company, logoUrl: "https://cdn.example.sn/logo.png" });
+    expect((await getSetting("company")).logoUrl).toBeNull();
+    await expect(
+      db.siteSetting.create({ data: { key: "company", value: { ...settingsDefaults.company, logoUrl: "https://cdn.example.sn/logo.png" } } }),
+    ).rejects.toThrow(/site_settings_logo_check/);
+  });
+
+  it("heures ouvrables (décision 2) : validées et auditées", async () => {
+    await saveSettings(db, admin, "businessHours", { days: [1, 2, 3, 4, 5], ranges: [{ start: "08:00", end: "13:00" }, { start: "15:00", end: "18:00" }] });
+    expect((await getAllSettings(db, admin)).businessHours.ranges).toHaveLength(2);
+    await expect(saveSettings(db, admin, "businessHours", { days: [], ranges: [{ start: "08:00", end: "18:00" }] })).rejects.toMatchObject({
+      details: { fieldErrors: { days: expect.any(Array) } },
+    });
+    expect(await db.auditLog.count({ where: { action: "settings.update", entityId: "businessHours" } })).toBe(1);
   });
 });

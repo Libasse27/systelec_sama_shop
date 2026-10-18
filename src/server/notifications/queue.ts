@@ -3,13 +3,14 @@ import type { Prisma } from "@/generated/prisma/client";
 import type { Db } from "@/server/db/client";
 import { logger } from "@/server/logger";
 import { sendEmail } from "./mailer";
+import { renderReturnMessage, RETURN_TEMPLATES, type ReturnMessageData, type ReturnTemplate } from "./return-templates";
 import { renderServiceMessage, SERVICE_TEMPLATES, type ServiceMessageData, type ServiceTemplate } from "./service-templates";
 import { renderOrderMessage, type OrderMessageData, type OrderTemplate } from "./templates";
 
 /** Document auquel une notification est rattachée (suivi dans sa fiche). */
-export type NotificationLink = { orderId: string } | { quoteRequestId: string } | { quoteId: string } | { interventionId: string };
+export type NotificationLink = { orderId: string } | { quoteRequestId: string } | { quoteId: string } | { interventionId: string } | { returnId: string };
 
-export type NotificationTemplate = OrderTemplate | ServiceTemplate;
+export type NotificationTemplate = OrderTemplate | ServiceTemplate | ReturnTemplate;
 
 export interface NotificationRecipients {
   email: string | null;
@@ -24,7 +25,7 @@ export async function queueNotifications(
   tx: Db,
   link: NotificationLink,
   template: NotificationTemplate,
-  data: OrderMessageData | ServiceMessageData,
+  data: OrderMessageData | ServiceMessageData | ReturnMessageData,
   recipients: NotificationRecipients,
 ): Promise<void> {
   const payload = data as unknown as Prisma.InputJsonValue;
@@ -37,6 +38,9 @@ export async function queueNotifications(
 }
 
 function renderMessage(template: string, payload: unknown): { subject: string; text: string } {
+  if ((RETURN_TEMPLATES as readonly string[]).includes(template)) {
+    return renderReturnMessage(template as ReturnTemplate, payload as ReturnMessageData);
+  }
   if ((SERVICE_TEMPLATES as readonly string[]).includes(template)) {
     return renderServiceMessage(template as ServiceTemplate, payload as ServiceMessageData);
   }

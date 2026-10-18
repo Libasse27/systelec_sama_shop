@@ -14,7 +14,9 @@ import { getOrderReturns, listReturns } from "./queries";
 import { createReturn, decideReturn, refundReturn } from "./service";
 
 let fixtures: OrderFixtures;
+/** Déclare les retours (orders.update) ; un autre responsable décide (validation indépendante). */
 let manager: Actor;
+let decider: Actor;
 let cashier: Actor;
 
 const itemOf = async (orderId: string, sku: string) => (await db.orderItem.findFirstOrThrow({ where: { orderId, sku }, select: { id: true } })).id;
@@ -25,7 +27,7 @@ async function recordReturn(order: PlacedOrder, quantities: Partial<Record<keyof
 }
 
 const accept = (returnId: string, refundAmount: number, restock = true) =>
-  decideReturn(db, manager, returnId, { decision: "ACCEPT", restock, refundAmount, note: restock ? "Articles intacts, remis en vente" : "Emballage abîmé, non remis en vente" });
+  decideReturn(db, decider, returnId, { decision: "ACCEPT", restock, refundAmount, note: restock ? "Articles intacts, remis en vente" : "Emballage abîmé, non remis en vente" });
 
 const refund = (returnId: string, idempotencyKey: string = randomUUID()) => refundReturn(db, cashier, returnId, { idempotencyKey });
 
@@ -38,6 +40,7 @@ describe("retours et remboursements (PostgreSQL)", () => {
     await syncRolesAndPermissions(db);
     fixtures = await seedOrderCatalog();
     manager = await actorWith("ORDER_MANAGER");
+    decider = await actorWith("ORDER_MANAGER");
     cashier = await actorWith("FINANCE_MANAGER");
   });
 
@@ -52,7 +55,7 @@ describe("retours et remboursements (PostgreSQL)", () => {
     await accept(created.id, PRICES["RT-01"]);
     expect(await stockOf("RT-01")).toEqual({ onHand: 19, reserved: 0 });
     const movement = await db.stockMovement.findFirstOrThrow({ where: { type: "RETURN" } });
-    expect(movement).toMatchObject({ quantity: 1, onHandAfter: 19, reason: `Retour ${created.number}`, orderId: order.id, actorId: manager.id });
+    expect(movement).toMatchObject({ quantity: 1, onHandAfter: 19, reason: `Retour ${created.number}`, orderId: order.id, actorId: decider.id });
     expect(await orderState(order.id)).toMatchObject({ paymentStatus: "REFUND_PENDING" });
 
     const { receiptNumber } = await refund(created.id);
@@ -83,7 +86,7 @@ describe("retours et remboursements (PostgreSQL)", () => {
   it("retour sans remise en stock (motivé) et sans remboursement : traité directement", async () => {
     const order = await closedPickupOrder(fixtures, manager, cashier);
     const created = await recordReturn(order, { "RT-01": 1 });
-    await expect(decideReturn(db, manager, created.id, { decision: "ACCEPT", restock: false, refundAmount: 0, note: "" })).rejects.toMatchObject({ code: "VALIDATION" });
+    await expect(decideReturn(db, decider, created.id, { decision: "ACCEPT", restock: false, refundAmount: 0, note: "" })).rejects.toMatchObject({ code: "VALIDATION" });
     expect((await accept(created.id, 0, false)).status).toBe("COMPLETED");
     expect(await stockOf("RT-01")).toEqual({ onHand: 18, reserved: 0 });
     expect(await orderState(order.id)).toMatchObject({ paymentStatus: "PAID", amountPaid: order.total });
@@ -92,7 +95,7 @@ describe("retours et remboursements (PostgreSQL)", () => {
   it("retour refusé : quantités libérées pour un nouveau retour, aucun remboursement possible", async () => {
     const order = await closedPickupOrder(fixtures, manager, cashier);
     const first = await recordReturn(order, { "RT-01": 2 });
-    await decideReturn(db, manager, first.id, { decision: "REJECT", note: "Hors délai de retour" });
+    await decideReturn(db, decider, first.id, { decision: "REJECT", note: "Articles utilisés, non conformes au motif" });
     expect(await orderState(order.id)).toMatchObject({ paymentStatus: "PAID" });
     await expect(refund(first.id)).rejects.toThrow(/n'attend aucun remboursement/);
     await expect(accept(first.id, 0)).rejects.toThrow(/déjà été traité/);
@@ -170,7 +173,7 @@ describe("retours et remboursements (PostgreSQL)", () => {
     expect(await db.returnItem.count()).toBe(1);
   });
 
-  it("droits : retours par orders.update, remboursement par payments.correct ; refus journalisés", async () => {
+  it("droits : déclaration par orders.update, décision par returns.decide, remboursement par payments.correct ; refus journalisés", async () => {
     const order = await closedPickupOrder(fixtures, manager, cashier);
     const service = await actorWith("CUSTOMER_SERVICE");
     const item = await itemOf(order.id, "RT-01");
@@ -178,10 +181,13 @@ describe("retours et remboursements (PostgreSQL)", () => {
       code: "FORBIDDEN",
     });
     const created = await recordReturn(order, { "RT-01": 1 });
+    await expect(decideReturn(db, cashier, created.id, { decision: "REJECT", note: "Pas de droit" })).rejects.toMatchObject({ code: "FORBIDDEN" });
     await accept(created.id, 25_000);
-    await expect(refundReturn(db, manager, created.id, { idempotencyKey: randomUUID() })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    // Remboursement jamais automatique : rien n'est versé à l'acceptation.
+    expect(await db.payment.count({ where: { returnId: created.id } })).toBe(0);
+    await expect(refundReturn(db, decider, created.id, { idempotencyKey: randomUUID() })).rejects.toMatchObject({ code: "FORBIDDEN" });
     await expect(refundReturn(db, await actorWith("DELIVERY_MANAGER"), created.id, { idempotencyKey: randomUUID() })).rejects.toMatchObject({ code: "FORBIDDEN" });
-    expect(await db.auditLog.count({ where: { action: "authz.denied", result: "DENIED" } })).toBe(3);
+    expect(await db.auditLog.count({ where: { action: "authz.denied", result: "DENIED" } })).toBe(4);
     expect((await listReturns(db, service)).rows.map((row) => row.number)).toEqual([created.number]);
   });
 
@@ -200,7 +206,8 @@ describe("retours et remboursements (PostgreSQL)", () => {
     it("quantité retournée ≤ quantité livrée, prix figé, commande remise, lignes en ajout seul", async () => {
       const order = await closedPickupOrder(fixtures, manager, cashier, { "RT-01": 2 });
       const item = await itemOf(order.id, "RT-01");
-      const base = { number: "RET-TEST-1", orderId: order.id, reason: "Test", createdById: manager.id };
+      // Remise et délai fournis ici sont ignorés : la base les recalcule.
+      const base = { number: "RET-TEST-1", orderId: order.id, reason: "Test", createdById: manager.id, handedOverAt: new Date(0), declarationDeadline: new Date(0) };
       await expect(
         db.return.create({ data: { ...base, idempotencyKey: randomUUID(), itemsValue: 75_000, items: { create: { orderItemId: item, quantity: 3, unitPrice: 25_000 } } } }),
       ).rejects.toThrow(/supérieure à la quantité livrée/);
@@ -232,7 +239,7 @@ describe("retours et remboursements (PostgreSQL)", () => {
       await expect(
         db.return.update({
           where: { id: other.id },
-          data: { status: "COMPLETED", refundAmount: 25_000, refundedAt: new Date(), restocked: false, decidedAt: new Date(), decidedById: manager.id, decisionNote: "Fraude" },
+          data: { status: "COMPLETED", refundAmount: 25_000, refundedAt: new Date(), restocked: false, decidedAt: new Date(), decidedById: decider.id, decisionNote: "Fraude" },
         }),
       ).rejects.toThrow(/remboursement non enregistré/);
 

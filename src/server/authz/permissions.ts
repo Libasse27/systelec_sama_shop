@@ -14,6 +14,8 @@ export const PERMISSIONS = [
   "orders.read",
   "orders.update",
   "deliveries.manage",
+  // Décision 2 : examiner (vérification) et décider un retour, jamais celui qu'on a déclaré.
+  "returns.decide",
   "payments.read",
   "payments.record",
   "payments.correct",

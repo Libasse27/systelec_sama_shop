@@ -4,6 +4,8 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/server/db/client";
 import { removeLogo, saveSettings, uploadLogo } from "@/server/modules/settings/admin";
 import { OFFLINE_PAYMENT_METHODS, settingsDefaults } from "@/server/modules/settings/schemas";
+import { ValidationError } from "@/server/errors";
+import { MAX_LOGO_BYTES } from "@/server/storage/logo-upload";
 import { getStorage } from "@/server/storage/storage";
 import type { ActionState } from "@/lib/form-state";
 import { checkbox, int, text } from "@/lib/form-data";
@@ -22,7 +24,8 @@ export async function saveCompanyAction(_state: ActionState, formData: FormData)
     await saveSettings(db, actor, "company", {
       companyName: text(formData, "companyName"),
       shopName: text(formData, "shopName"),
-      logoUrl: nullable(formData, "logoUrl"),
+      // Logo : téléversé uniquement (décision 4), conservé par le service.
+      logoUrl: null,
       phone: nullable(formData, "phone"),
       whatsapp: nullable(formData, "whatsapp"),
       email: nullable(formData, "email"),
@@ -79,6 +82,8 @@ export async function saveFeaturesAction(_state: ActionState, formData: FormData
 export async function uploadLogoAction(_state: ActionState, formData: FormData): Promise<ActionState> {
   return adminAction(PATH, async (actor) => {
     const file = formData.get("logo");
+    // Trop lourd : refusé sans lire le fichier en mémoire.
+    if (file instanceof File && file.size > MAX_LOGO_BYTES) throw new ValidationError("Logo trop lourd.", { fieldErrors: { logo: ["1 Mo maximum"] } });
     const bytes = file instanceof File ? new Uint8Array(await file.arrayBuffer()) : new Uint8Array();
     await uploadLogo(db, getStorage(), actor, bytes);
     refreshSite();
@@ -91,5 +96,23 @@ export async function removeLogoAction(): Promise<ActionState> {
     await removeLogo(db, actor);
     refreshSite();
     return "Logo retiré : le logo typographique provisoire est affiché.";
+  });
+}
+
+/** Plages saisies : la seconde est facultative (pause de mi-journée). */
+function businessRanges(formData: FormData): { start: string | undefined; end: string | undefined }[] {
+  const ranges = [{ start: text(formData, "ranges.0.start"), end: text(formData, "ranges.0.end") }];
+  const second = { start: text(formData, "ranges.1.start"), end: text(formData, "ranges.1.end") };
+  if (second.start || second.end) ranges.push(second);
+  return ranges;
+}
+
+export async function saveBusinessHoursAction(_state: ActionState, formData: FormData): Promise<ActionState> {
+  return adminAction(PATH, async (actor) => {
+    await saveSettings(db, actor, "businessHours", {
+      days: [1, 2, 3, 4, 5, 6, 7].filter((day) => checkbox(formData, `day-${day}`)),
+      ranges: businessRanges(formData),
+    });
+    return "Heures ouvrables enregistrées.";
   });
 }

@@ -131,3 +131,70 @@ Non corrigé (risque faible) :
   - les observations de livraison restent internes, et le motif d'un échec est communiqué au client ;
   - le nom de la personne qui a reçu le colis apparaît dans le suivi du client ;
   - un logo hébergé à l'extérieur (URL https) doit-il rester possible ?
+
+## Correctifs post-phase 9
+
+**Branche :** `fix/phase-9-decisions` (depuis `feat/phase-9-admin-avancee`) · **Date :** 2026-10-18 · décisions finales détaillées dans `docs/03-plan-et-decisions.md` (§ 3).
+
+### Analyse préalable
+
+- **Qui déclare un retour ?** Le personnel seulement (`orders.update`, fiche de la commande). Le client n'a pas de parcours en ligne : la déclaration par le personnel **au nom du client** est retenue pour ce correctif ; aucun parcours client n'a été ajouté (à décider).
+- **Date de référence du délai de 48 h** : la remise au client, c'est-à-dire la clôture de la commande (`closedAt`), posée au retrait en boutique ou à la livraison effectuée (décision 5 : une commande à livrer ne se clôt que par sa livraison). La base la recopie dans le retour (`handedOverAt`).
+- **Statuts** : les statuts existants convenaient ; un seul ajout, `VERIFICATION` (vérification demandée). « Hors délai » est un indicateur, pas un statut (le retour suit le même cycle).
+- **Retours déjà en base** : reprise par la migration (remise, échéance, indicateur, première action = décision, historique reconstitué marqué « reprise »). Sur la base de développement : 6 retours traités repris, aucun hors délai. Les retours repris ne sont pas soumis rétroactivement aux nouvelles règles de décision (contrôlées à la transition).
+- **Commandes à livrer déjà clôturées sans livraison** : aucune en base de développement ; le trigger ne contrôle que les nouvelles clôtures.
+- **Logo externe déjà enregistré** : aucun en base de développement ; la migration le retirerait (logo provisoire affiché) avec une trace d'audit `settings.migrate`.
+- **Incompatibilités** : aucune incompatibilité technique bloquante avec les décisions 1, 3, 4, 5 et 6 ni avec l'architecture. Deux limites sont signalées plus bas (livreur non relié à un compte ; séparation des personnes pour le remboursement non exigée).
+
+### Livré
+
+| Décision | Élément | Fichiers |
+|---|---|---|
+| 1, 3, 6 | Comportement validé, inchangé ; documenté | `docs/03-plan-et-decisions.md` |
+| 2 | Délai de déclaration de 48 h posé par la base, indicateur « hors délai » visible (liste, commande, fiche) et filtrable | trigger `returns_check_insert`, contrainte `returns_declaration_check`, `/admin/retours` |
+| 2 | Heures ouvrables administrables (jours, une ou deux plages, Dakar ; défaut lundi–samedi 8 h–18 h) ; échéance de traitement à 24 heures ouvrables ; **alerte unique** aux administrateurs actifs par la tâche planifiée existante, jamais d'annulation ; reportée et journalisée si aucun administrateur n'est joignable | `lib/business-hours.ts`, `returns/{policy,overdue}.ts`, `scripts/expire-orders.ts`, paramètre `businessHours` |
+| 2 | Validation indépendante : nouvelle permission `returns.decide` (gestionnaire de commandes, administrateurs) ; le déclarant ne peut ni accepter, ni refuser, ni demander ou enregistrer une vérification (vérifié sous verrou, refus journalisé `authz.denied`, décision contrôlée en base) | `returns/service.ts`, trigger `returns_check_update`, `authz/{permissions,roles}.ts` |
+| 2 | Vérification : inspection, photos, facture, informations (nature + précisions), puis réponse ; décision impossible tant qu'une vérification attend | `returns/service.ts`, `/admin/retours/[id]` |
+| 2 | Remboursement jamais automatique : validation distincte (`payments.correct`) après l'acceptation, plafonds inchangés | `returns/service.ts` |
+| 2 | Historique propre au retour (`return_events`), ajout seul, statut contrôlé ; affiché sur la nouvelle **fiche du retour** | migration, `/admin/retours/[id]` |
+| 2 | Exceptions : un retour hors délai s'accepte avec un fondement (garantie, vice caché, obligation légale, autre) et un motif obligatoires (service + base) | `returns/schemas.ts`, contrainte `returns_exception_check` |
+| 4 | Logo du site téléversé uniquement : champ d'adresse retiré, schéma strict, contrainte `site_settings_logo_check`, migration d'une valeur externe ; l'enregistrement de l'identité conserve le logo en place | `settings/*`, `/admin/parametres` |
+| 4 | Partenaires : création, modification, activation, ordre, suppression (`content.manage`, audit) ; logo téléversé par le même mécanisme vérifié (`storage/logo-upload.ts`) ; site https sans identifiants ; affichage sur l'accueil seulement s'il y a des partenaires actifs | `partners/*`, `/admin/contenu`, `app/page.tsx` |
+| 5 | Une commande à livrer n'est jamais remise à la main : « Remise au client » n'est plus proposé, refus du service, trigger différé `orders_delivery_closed_by_courier` ; le retrait en boutique est inchangé | `orders/status.ts`, migration |
+
+Effets sur les phases 6 et 7 : les parcours de retrait (remise manuelle après encaissement) sont inchangés ; aucun test des phases 6 et 7 ne clôturait une commande à livrer à la main. Les tests de factures et de rapports qui décidaient un retour par son déclarant passent désormais par un second responsable.
+
+Migrations : `20261018090000_return_verification_status` (valeur d'énumération, séparée car utilisable seulement après validation) et `20261018090100_owner_decisions`, appliquées sur les bases de développement et de test. **Déploiement** : relancer `pnpm db:seed` pour synchroniser la permission `returns.decide` (sinon personne ne peut décider un retour).
+
+### Tests réellement exécutés
+
+| Commande | Résultat |
+|---|---|
+| `pnpm lint` / `pnpm typecheck` | OK |
+| `pnpm test` | 58 fichiers, 380 tests réussis (dont intégration PostgreSQL) |
+| `pnpm test:e2e` (build compris) | 84 tests réussis (bureau et mobile) |
+| `prisma migrate diff` (bases de dev et de test ↔ schéma) | aucun écart |
+
+Nouveaux tests : heures ouvrables (week-end, soirée, pause de mi-journée, fermeture exacte) ; politique (`returns-policy.int.test.ts`) : délai et indicateur posés par la base, hors délai filtrable et accepté seulement avec exception, refus du déclarant journalisé, décisions simultanées, contournements SQL, vérification, historique en ajout seul, alerte unique (y compris deux passages simultanés, aucun administrateur joignable, paramètre d'horaires) ; partenaires (logos, liens, base, droits) ; logo externe refusé jusqu'en base ; décision 5 en service et en base. E2E : retour avec deux personnes (déclarant bloqué, second responsable : vérification, réponse, acceptation ; finances : remboursement ; historique), partenaires (téléversement, accueil, désactivation, absence de champ d'adresse de logo), commande à livrer sans bouton de remise.
+
+### Revues
+
+Revue de code et revue de sécurité sur le diff : aucun point CRITICAL ni HIGH. Corrigé, avec tests :
+
+- **MEDIUM (code)** : le déclarant pouvait demander une vérification sur son propre retour et ainsi neutraliser l'alerte de délai. Refusé et journalisé.
+- **MEDIUM (sécurité)** : le déclarant pouvait enregistrer lui-même le résultat de la vérification. Réservé à `returns.decide`, jamais au déclarant.
+- **MEDIUM (sécurité)** : l'alerte de délai était marquée envoyée même sans administrateur joignable. Destinataires lus d'abord ; sinon rien n'est marqué et l'anomalie est journalisée.
+- **LOW** : lien de partenaire avec identifiants (`https://site@autre.tld`) refusé ; taille du logo contrôlée avant lecture en mémoire ; clé React de l'historique.
+
+Non corrigé (à décider ou risque faible) :
+
+- **Séparation des personnes pour le remboursement** : le remboursement exige `payments.correct` et une étape distincte, mais un administrateur peut décider puis rembourser. La politique ne l'exige pas ; à décider.
+- **Livreur** : `Courier` n'est pas relié à un compte ; toute personne `deliveries.manage` enregistre la livraison effectuée. Relier livreurs et comptes est une évolution (phase 10).
+- Logos non ré-encodés (métadonnées EXIF), anciens fichiers conservés ; course très rare entre l'enregistrement de l'identité et un téléversement de logo simultané ; fin de plage horaire à 23:59 au plus.
+
+### Reste à décider
+
+- Parcours de déclaration par le client lui-même (compte et suivi invité, photos jointes).
+- Remboursement par une personne différente de celle qui a décidé.
+- Gestion des jours fériés dans les heures ouvrables.
+- Seconde échéance (relance) pour une vérification restée sans réponse.

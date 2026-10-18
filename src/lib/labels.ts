@@ -116,7 +116,32 @@ export const DELIVERY_STATUS_LABELS = {
 
 export const RETURN_STATUS_LABELS = {
   RECEIVED: "À vérifier",
+  VERIFICATION: "Vérification demandée",
   REFUND_PENDING: "Remboursement à verser",
   COMPLETED: "Traité",
   REJECTED: "Refusé",
+} as const;
+
+export const RETURN_VERIFICATION_KIND_LABELS = {
+  INSPECTION: "Inspection physique",
+  PHOTOS: "Photos",
+  INVOICE: "Facture ou preuve d'achat",
+  INFORMATION: "Informations complémentaires",
+} as const;
+
+export const RETURN_EXCEPTION_GROUND_LABELS = {
+  WARRANTY: "Garantie",
+  HIDDEN_DEFECT: "Vice caché",
+  LEGAL_OBLIGATION: "Obligation légale",
+  OTHER: "Autre motif",
+} as const;
+
+export const RETURN_EVENT_LABELS = {
+  DECLARED: "Retour déclaré",
+  VERIFICATION_REQUESTED: "Vérification demandée",
+  VERIFICATION_ANSWERED: "Réponse à la vérification",
+  ACCEPTED: "Retour accepté",
+  REJECTED: "Retour refusé",
+  REFUNDED: "Remboursement versé",
+  OVERDUE_NOTIFIED: "Délai de traitement dépassé : administrateur alerté",
 } as const;

@@ -729,6 +729,8 @@ model Notification {
   quoteRequestId String?
   quoteId        String?
   interventionId String?
+  /// Alerte interne sur un retour (délai de traitement dépassé).
+  returnId       String?
   sentAt         DateTime?           @db.Timestamptz(3)
   createdAt      DateTime            @default(now()) @db.Timestamptz(3)
 
@@ -737,6 +739,7 @@ model Notification {
   @@index([quoteRequestId])
   @@index([quoteId])
   @@index([interventionId])
+  @@index([returnId])
   @@map("notifications")
 }
 
@@ -1029,45 +1032,110 @@ model Delivery {
   @@map("deliveries")
 }
 
-/// RECEIVED : articles rapportés, à vérifier ; REFUND_PENDING : accepté, remboursement à verser ;
-/// COMPLETED : traité (remboursé ou sans remboursement) ; REJECTED : refusé, articles rendus au client.
+/// RECEIVED : articles rapportés, à examiner ; VERIFICATION : vérification demandée (inspection,
+/// photos, facture, informations), en attente de sa réponse ; REFUND_PENDING : accepté, remboursement
+/// à verser ; COMPLETED : traité (remboursé ou sans remboursement) ; REJECTED : refusé, articles rendus.
 enum ReturnStatus {
   RECEIVED
+  VERIFICATION
   REFUND_PENDING
   COMPLETED
   REJECTED
 }
 
+/// Nature d'une vérification demandée avant la décision sur un retour.
+enum ReturnVerificationKind {
+  INSPECTION
+  PHOTOS
+  INVOICE
+  INFORMATION
+}
+
+/// Fondement de l'acceptation d'un retour déclaré hors délai (exception à la politique commerciale).
+enum ReturnExceptionGround {
+  WARRANTY
+  HIDDEN_DEFECT
+  LEGAL_OBLIGATION
+  OTHER
+}
+
+/// Étape de l'historique d'un retour (ajout seul).
+enum ReturnEventType {
+  DECLARED
+  VERIFICATION_REQUESTED
+  VERIFICATION_ANSWERED
+  ACCEPTED
+  REJECTED
+  REFUNDED
+  OVERDUE_NOTIFIED
+}
+
 /// Retour d'articles d'une commande remise au client. Quantités et montants contrôlés en base.
 model Return {
-  id             String       @id @default(cuid())
-  number         String       @unique
-  orderId        String
-  order          Order        @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  id                  String                 @id @default(cuid())
+  number              String                 @unique
+  orderId             String
+  order               Order                  @relation(fields: [orderId], references: [id], onDelete: Restrict)
   /// Clé envoyée par le formulaire : un double envoi n'enregistre qu'un retour.
-  idempotencyKey String       @unique
-  status         ReturnStatus @default(RECEIVED)
+  idempotencyKey      String                 @unique
+  status              ReturnStatus           @default(RECEIVED)
   /// Motif du client.
-  reason         String
+  reason              String
   /// Valeur des articles retournés (prix figés de la commande).
-  itemsValue     Int
+  itemsValue          Int
   /// Montant à rembourser décidé (≤ valeur des articles).
-  refundAmount   Int          @default(0)
+  refundAmount        Int                    @default(0)
   /// Décision : articles remis en stock ou non, avec son motif.
-  restocked      Boolean?
-  decisionNote   String?
-  createdById    String
-  decidedById    String?
-  decidedAt      DateTime?    @db.Timestamptz(3)
-  refundedAt     DateTime?    @db.Timestamptz(3)
-  items          ReturnItem[]
-  refund         Payment?
-  createdAt      DateTime     @default(now()) @db.Timestamptz(3)
-  updatedAt      DateTime     @updatedAt @db.Timestamptz(3)
+  restocked           Boolean?
+  decisionNote        String?
+  createdById         String
+  decidedById         String?
+  decidedAt           DateTime?              @db.Timestamptz(3)
+  refundedAt          DateTime?              @db.Timestamptz(3)
+  /// Remise au client (livraison ou retrait) : date de référence du délai de déclaration (trigger).
+  handedOverAt        DateTime               @db.Timestamptz(3)
+  /// Fin du délai commercial de déclaration (remise + 48 h), calculée par la base.
+  declarationDeadline DateTime               @db.Timestamptz(3)
+  /// Déclaré après ce délai : accepté à l'enregistrement, mais signalé (calculé par la base).
+  lateDeclaration     Boolean                @default(false)
+  /// Fondement et motif de l'acceptation d'un retour hors délai (garantie, vice caché, obligation légale).
+  exceptionGround     ReturnExceptionGround?
+  exceptionNote       String?
+  /// Première action du personnel (vérification demandée ou décision), posée par la base.
+  firstActionAt       DateTime?              @db.Timestamptz(3)
+  /// Alerte « délai de traitement dépassé » envoyée (une seule fois par retour).
+  overdueNotifiedAt   DateTime?              @db.Timestamptz(3)
+  items               ReturnItem[]
+  events              ReturnEvent[]
+  refund              Payment?
+  createdAt           DateTime               @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime               @updatedAt @db.Timestamptz(3)
 
   @@index([orderId, createdAt])
   @@index([status, createdAt])
+  @@index([lateDeclaration, createdAt])
   @@map("returns")
+}
+
+/// Historique propre à un retour (ajout seul, trigger) : qui, quand, statut, motif, décision.
+model ReturnEvent {
+  id               String                  @id @default(cuid())
+  returnId         String
+  return           Return                  @relation(fields: [returnId], references: [id], onDelete: Restrict)
+  type             ReturnEventType
+  fromStatus       ReturnStatus?
+  toStatus         ReturnStatus
+  /// Auteur ; nul pour une action du système (alerte de délai).
+  actorId          String?
+  /// Motif, demande de vérification, réponse ou motif de la décision.
+  comment          String?
+  verificationKind ReturnVerificationKind?
+  /// Décision : montant, remise en stock, exception hors délai ; remboursement : reçu.
+  details          Json?
+  createdAt        DateTime                @default(now()) @db.Timestamptz(3)
+
+  @@index([returnId, createdAt])
+  @@map("return_events")
 }
 
 /// Ligne d'un retour (ajout seul) : quantité retournée d'une ligne de commande, au prix figé.
@@ -1083,4 +1151,23 @@ model ReturnItem {
   @@unique([returnId, orderItemId])
   @@index([orderItemId])
   @@map("return_items")
+}
+
+// ─── Correctifs post-phase 9 : partenaires ───────────────────────────────────
+
+/// Partenaire affiché sur la boutique publique. Logo TÉLÉVERSÉ uniquement (contrainte CHECK).
+model Partner {
+  id         String   @id @default(cuid())
+  name       String
+  /// Site du partenaire (https uniquement), facultatif.
+  websiteUrl String?
+  /// Logo téléversé, servi par /medias/partenaires/… : jamais d'adresse externe.
+  logoUrl    String
+  isActive   Boolean  @default(true)
+  position   Int      @default(0)
+  createdAt  DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt  DateTime @updatedAt @db.Timestamptz(3)
+
+  @@index([isActive, position])
+  @@map("partners")
 }

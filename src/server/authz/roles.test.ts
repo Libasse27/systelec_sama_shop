@@ -16,7 +16,7 @@ const EXPECTED: Record<string, readonly Permission[] | "ALL"> = {
   ADMIN: "ALL",
   CATALOG_MANAGER: ["admin.access", "categories.manage", "inventory.read", "products.archive", "products.create", "products.read", "products.update"],
   STOCK_MANAGER: ["admin.access", "inventory.adjust", "inventory.read", "products.read", "reports.read"],
-  ORDER_MANAGER: ["admin.access", "customers.read", "deliveries.manage", "inventory.read", "orders.read", "orders.update", "payments.read", "products.read"],
+  ORDER_MANAGER: ["admin.access", "customers.read", "deliveries.manage", "inventory.read", "orders.read", "orders.update", "payments.read", "products.read", "returns.decide"],
   FINANCE_MANAGER: ["admin.access", "customers.read", "orders.read", "payments.correct", "payments.read", "payments.record", "reports.export", "reports.read"],
   DELIVERY_MANAGER: ["admin.access", "customers.read", "deliveries.manage", "orders.read", "payments.record"],
   TECH_MANAGER: ["admin.access", "customers.read", "interventions.manage", "interventions.read", "inventory.read", "payments.record", "products.read", "quotes.manage", "quotes.read"],
@@ -52,6 +52,10 @@ describe("matrice des rôles (§14)", () => {
       ["ADMIN", "DELIVERY_MANAGER", "FINANCE_MANAGER", "SUPER_ADMIN", "TECH_MANAGER"].sort(),
     );
     expect(rolesWith("payments.correct")).toEqual(["ADMIN", "FINANCE_MANAGER", "SUPER_ADMIN"].sort());
+  });
+
+  it("réserve la décision sur un retour aux responsables (décision 2), le remboursement aux finances", () => {
+    expect(rolesWith("returns.decide")).toEqual(["ADMIN", "ORDER_MANAGER", "SUPER_ADMIN"]);
   });
 
   it("réserve la gestion des rôles, des utilisateurs, des paramètres et l'audit aux administrateurs", () => {

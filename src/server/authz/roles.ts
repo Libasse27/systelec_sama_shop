@@ -43,6 +43,7 @@ export const ROLE_DEFINITIONS: readonly RoleDefinition[] = [
       "inventory.read",
       "orders.read",
       "orders.update",
+      "returns.decide",
       "deliveries.manage",
       "payments.read",
       "customers.read",

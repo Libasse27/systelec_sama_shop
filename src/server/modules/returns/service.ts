@@ -1,11 +1,11 @@
 import "server-only";
-import type { Prisma, PrismaClient, ReturnStatus } from "@/generated/prisma/client";
+import type { Prisma, PrismaClient, ReturnEventType, ReturnExceptionGround, ReturnStatus, ReturnVerificationKind } from "@/generated/prisma/client";
 import { businessYear } from "@/lib/dates";
 import { formatFcfa } from "@/lib/money";
 import { recordAudit } from "@/server/audit/audit";
 import { assertPermission, type Actor } from "@/server/authz/service";
 import { isUniqueViolation } from "@/server/db/errors";
-import { AppError } from "@/server/errors";
+import { AppError, ValidationError } from "@/server/errors";
 import { lockStock } from "@/server/modules/inventory/reservations";
 import { lockOrderRow } from "@/server/modules/orders/lock";
 import type { Contact } from "@/server/modules/orders/schemas";
@@ -13,8 +13,9 @@ import { orderPaymentStatus } from "@/server/modules/payments/balance";
 import { nextBusinessNumber } from "@/server/modules/sequences/service";
 import { dispatchOrderNotifications, queueOrderNotifications } from "@/server/notifications/order-notifications";
 import { parseInput } from "@/server/validation";
+import { RETURN_DECLARATION_HOURS } from "./policy";
 import { maxRefundFor } from "./refund-cap";
-import { createReturnSchema, decideReturnSchema, refundReturnSchema } from "./schemas";
+import { answerVerificationSchema, createReturnSchema, decideReturnSchema, refundReturnSchema, requestVerificationSchema } from "./schemas";
 
 type Tx = Prisma.TransactionClient;
 
@@ -44,9 +45,26 @@ async function lockReturn(tx: Tx, returnId: string) {
       status: true,
       itemsValue: true,
       refundAmount: true,
+      createdById: true,
+      lateDeclaration: true,
       items: { select: { quantity: true, orderItem: { select: { variantId: true } } } },
     },
   });
+}
+
+interface ReturnEventInput {
+  type: ReturnEventType;
+  fromStatus: ReturnStatus | null;
+  toStatus: ReturnStatus;
+  actorId: string | null;
+  comment?: string | null;
+  verificationKind?: ReturnVerificationKind;
+  details?: Prisma.InputJsonValue;
+}
+
+/** Ajoute une étape à l'historique propre du retour (ajout seul, statut contrôlé en base). */
+export async function recordReturnEvent(tx: Tx, returnId: string, event: ReturnEventInput): Promise<void> {
+  await tx.returnEvent.create({ data: { returnId, ...event, comment: event.comment ?? null } });
 }
 
 async function orderOfReturn(client: PrismaClient, returnId: string): Promise<string> {
@@ -59,12 +77,16 @@ export interface RecordedReturn {
   id: string;
   number: string;
   replayed: boolean;
+  /** Déclaré après le délai commercial de 48 h (enregistré quand même, signalé). */
+  lateDeclaration: boolean;
 }
 
 /**
- * Enregistre un retour d'articles sur une commande remise au client (orders.update) : quantité
- * retournée ≤ quantité livrée (retours précédents déduits, refusés exceptés), valeur au prix figé.
- * Le retour est « à vérifier » : la commande passe au statut de paiement « À vérifier ».
+ * Déclare un retour d'articles sur une commande remise au client (orders.update), au nom du client :
+ * quantité retournée ≤ quantité livrée (retours précédents déduits, refusés exceptés), valeur au prix
+ * figé. Le retour est « à vérifier » : la commande passe au statut de paiement « À vérifier ».
+ * Décision 2 : une déclaration après 48 h (remise au client) est ACCEPTÉE mais marquée « hors délai »
+ * (calculé par la base) ; elle n'est jamais refusée à l'enregistrement. Historique : « déclaré ».
  * Idempotent : un double envoi n'enregistre qu'un retour.
  */
 export async function createReturn(client: PrismaClient, actor: Actor, orderId: string, input: unknown): Promise<RecordedReturn> {
@@ -73,14 +95,14 @@ export async function createReturn(client: PrismaClient, actor: Actor, orderId: 
   try {
     return await client.$transaction(async (tx) => {
       await lockOrderRow(tx, orderId);
-      const existing = await tx.return.findUnique({ where: { idempotencyKey }, select: { id: true, number: true, orderId: true } });
+      const existing = await tx.return.findUnique({ where: { idempotencyKey }, select: { id: true, number: true, orderId: true, lateDeclaration: true } });
       if (existing) {
         if (existing.orderId !== orderId) throw new AppError("CONFLICT", "Ce retour a déjà été envoyé.");
-        return { id: existing.id, number: existing.number, replayed: true };
+        return { id: existing.id, number: existing.number, replayed: true, lateDeclaration: existing.lateDeclaration };
       }
       const order = await tx.order.findUniqueOrThrow({
         where: { id: orderId },
-        select: { status: true, items: { select: { id: true, quantity: true, unitPrice: true, productName: true, returnItems: { where: { return: { status: { not: "REJECTED" } } }, select: { quantity: true } } } } },
+        select: { status: true, closedAt: true, items: { select: { id: true, quantity: true, unitPrice: true, productName: true, returnItems: { where: { return: { status: { not: "REJECTED" } } }, select: { quantity: true } } } } },
       });
       if (order.status !== "CLOSED") throw new AppError("CONFLICT", "Seule une commande remise au client peut faire l'objet d'un retour.");
       const lines = items.map((requested) => {
@@ -94,13 +116,33 @@ export async function createReturn(client: PrismaClient, actor: Actor, orderId: 
       });
       const itemsValue = lines.reduce((sum, line) => sum + line.quantity * line.unitPrice, 0);
       const number = await nextBusinessNumber(tx, "return", businessYear());
+      // Remise et délai : recalculés par la base (trigger), qui fait foi.
+      const handedOverAt = order.closedAt ?? new Date();
       const created = await tx.return.create({
-        data: { number, orderId, idempotencyKey, reason, itemsValue, createdById: actor.id, items: { create: lines } },
-        select: { id: true },
+        data: {
+          number,
+          orderId,
+          idempotencyKey,
+          reason,
+          itemsValue,
+          createdById: actor.id,
+          handedOverAt,
+          declarationDeadline: new Date(handedOverAt.getTime() + RETURN_DECLARATION_HOURS * 3_600_000),
+          items: { create: lines },
+        },
+        select: { id: true, lateDeclaration: true, declarationDeadline: true },
       });
-      await refreshPaymentStatus(tx, orderId, actor.id, `Retour ${number} à vérifier`);
-      await recordAudit(tx, { actorId: actor.id, action: "return.create", entityType: "Return", entityId: created.id, after: { number, orderId, reason, itemsValue, lines } });
-      return { id: created.id, number, replayed: false };
+      const { lateDeclaration } = created;
+      await recordReturnEvent(tx, created.id, { type: "DECLARED", fromStatus: null, toStatus: "RECEIVED", actorId: actor.id, comment: reason, details: { lateDeclaration } });
+      await refreshPaymentStatus(tx, orderId, actor.id, `Retour ${number} à vérifier${lateDeclaration ? " (déclaré hors délai)" : ""}`);
+      await recordAudit(tx, {
+        actorId: actor.id,
+        action: "return.create",
+        entityType: "Return",
+        entityId: created.id,
+        after: { number, orderId, reason, itemsValue, lines, lateDeclaration, declarationDeadline: created.declarationDeadline },
+      });
+      return { id: created.id, number, replayed: false, lateDeclaration };
     });
   } catch (error) {
     if (isUniqueViolation(error)) throw new AppError("CONFLICT", "Ce retour a déjà été envoyé.");
@@ -108,47 +150,167 @@ export async function createReturn(client: PrismaClient, actor: Actor, orderId: 
   }
 }
 
+/** Refus d'un examen (décision, résultat de vérification) par la personne qui a déclaré le retour (constaté sous verrou). */
+class SelfDecisionError extends Error {}
+
+/** Journalise le refus hors de la transaction annulée. */
+async function denySelfReview(client: PrismaClient, actor: Actor, returnId: string): Promise<void> {
+  await recordAudit(client, { actorId: actor.id, action: "authz.denied", entityType: "Return", entityId: returnId, result: "DENIED", after: { rule: "return.declarer_cannot_review" } });
+}
+
 /**
- * Décision sur un retour à vérifier (orders.update), toujours motivée :
+ * Décision sur un retour à examiner (returns.decide), toujours motivée, définitive (contrôlé aussi en base) :
+ * - validation indépendante : la personne qui a déclaré le retour ne peut pas le décider (vérifié sous
+ *   verrou, refus journalisé, contrôlé aussi en base) ;
+ * - une vérification demandée doit d'abord recevoir sa réponse ;
  * - acceptation : remise en stock ou non (articles abîmés), montant à rembourser ≤ valeur des
- *   articles remise déduite (maxRefundFor) et ≤ espèces encore détenues pour la commande (autres remboursements attendus déduits) ;
+ *   articles remise déduite (maxRefundFor) et ≤ espèces encore détenues (autres remboursements attendus
+ *   déduits) ; un retour déclaré hors délai exige un fondement et un motif d'exception ;
  * - refus : les articles sont rendus au client, rien n'est remboursé.
- * La décision est définitive (contrôlé aussi en base).
+ * Le remboursement n'est JAMAIS versé ici : il reste à valider par une personne autorisée (refundReturn).
  */
 export async function decideReturn(client: PrismaClient, actor: Actor, returnId: string, input: unknown): Promise<{ status: ReturnStatus }> {
-  await assertPermission(client, actor, "orders.update");
+  await assertPermission(client, actor, "returns.decide");
   const decision = parseInput(decideReturnSchema, input, "Décision sur le retour");
   const orderId = await orderOfReturn(client, returnId);
-  return client.$transaction(async (tx) => {
+  try {
+    return await client.$transaction(async (tx) => {
+      await lockOrderRow(tx, orderId);
+      const current = await lockReturn(tx, returnId);
+      if (current.status === "VERIFICATION") throw new AppError("CONFLICT", "Une vérification est en attente : enregistrez d'abord sa réponse ou son résultat.");
+      if (current.status !== "RECEIVED") throw new AppError("CONFLICT", "Ce retour a déjà été traité.");
+      if (current.createdById === actor.id) throw new SelfDecisionError();
+      const decided = { decidedAt: new Date(), decidedById: actor.id, decisionNote: decision.note };
+
+      let status: ReturnStatus;
+      let exception: { exceptionGround: ReturnExceptionGround; exceptionNote: string } | null = null;
+      if (decision.decision === "REJECT") {
+        status = "REJECTED";
+        await tx.return.update({ where: { id: returnId }, data: { ...decided, status } });
+      } else {
+        if (current.lateDeclaration) {
+          if (!decision.exceptionGround || !decision.exceptionNote) {
+            throw new ValidationError("Retour déclaré hors délai : indiquez le fondement et le motif de l'exception pour l'accepter.", {
+              fieldErrors: {
+                ...(!decision.exceptionGround && { exceptionGround: ["Fondement requis (garantie, vice caché, obligation légale…)"] }),
+                ...(!decision.exceptionNote && { exceptionNote: ["Motif de l'exception requis"] }),
+              },
+            });
+          }
+          exception = { exceptionGround: decision.exceptionGround, exceptionNote: decision.exceptionNote };
+        }
+        const order = await tx.order.findUniqueOrThrow({
+          where: { id: orderId },
+          select: { amountPaid: true, subtotal: true, discountTotal: true, returns: { where: { status: "REFUND_PENDING" }, select: { refundAmount: true } } },
+        });
+        const cap = maxRefundFor(current.itemsValue, order);
+        if (decision.refundAmount > cap) {
+          throw new AppError("CONFLICT", `Le remboursement ne peut dépasser la valeur des articles retournés, remise déduite (${formatFcfa(cap)}).`);
+        }
+        const refundable = order.amountPaid - order.returns.reduce((sum, entry) => sum + entry.refundAmount, 0);
+        if (decision.refundAmount > refundable) {
+          throw new AppError("CONFLICT", `Le remboursement ne peut dépasser les espèces encaissées restantes (${formatFcfa(Math.max(0, refundable))}).`);
+        }
+        if (decision.restock) await restock(tx, actor, orderId, current);
+        status = decision.refundAmount > 0 ? "REFUND_PENDING" : "COMPLETED";
+        await tx.return.update({
+          where: { id: returnId },
+          data: { ...decided, ...exception, status, restocked: decision.restock, refundAmount: decision.refundAmount },
+        });
+      }
+      const details = decision.decision === "REJECT" ? null : { refundAmount: decision.refundAmount, restocked: decision.restock, ...exception };
+      await recordReturnEvent(tx, returnId, {
+        type: decision.decision === "REJECT" ? "REJECTED" : "ACCEPTED",
+        fromStatus: current.status,
+        toStatus: status,
+        actorId: actor.id,
+        comment: decision.note,
+        ...(details && { details }),
+      });
+      await refreshPaymentStatus(tx, orderId, actor.id, `Retour ${current.number} : ${decision.decision === "REJECT" ? "refusé" : "accepté"}`);
+      await recordAudit(tx, {
+        actorId: actor.id,
+        action: "return.decide",
+        entityType: "Return",
+        entityId: returnId,
+        before: { status: current.status },
+        after: { status, decision: decision.decision, note: decision.note, ...details },
+      });
+      return { status };
+    });
+  } catch (error) {
+    if (error instanceof SelfDecisionError) {
+      await denySelfReview(client, actor, returnId);
+      throw new AppError("FORBIDDEN", "Vous avez déclaré ce retour : un autre responsable doit l'accepter ou le refuser.");
+    }
+    throw error;
+  }
+}
+
+/**
+ * Demande une vérification avant de décider (returns.decide, jamais par le déclarant) : inspection physique, photos, facture
+ * ou informations complémentaires, avec la demande précise. Le retour passe « vérification demandée »
+ * (première action : le délai de traitement est tenu) et attend la réponse.
+ */
+export async function requestReturnVerification(client: PrismaClient, actor: Actor, returnId: string, input: unknown): Promise<void> {
+  await assertPermission(client, actor, "returns.decide");
+  const { kind, request } = parseInput(requestVerificationSchema, input, "Demande de vérification");
+  const orderId = await orderOfReturn(client, returnId);
+  try {
+    await requestUnderLock(client, actor, orderId, returnId, kind, request);
+  } catch (error) {
+    if (error instanceof SelfDecisionError) {
+      // Sinon le déclarant pourrait « commencer » lui-même le traitement et neutraliser l'alerte de délai.
+      await denySelfReview(client, actor, returnId);
+      throw new AppError("FORBIDDEN", "Vous avez déclaré ce retour : un autre responsable doit l'examiner.");
+    }
+    throw error;
+  }
+}
+
+async function requestUnderLock(client: PrismaClient, actor: Actor, orderId: string, returnId: string, kind: ReturnVerificationKind, request: string): Promise<void> {
+  await client.$transaction(async (tx) => {
     await lockOrderRow(tx, orderId);
     const current = await lockReturn(tx, returnId);
+    if (current.status === "VERIFICATION") throw new AppError("CONFLICT", "Une vérification est déjà en attente de réponse.");
     if (current.status !== "RECEIVED") throw new AppError("CONFLICT", "Ce retour a déjà été traité.");
-    const decided = { decidedAt: new Date(), decidedById: actor.id, decisionNote: decision.note };
+    if (current.createdById === actor.id) throw new SelfDecisionError();
+    await tx.return.update({ where: { id: returnId }, data: { status: "VERIFICATION" } });
+    await recordReturnEvent(tx, returnId, { type: "VERIFICATION_REQUESTED", fromStatus: "RECEIVED", toStatus: "VERIFICATION", actorId: actor.id, comment: request, verificationKind: kind });
+    await refreshPaymentStatus(tx, orderId, actor.id, `Retour ${current.number} : vérification demandée`);
+    await recordAudit(tx, { actorId: actor.id, action: "return.verification.request", entityType: "Return", entityId: returnId, before: { status: current.status }, after: { status: "VERIFICATION", kind, request } });
+  });
+}
 
-    let status: ReturnStatus;
-    if (decision.decision === "REJECT") {
-      status = "REJECTED";
-      await tx.return.update({ where: { id: returnId }, data: { ...decided, status } });
-    } else {
-      const order = await tx.order.findUniqueOrThrow({
-        where: { id: orderId },
-        select: { amountPaid: true, subtotal: true, discountTotal: true, returns: { where: { status: "REFUND_PENDING" }, select: { refundAmount: true } } },
-      });
-      const cap = maxRefundFor(current.itemsValue, order);
-      if (decision.refundAmount > cap) {
-        throw new AppError("CONFLICT", `Le remboursement ne peut dépasser la valeur des articles retournés, remise déduite (${formatFcfa(cap)}).`);
-      }
-      const refundable = order.amountPaid - order.returns.reduce((sum, entry) => sum + entry.refundAmount, 0);
-      if (decision.refundAmount > refundable) {
-        throw new AppError("CONFLICT", `Le remboursement ne peut dépasser les espèces encaissées restantes (${formatFcfa(Math.max(0, refundable))}).`);
-      }
-      if (decision.restock) await restock(tx, actor, orderId, current);
-      status = decision.refundAmount > 0 ? "REFUND_PENDING" : "COMPLETED";
-      await tx.return.update({ where: { id: returnId }, data: { ...decided, status, restocked: decision.restock, refundAmount: decision.refundAmount } });
+/**
+ * Enregistre la réponse ou le résultat de la vérification demandée (returns.decide). Validation
+ * indépendante : la personne qui a déclaré le retour ne fournit pas elle-même le résultat que le
+ * décideur va lire (vérifié sous verrou, refus journalisé). Le retour revient « à vérifier ».
+ */
+export async function answerReturnVerification(client: PrismaClient, actor: Actor, returnId: string, input: unknown): Promise<void> {
+  await assertPermission(client, actor, "returns.decide");
+  const { response } = parseInput(answerVerificationSchema, input, "Réponse à la vérification");
+  const orderId = await orderOfReturn(client, returnId);
+  try {
+    await answerUnderLock(client, actor, orderId, returnId, response);
+  } catch (error) {
+    if (error instanceof SelfDecisionError) {
+      await denySelfReview(client, actor, returnId);
+      throw new AppError("FORBIDDEN", "Vous avez déclaré ce retour : un autre responsable doit enregistrer le résultat de la vérification.");
     }
-    await refreshPaymentStatus(tx, orderId, actor.id, `Retour ${current.number} : ${decision.decision === "REJECT" ? "refusé" : "accepté"}`);
-    await recordAudit(tx, { actorId: actor.id, action: "return.decide", entityType: "Return", entityId: returnId, before: { status: current.status }, after: { status, ...decision } });
-    return { status };
+    throw error;
+  }
+}
+
+async function answerUnderLock(client: PrismaClient, actor: Actor, orderId: string, returnId: string, response: string): Promise<void> {
+  await client.$transaction(async (tx) => {
+    await lockOrderRow(tx, orderId);
+    const current = await lockReturn(tx, returnId);
+    if (current.status !== "VERIFICATION") throw new AppError("CONFLICT", "Aucune vérification n'est en attente sur ce retour.");
+    if (current.createdById === actor.id) throw new SelfDecisionError();
+    await tx.return.update({ where: { id: returnId }, data: { status: "RECEIVED" } });
+    await recordReturnEvent(tx, returnId, { type: "VERIFICATION_ANSWERED", fromStatus: "VERIFICATION", toStatus: "RECEIVED", actorId: actor.id, comment: response });
+    await recordAudit(tx, { actorId: actor.id, action: "return.verification.answer", entityType: "Return", entityId: returnId, before: { status: current.status }, after: { status: "RECEIVED", response } });
   });
 }
 
@@ -182,7 +344,8 @@ export interface RecordedRefund {
 }
 
 /**
- * Verse en espèces le remboursement d'un retour accepté (payments.correct) : écriture négative
+ * Verse en espèces le remboursement d'un retour accepté (payments.correct) : validation DISTINCTE et
+ * explicite d'une personne autorisée, après l'acceptation (jamais automatique). Écriture négative
  * liée au retour, avec son reçu ; montant encaissé de la commande diminué d'autant, montant
  * remboursé augmenté, statut « Remboursement effectué ». Jamais au-delà des espèces encaissées
  * (contrôlé aussi en base). Idempotent ; un retour n'est remboursé qu'une fois (unicité en base).
@@ -227,6 +390,14 @@ export async function refundReturn(client: PrismaClient, actor: Actor, returnId:
       });
       await tx.order.update({ where: { id: orderId }, data: { amountPaid: order.amountPaid - amount, refundedAmount: order.refundedAmount + amount } });
       await tx.return.update({ where: { id: returnId }, data: { status: "COMPLETED", refundedAt: new Date() } });
+      await recordReturnEvent(tx, returnId, {
+        type: "REFUNDED",
+        fromStatus: "REFUND_PENDING",
+        toStatus: "COMPLETED",
+        actorId: actor.id,
+        comment: reason,
+        details: { amount, receiptNumber },
+      });
       await refreshPaymentStatus(tx, orderId, actor.id, `${reason} : ${formatFcfa(amount)} en espèces (${receiptNumber})`);
       const contact = order.contact as unknown as Contact;
       await queueOrderNotifications(

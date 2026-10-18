@@ -23,6 +23,7 @@ describe("orderPaymentStatus (retours et remboursements)", () => {
 
   it("retour à vérifier, puis remboursement à verser, puis remboursement effectué", () => {
     expect(orderPaymentStatus({ ...paid, returns: ["RECEIVED"] })).toBe("TO_VERIFY");
+    expect(orderPaymentStatus({ ...paid, returns: ["VERIFICATION"] })).toBe("TO_VERIFY");
     expect(orderPaymentStatus({ ...paid, returns: ["RECEIVED", "REFUND_PENDING"] })).toBe("REFUND_PENDING");
     expect(orderPaymentStatus({ total: 50_000, amountPaid: 25_000, refundedAmount: 25_000, returns: ["COMPLETED"] })).toBe("REFUNDED");
     expect(orderPaymentStatus({ total: 50_000, amountPaid: 25_000, refundedAmount: 25_000, returns: ["COMPLETED", "RECEIVED"] })).toBe("TO_VERIFY");

@@ -13,8 +13,9 @@ const optionalUrl = z.url({ protocol: /^https?$/ }).max(500).nullable();
 
 /** Logo téléversé depuis l'administration (servi par /medias/identite/…), forme stricte. */
 export const UPLOADED_LOGO_PATTERN = /^\/medias\/identite\/logo-[a-f0-9-]{36}\.(?:jpg|png|webp)$/;
-// Logo : lien http(s) ou fichier téléversé (D13).
-const logoUrl = z.union([z.string().regex(UPLOADED_LOGO_PATTERN), z.url({ protocol: /^https?$/ }).max(500)]).nullable();
+// Logo (D13, décision 4 du propriétaire) : fichier téléversé UNIQUEMENT, jamais d'adresse externe
+// (contrôlé aussi en base : contrainte site_settings_logo_check).
+const logoUrl = z.string().regex(UPLOADED_LOGO_PATTERN, "Logo : fichier téléversé uniquement").nullable();
 
 export const companySettingsSchema = z
   .object({
@@ -71,12 +72,42 @@ export const featureSettingsSchema = z
   })
   .strict();
 
+const TIME_OF_DAY = /^(?:[01]\d|2[0-3]):[0-5]\d$/;
+const timeOfDay = z.string().regex(TIME_OF_DAY, "Heure au format HH:MM (00:00 à 23:59)");
+
+/**
+ * Heures ouvrables (décision 2 : délai de traitement des retours), à Dakar (UTC+0 toute l'année).
+ * Jours ISO (1 = lundi … 7 = dimanche) et une ou deux plages par jour ouvrable. Jours fériés non gérés.
+ */
+export const businessHoursSchema = z
+  .object({
+    days: z
+      .array(z.number().int().min(1).max(7))
+      .min(1, "Choisissez au moins un jour ouvrable")
+      .max(7)
+      .refine((days) => new Set(days).size === days.length, "Jour en double")
+      .transform((days) => [...days].sort((a, b) => a - b)),
+    ranges: z
+      .array(
+        z
+          .object({ start: timeOfDay, end: timeOfDay })
+          .strict()
+          .refine((range) => range.start < range.end, { message: "La fin doit suivre le début", path: ["end"] }),
+      )
+      .min(1, "Indiquez au moins une plage horaire")
+      .max(2, "Deux plages au plus")
+      .transform((ranges) => [...ranges].sort((a, b) => a.start.localeCompare(b.start)))
+      .refine((ranges) => ranges.every((range, index) => index === 0 || ranges[index - 1]!.end <= range.start), "Les plages horaires se chevauchent"),
+  })
+  .strict();
+
 export const settingsSchemas = {
   company: companySettingsSchema,
   commerce: commerceSettingsSchema,
   payments: paymentSettingsSchema,
   tax: taxSettingsSchema,
   features: featureSettingsSchema,
+  businessHours: businessHoursSchema,
 } as const;
 
 export type SettingKey = keyof typeof settingsSchemas;
@@ -112,4 +143,6 @@ export const settingsDefaults: { [K in SettingKey]: SettingValue<K> } = {
   },
   tax: { vatDetailEnabled: false, vatRate: 18 },
   features: { reviewsEnabled: false },
+  // Lundi à samedi, 8 h – 18 h : 24 heures ouvrables ≈ 2 jours et demi d'ouverture.
+  businessHours: { days: [1, 2, 3, 4, 5, 6], ranges: [{ start: "08:00", end: "18:00" }] },
 };

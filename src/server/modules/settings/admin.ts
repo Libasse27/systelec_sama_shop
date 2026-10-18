@@ -1,11 +1,9 @@
 import "server-only";
-import { randomUUID } from "node:crypto";
 import type { PrismaClient } from "@/generated/prisma/client";
 import { assertPermission, type Actor } from "@/server/authz/service";
-import { AppError, ValidationError } from "@/server/errors";
-import { logger } from "@/server/logger";
-import { detectImageType } from "@/server/storage/image-type";
-import { mediaUrl, type FileStorage } from "@/server/storage/storage";
+import { AppError } from "@/server/errors";
+import { discardStoredFile, storeLogo } from "@/server/storage/logo-upload";
+import type { FileStorage } from "@/server/storage/storage";
 import { parseInput } from "@/server/validation";
 import { settingsSchemas, type SettingKey, type SettingValue } from "./schemas";
 import { getSetting, updateSetting } from "./service";
@@ -16,6 +14,7 @@ const SETTING_LABELS: Record<SettingKey, string> = {
   payments: "Moyens de règlement",
   tax: "TVA",
   features: "Fonctions",
+  businessHours: "Heures ouvrables",
 };
 
 /** Paramètres modifiables par écran : tous, sauf la devise et le fuseau (imposés par le schéma). */
@@ -28,44 +27,35 @@ export function isSettingKey(value: unknown): value is SettingKey {
 /** Tous les paramètres pour l'écran d'administration (settings.manage). */
 export async function getAllSettings(client: PrismaClient, actor: Actor): Promise<{ [K in SettingKey]: SettingValue<K> }> {
   await assertPermission(client, actor, "settings.manage");
-  const [company, commerce, payments, tax, features] = await Promise.all(EDITABLE_SETTING_KEYS.map((key) => getSetting(key, client)));
-  return { company, commerce, payments, tax, features } as { [K in SettingKey]: SettingValue<K> };
+  const values = await Promise.all(EDITABLE_SETTING_KEYS.map(async (key) => [key, await getSetting(key, client)] as const));
+  return Object.fromEntries(values) as { [K in SettingKey]: SettingValue<K> };
 }
 
 /**
  * Enregistre un groupe de paramètres (settings.manage) : validé par son schéma Zod strict (erreurs
- * rattachées à chaque champ), audité avant/après dans la même transaction.
+ * rattachées à chaque champ), audité avant/après dans la même transaction. Le logo ne se change
+ * pas par l'identité (décision 4 : téléversement uniquement) : la valeur enregistrée est conservée.
  */
 export async function saveSettings<K extends SettingKey>(client: PrismaClient, actor: Actor, key: K, input: unknown): Promise<SettingValue<K>> {
   await assertPermission(client, actor, "settings.manage");
-  const value = parseInput(settingsSchemas[key], input, SETTING_LABELS[key]);
+  const submitted = key === "company" && typeof input === "object" && input !== null ? { ...input, logoUrl: (await getSetting("company", client)).logoUrl } : input;
+  const value = parseInput(settingsSchemas[key], submitted, SETTING_LABELS[key]);
   return updateSetting(key, value, actor.id, client);
 }
 
-/** Taille maximale d'un logo (le logo s'affiche sur chaque page). */
-export const MAX_LOGO_BYTES = 1024 * 1024;
-
 /**
- * Téléverse le logo (D13) : PNG, JPEG ou WebP vérifié sur son contenu, 1 Mo au plus, nom
+ * Téléverse le logo (D13, décision 4) : PNG, JPEG ou WebP vérifié sur son contenu, 1 Mo au plus, nom
  * aléatoire. Le logo précédent reste stocké (traçabilité de l'audit) ; il n'est plus affiché.
  */
 export async function uploadLogo(client: PrismaClient, storage: FileStorage, actor: Actor, bytes: Uint8Array): Promise<{ logoUrl: string }> {
   await assertPermission(client, actor, "settings.manage");
-  if (bytes.byteLength === 0) throw new ValidationError("Choisissez une image.", { fieldErrors: { logo: ["Fichier vide"] } });
-  if (bytes.byteLength > MAX_LOGO_BYTES) throw new ValidationError("Logo trop lourd.", { fieldErrors: { logo: ["1 Mo maximum"] } });
-  const extension = detectImageType(bytes);
-  if (!extension) throw new ValidationError("Format d'image refusé.", { fieldErrors: { logo: ["Formats acceptés : PNG, JPEG, WebP"] } });
-  const key = `identite/logo-${randomUUID()}.${extension}`;
-  await storage.put(key, bytes);
+  const { key, url: logoUrl } = await storeLogo(storage, "identite", "logo", bytes, "logo");
   try {
     const company = await getSetting("company", client);
-    const logoUrl = mediaUrl(key);
     await updateSetting("company", { ...company, logoUrl }, actor.id, client);
     return { logoUrl };
   } catch (error) {
-    await storage.remove(key).catch((removeError: unknown) => {
-      logger.warn("Logo orphelin non supprimé", { key, error: removeError instanceof Error ? removeError.message : "inconnue" });
-    });
+    await discardStoredFile(storage, key);
     throw error;
   }
 }

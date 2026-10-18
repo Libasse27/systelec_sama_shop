@@ -4,9 +4,9 @@ import { db } from "@/server/db/client";
 import { assignCourier, completeDelivery, failDelivery, startDelivery } from "@/server/modules/deliveries/service";
 import { issueOrderInvoice } from "@/server/modules/invoices/service";
 import { changeOrderStatus } from "@/server/modules/orders/status";
-import { createReturn, decideReturn, refundReturn } from "@/server/modules/returns/service";
+import { createReturn } from "@/server/modules/returns/service";
 import type { ActionState } from "@/lib/form-state";
-import { checkbox, int, text } from "@/lib/form-data";
+import { int, text } from "@/lib/form-data";
 import { ORDER_STATUS_LABELS } from "@/lib/labels";
 import { adminAction } from "../_lib/action";
 
@@ -50,7 +50,7 @@ export async function failDeliveryAction(orderId: string, _state: ActionState, f
   });
 }
 
-// ─── Retours, remboursements, facture ───────────────────────────────────────
+// ─── Retours (déclaration ; décision et remboursement : fiche du retour), facture ─
 
 /** Quantités saisies par ligne (champs « qte-<ligne> ») ; les lignes vides valent 0. */
 function returnedItems(formData: FormData): { orderItemId: string; quantity: number | undefined }[] {
@@ -61,34 +61,15 @@ function returnedItems(formData: FormData): { orderItemId: string; quantity: num
 
 export async function createReturnAction(orderId: string, _state: ActionState, formData: FormData): Promise<ActionState> {
   return adminAction(orderPath(orderId), async (actor) => {
-    const { number, replayed } = await createReturn(db, actor, orderId, {
+    const { number, replayed, lateDeclaration } = await createReturn(db, actor, orderId, {
       idempotencyKey: text(formData, "idempotencyKey"),
       reason: text(formData, "reason"),
       items: returnedItems(formData),
     });
-    return replayed ? `Retour déjà enregistré (${number}).` : `Retour ${number} enregistré : à vérifier.`;
-  });
-}
-
-export async function decideReturnAction(orderId: string, returnId: string, _state: ActionState, formData: FormData): Promise<ActionState> {
-  const decision = text(formData, "decision");
-  return adminAction(orderPath(orderId), async (actor) => {
-    await decideReturn(
-      db,
-      actor,
-      returnId,
-      decision === "REJECT"
-        ? { decision, note: text(formData, "note") }
-        : { decision, restock: checkbox(formData, "restock"), refundAmount: int(formData, "refundAmount"), note: text(formData, "note") },
-    );
-    return decision === "REJECT" ? "Retour refusé." : "Retour accepté.";
-  });
-}
-
-export async function refundReturnAction(orderId: string, returnId: string, _state: ActionState, formData: FormData): Promise<ActionState> {
-  return adminAction(orderPath(orderId), async (actor) => {
-    const { receiptNumber, replayed } = await refundReturn(db, actor, returnId, { idempotencyKey: text(formData, "idempotencyKey"), note: text(formData, "note") });
-    return replayed ? `Remboursement déjà enregistré (reçu ${receiptNumber}).` : `Remboursement versé : reçu ${receiptNumber}.`;
+    if (replayed) return `Retour déjà enregistré (${number}).`;
+    return lateDeclaration
+      ? `Retour ${number} enregistré : à vérifier. Déclaré hors délai (plus de 48 h après la remise) : signalé pour examen.`
+      : `Retour ${number} enregistré : à vérifier.`;
   });
 }
 

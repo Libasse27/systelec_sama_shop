@@ -15,7 +15,8 @@ import type { Contact } from "./schemas";
 type Tx = Prisma.TransactionClient;
 
 /**
- * Transitions autorisées. Une commande se clôt (remise au client) depuis « prête » ;
+ * Transitions autorisées. Une commande se clôt (remise au client) depuis « prête » (à livrer : par sa
+ * livraison seulement, voir allowedTransitions) ;
  * elle s'annule à tout moment avant la clôture. Clôture et annulation sont définitives.
  */
 export const ORDER_TRANSITIONS: Record<OrderStatus, readonly OrderStatus[]> = {
@@ -28,10 +29,14 @@ export const ORDER_TRANSITIONS: Record<OrderStatus, readonly OrderStatus[]> = {
   CLOSED: [],
 };
 
-export function allowedTransitions(status: OrderStatus, method: "DELIVERY" | "PICKUP"): OrderStatus[] {
-  // « Prête au retrait » n'a de sens que pour un retrait, « prête à expédier » que pour une livraison.
-  const irrelevant: OrderStatus = method === "PICKUP" ? "READY_TO_SHIP" : "READY_FOR_PICKUP";
-  return ORDER_TRANSITIONS[status].filter((next) => next !== irrelevant);
+/**
+ * Transitions possibles selon le mode. « Prête au retrait » n'a de sens que pour un retrait, « prête
+ * à livrer » que pour une livraison. Décision 5 : une commande à livrer n'est JAMAIS remise à la
+ * main ; elle ne se clôt qu'en marquant sa livraison effectuée (`viaDelivery`), par un livreur.
+ */
+export function allowedTransitions(status: OrderStatus, method: "DELIVERY" | "PICKUP", viaDelivery = false): OrderStatus[] {
+  const irrelevant: readonly OrderStatus[] = method === "PICKUP" ? ["READY_TO_SHIP"] : viaDelivery ? ["READY_FOR_PICKUP"] : ["READY_FOR_PICKUP", "CLOSED"];
+  return ORDER_TRANSITIONS[status].filter((next) => !irrelevant.includes(next));
 }
 
 const changeSchema = z
@@ -53,8 +58,8 @@ const changeSchema = z
 /**
  * Applique un changement de statut sur une commande verrouillée. Annulation : le stock réservé
  * est libéré. Clôture (remise au client) : le stock réservé sort définitivement (vente).
- * Une commande suivie par une livraison se clôt en marquant la livraison effectuée
- * (`viaDelivery`), et ne s'annule pas tant que le livreur est en route.
+ * Une commande à livrer se clôt uniquement en marquant sa livraison effectuée (`viaDelivery`,
+ * décision 5), et ne s'annule pas tant que le livreur est en route.
  */
 export async function applyOrderTransition(
   tx: Tx,
@@ -81,16 +86,20 @@ export async function applyOrderTransition(
   });
   if (guard && !guard(order)) return null;
   if (order.status === to) return null;
-  if (!allowedTransitions(order.status, order.fulfillmentMethod).includes(to)) {
+  // Décision 5 : contrôlé aussi en base (trigger orders_delivery_closed_by_courier).
+  if (to === "CLOSED" && order.fulfillmentMethod === "DELIVERY" && !viaDelivery) {
+    throw new AppError(
+      "CONFLICT",
+      "Commande à livrer : elle est remise au client uniquement par un livreur. Assignez un livreur, puis marquez la livraison effectuée.",
+    );
+  }
+  if (!allowedTransitions(order.status, order.fulfillmentMethod, viaDelivery).includes(to)) {
     throw new AppError("CONFLICT", `Passage impossible de « ${ORDER_STATUS_LABELS[order.status]} » à « ${ORDER_STATUS_LABELS[to]} ».`);
   }
-  if (to === "CLOSED" || to === "CANCELLED") {
+  if (to === "CANCELLED") {
     const delivery = await tx.delivery.findUnique({ where: { orderId }, select: { status: true } });
-    if (to === "CANCELLED" && delivery?.status === "IN_TRANSIT") {
+    if (delivery?.status === "IN_TRANSIT") {
       throw new AppError("CONFLICT", "Livraison en cours : enregistrez d'abord son résultat (livrée ou échec).");
-    }
-    if (to === "CLOSED" && delivery && !viaDelivery) {
-      throw new AppError("CONFLICT", "Cette commande est suivie par une livraison : la remise se fait en marquant la livraison effectuée.");
     }
   }
   // Contrôlés sous le verrou de la commande, que les encaissements prennent aussi.

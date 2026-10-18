@@ -60,7 +60,8 @@ describe("factures de commandes (PostgreSQL)", () => {
     const { number } = await issueOrderInvoice(db, manager, order.id);
     const item = await db.orderItem.findFirstOrThrow({ where: { orderId: order.id } });
     const created = await createReturn(db, manager, order.id, { idempotencyKey: randomUUID(), reason: "Défaut", items: [{ orderItemId: item.id, quantity: 1 }] });
-    await decideReturn(db, manager, created.id, { decision: "ACCEPT", restock: false, refundAmount: 25_000, note: "Écran fêlé" });
+    // Validation indépendante : un autre responsable décide.
+    await decideReturn(db, await actorWith("ORDER_MANAGER"), created.id, { decision: "ACCEPT", restock: false, refundAmount: 25_000, note: "Écran fêlé" });
     await refundReturn(db, cashier, created.id, { idempotencyKey: randomUUID() });
 
     const invoice = await getInvoice(db, { user: manager }, number);

@@ -50,3 +50,28 @@ Les choix techniques réversibles (bibliothèques, structure) sont documentés d
 |---|---|---|
 | D13 | Logo et couleurs | Logo provisoire typographique remplaçable depuis l'admin ; bleu nuit / bleu électrique / accent orange limité |
 | D14 | Flux Git | Une branche par phase (`feat/phase-2-socle`…), commits conventionnels, fusion dans `main` après validation. Aucun push sans votre accord |
+
+## 3. Décisions du propriétaire (phase 9)
+
+Décisions ouvertes à la fin de la phase 9 (voir `docs/rapports/phase-9.md`), tranchées par le propriétaire et appliquées sur la branche `fix/phase-9-decisions` (section « Correctifs post-phase 9 » du rapport).
+
+| # | Question | Décision finale | Mise en œuvre |
+|---|---|---|---|
+| 1 | Plafond de remboursement d'un retour | **Validé tel quel** : prix payés, remise de la commande déduite au prorata (arrondi en faveur de la boutique), frais de livraison non remboursés par le plafond automatique ; jamais plus que les espèces encore détenues pour la commande | `returns/refund-cap.ts`, `returns/service.ts` (inchangés) |
+| 2 | Une même personne peut-elle créer et décider un retour ? | **Non** : politique de retours ci-dessous (délais, vérification, validation indépendante, remboursement séparé, historique, exceptions) | `returns/*`, permission `returns.decide`, migration `*_owner_decisions` |
+| 3 | Motif d'échec de livraison et nom de la personne qui a reçu le colis montrés au client | **Validé tel quel** ; les observations de livraison restent internes | `deliveries/service.ts` (inchangé) |
+| 4 | Logo hébergé sur un autre site | **Non** : logo **téléversé uniquement** (validation, écran, contrainte en base ; une adresse externe déjà enregistrée est retirée par la migration, auditée). Ajout d'une section **Partenaires** (nom, site https facultatif, logo téléversé, actif, ordre), administrée par `content.manage` et affichée sur l'accueil seulement s'il y a des partenaires actifs. **Aucun logo externe, nulle part** | `settings/*`, `partners/*`, `storage/logo-upload.ts`, `/admin/contenu`, accueil |
+| 5 | Clôture manuelle d'une commande à livrer sans livreur | **Non** : une commande en mode livraison est **toujours** remise au client par un livreur (livraison marquée effectuée). Le retrait en boutique n'est pas concerné | `orders/status.ts`, trigger `orders_delivery_closed_by_courier` |
+| 6 | Bibliothèque Excel | **Validé** : `write-excel-file` (au lieu d'`exceljs`, non maintenu) | inchangé |
+
+### Politique de retours (décision 2)
+
+1. **Délai de déclaration.** Un produit endommagé, défectueux ou non conforme se déclare dans les **48 heures** qui suivent la remise au client : livraison effectuée ou retrait en boutique (date de clôture de la commande). Ce délai commercial **ne limite pas les droits légaux du client** (voir le point 7).
+2. **Délai de traitement.** Le personnel dispose de **24 heures ouvrables** à compter de la déclaration pour commencer le traitement (première action : demande de vérification ou décision). Passé ce délai, la demande **reste ouverte** et **une seule alerte** est envoyée aux administrateurs actifs (tâche planifiée `pnpm orders:expire`). Un retour n'est **jamais annulé ni décidé automatiquement**. Les heures ouvrables sont un paramètre administrable (**Paramètres → Heures ouvrables**) : jours ouvrables et une ou deux plages horaires, heure de Dakar. Valeur par défaut : **du lundi au samedi, de 8 h à 18 h** (24 heures ouvrables ≈ deux jours et demi d'ouverture). Les **jours fériés ne sont pas déduits** : un jour férié ouvrable dans le paramètre compte comme ouvré.
+3. **Validation indépendante.** La personne qui déclare un retour ne peut ni l'accepter ni le refuser. Seul un autre responsable disposant de la permission `returns.decide` (gestionnaire de commandes, administrateurs) décide. Le refus est journalisé (`authz.denied`), vérifié sous verrou et contrôlé en base.
+4. **Vérification.** Avant de décider, le responsable peut demander une **inspection physique**, des **photos**, une **facture** ou des **informations complémentaires** (statut « Vérification demandée », nature et précisions). La réponse ou le résultat est ensuite enregistré (par un responsable, ou par la personne qui reçoit les éléments du client), et le retour revient « à vérifier ».
+5. **Remboursement.** Jamais déclenché automatiquement : l'acceptation fixe un montant (dans les plafonds de la décision 1), puis une **validation distincte et explicite** par une personne autorisée (`payments.correct`) verse le remboursement en espèces, avec son reçu.
+6. **Traçabilité.** Chaque retour a son **historique propre** (déclaration, vérification, réponse, décision, remboursement, alerte de délai : utilisateur, date, statut, motif, décision), en **ajout seul** en base, affiché sur la fiche du retour, en plus du journal d'audit.
+7. **Exceptions.** Une déclaration hors délai est **enregistrée** et marquée **« hors délai »** (indicateur visible et filtrable). Un responsable autorisé peut l'examiner et l'**accepter**, notamment au titre de la **garantie**, d'un **vice caché** ou d'une **obligation légale**, avec un **fondement et un motif d'exception obligatoires**.
+
+Déclaration : aujourd'hui, le **personnel déclare le retour au nom du client** (fiche de la commande, `orders.update`). Le client ne déclare pas lui-même en ligne ; un parcours client (formulaire dans « Mon compte » et le suivi invité, avec photos) reste à décider.

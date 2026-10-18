@@ -56,7 +56,7 @@ export async function getDashboard(client: Db, actor: Actor, now: Date = new Dat
     has("orders.read")
       ? Promise.all([
           client.order.groupBy({ by: ["status"], where: { status: { in: OPEN_ORDER_STATUSES } }, _count: { _all: true } }),
-          client.return.count({ where: { status: { in: ["RECEIVED", "REFUND_PENDING"] } } }),
+          client.return.count({ where: { status: { in: ["RECEIVED", "VERIFICATION", "REFUND_PENDING"] } } }),
         ]).then(([groups, returnsToProcess]) => ({ byStatus: countsOf(groups.map((group) => ({ key: group.status, count: group._count._all }))), returnsToProcess }))
       : null,
     has("orders.read") && has("reports.read")

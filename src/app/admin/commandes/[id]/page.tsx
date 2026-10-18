@@ -50,6 +50,9 @@ export default async function AdminOrderPage({ params }: { params: Promise<{ id:
             ) : (
               <>
                 <TextAreaField name="comment" label="Commentaire" required={false} rows={2} hint="Obligatoire pour une annulation (motif). Visible par le client." />
+                {order.fulfillmentMethod === "DELIVERY" && (
+                  <p className="text-sm text-ink-muted">Commande à livrer : elle est remise au client uniquement par un livreur, en marquant la livraison effectuée.</p>
+                )}
                 <div className="flex flex-wrap gap-2">
                   {order.nextStatuses.map((status) => (
                     <SubmitButton

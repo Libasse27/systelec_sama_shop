@@ -17,7 +17,7 @@ pnpm admin:create             # premier administrateur principal (mot de passe s
 pnpm dev
 ```
 
-Les images téléversées depuis l'administration (produits, logo) sont écrites dans `STORAGE_LOCAL_DIR` (`./storage` par défaut,
+Les images téléversées depuis l'administration (produits, logo, logos des partenaires) sont écrites dans `STORAGE_LOCAL_DIR` (`./storage` par défaut,
 hors Git) : en production, ce dossier doit être un volume persistant et sauvegardé.
 
 Le premier administrateur principal gère ensuite les comptes depuis **Administration → Utilisateurs** (rôles,
@@ -27,7 +27,8 @@ le **Journal d'audit**. Les rapports financiers s'exportent en CSV, Excel (.xlsx
 Sans fournisseur e-mail configuré, un lien de réinitialisation de mot de passe se génère avec
 `pnpm admin:reset-link <email>` (après vérification de l'identité du demandeur).
 
-Les commandes non confirmées libèrent leur stock après le délai de réservation (48 h par défaut) :
+Les commandes non confirmées libèrent leur stock après le délai de réservation (48 h par défaut), et les
+retours sans action après 24 heures ouvrables déclenchent une alerte unique aux administrateurs :
 planifier `pnpm orders:expire` (par exemple toutes les 15 minutes).
 
 Vérifications : `pnpm lint && pnpm typecheck && pnpm test && pnpm build && pnpm test:e2e`.
@@ -46,16 +47,3 @@ Vérifications : `pnpm lint && pnpm typecheck && pnpm test && pnpm build && pnpm
 ## Stack
 
 Next.js (App Router) · React · TypeScript strict · Tailwind CSS · PostgreSQL · Prisma · Better Auth · Vitest · Playwright · pnpm · Docker Compose.
-
-
-
-
-Décisions à confirmer de votre part :
-1. Le remboursement se calcule sur les prix payés, remise déduite au prorata, sans les frais de livraison. Ça vous convient ?
-2. Une même personne peut-elle créer un retour et le valider ? Le remboursement, lui, demande une autre permission.
-3. Le motif d'un échec de livraison et le nom de la personne qui a reçu le colis sont montrés au client. Ça vous va ?
-4. Faut-il garder la possibilité d'utiliser un logo hébergé sur un autre site ?
-5. Une commande à livrer sans livreur assigné peut encore être clôturée à la main. Faut-il le garder ?
-6. Pour l'Excel, l'agent a choisi la bibliothèque write-excel-file au lieu d'exceljs, prévue au départ, parce qu'exceljs n'est plus mis à jour depuis 2024. Vous validez ?
-
-Je commite et pousse la phase 9 ?

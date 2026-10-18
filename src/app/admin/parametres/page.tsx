@@ -1,12 +1,21 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { PageHeader, Section } from "@/components/admin/admin-ui";
-import { ActionForm, CheckboxField, FileField, IntegerField, SubmitButton, TextField } from "@/components/forms/form-controls";
+import { ActionForm, CheckboxField, FileField, GroupErrors, IntegerField, SubmitButton, TextField } from "@/components/forms/form-controls";
 import { requirePermission } from "@/server/auth/session";
 import { db } from "@/server/db/client";
 import { getAllSettings } from "@/server/modules/settings/admin";
-import { UPLOADED_LOGO_PATTERN } from "@/server/modules/settings/schemas";
-import { removeLogoAction, saveCommerceAction, saveCompanyAction, saveFeaturesAction, savePaymentsAction, saveTaxAction, uploadLogoAction } from "./actions";
+import { RETURN_PROCESSING_BUSINESS_HOURS } from "@/server/modules/returns/policy";
+import {
+  removeLogoAction,
+  saveBusinessHoursAction,
+  saveCommerceAction,
+  saveCompanyAction,
+  saveFeaturesAction,
+  savePaymentsAction,
+  saveTaxAction,
+  uploadLogoAction,
+} from "./actions";
 
 export const metadata: Metadata = { title: "Paramètres", robots: { index: false } };
 
@@ -16,12 +25,22 @@ const PAYMENT_METHOD_LABELS = {
   CASH_AFTER_SERVICE: "Espèces après une prestation technique",
 } as const;
 
+const WEEKDAYS = [
+  [1, "Lundi"],
+  [2, "Mardi"],
+  [3, "Mercredi"],
+  [4, "Jeudi"],
+  [5, "Vendredi"],
+  [6, "Samedi"],
+  [7, "Dimanche"],
+] as const;
+
 /** Paramètres administrables (D1 à D8, D13), validés et audités. Aucun moyen de paiement électronique. */
 export default async function SettingsPage() {
   const user = await requirePermission("settings.manage", "/admin/parametres");
   const settings = await getAllSettings(db, user);
-  const { company, commerce, payments, tax, features } = settings;
-  const uploadedLogo = company.logoUrl !== null && UPLOADED_LOGO_PATTERN.test(company.logoUrl);
+  const { company, commerce, payments, tax, features, businessHours } = settings;
+  const [morning, afternoon] = businessHours.ranges;
 
   return (
     <div className="flex flex-col gap-6">
@@ -46,10 +65,6 @@ export default async function SettingsPage() {
             <TextField name="email" label="E-mail" type="email" defaultValue={company.email} required={false} />
             <TextField name="openingHours" label="Horaires" defaultValue={company.openingHours} required={false} />
             <TextField name="address" label="Adresse" defaultValue={company.address} required={false} className="sm:col-span-2" />
-            {!uploadedLogo && (
-              <TextField name="logoUrl" label="Adresse d'un logo hébergé (https)" defaultValue={company.logoUrl} required={false} className="sm:col-span-2" />
-            )}
-            {uploadedLogo && <input type="hidden" name="logoUrl" value={company.logoUrl ?? ""} />}
             <TextField name="socialLinks.facebook" label="Facebook" defaultValue={company.socialLinks.facebook} required={false} />
             <TextField name="socialLinks.instagram" label="Instagram" defaultValue={company.socialLinks.instagram} required={false} />
             <TextField name="socialLinks.linkedin" label="LinkedIn" defaultValue={company.socialLinks.linkedin} required={false} />
@@ -64,10 +79,11 @@ export default async function SettingsPage() {
       <Section title="Logo (D13)">
         <div className="flex flex-col gap-4">
           <p className="text-sm text-ink-muted">
-            {company.logoUrl ? "Logo actuel :" : "Aucun logo : le logo typographique provisoire est affiché."}
+            {company.logoUrl ? "Logo actuel :" : "Aucun logo : le logo typographique provisoire est affiché."} Le logo se téléverse uniquement : aucune adresse
+            externe n&apos;est acceptée.
           </p>
           {company.logoUrl && (
-            // eslint-disable-next-line @next/next/no-img-element -- logo administrable (fichier téléversé ou URL https)
+            // eslint-disable-next-line @next/next/no-img-element -- logo téléversé, servi par /medias
             <img src={company.logoUrl} alt={`Logo actuel de ${company.shopName}`} className="h-12 w-auto self-start rounded bg-brand-navy p-1" />
           )}
           <ActionForm action={uploadLogoAction} resetOnSuccess>
@@ -101,6 +117,32 @@ export default async function SettingsPage() {
           <p className="text-xs text-ink-muted">Devise : franc CFA (XOF). Fuseau : Africa/Dakar. Non modifiables.</p>
           <div>
             <SubmitButton>Enregistrer les règles de commande</SubmitButton>
+          </div>
+        </ActionForm>
+      </Section>
+
+      <Section title="Heures ouvrables (retours)">
+        <ActionForm action={saveBusinessHoursAction}>
+          <p className="text-sm text-ink-muted">
+            Le personnel dispose de {RETURN_PROCESSING_BUSINESS_HOURS} heures ouvrables pour commencer le traitement d&apos;un retour ; au-delà, les administrateurs
+            sont alertés une fois et la demande reste ouverte. Heure de Dakar. Les jours fériés ne sont pas déduits.
+          </p>
+          <fieldset className="flex flex-wrap gap-x-4 gap-y-2">
+            <legend className="mb-1 text-sm font-medium">Jours ouvrables</legend>
+            {WEEKDAYS.map(([day, label]) => (
+              <CheckboxField key={day} name={`day-${day}`} label={label} defaultChecked={businessHours.days.includes(day)} />
+            ))}
+          </fieldset>
+          <GroupErrors name="days" />
+          <div className="grid gap-3 sm:grid-cols-4">
+            <TextField name="ranges.0.start" label="Ouverture" type="time" defaultValue={morning?.start} />
+            <TextField name="ranges.0.end" label="Fermeture" type="time" defaultValue={morning?.end} />
+            <TextField name="ranges.1.start" label="Réouverture" type="time" required={false} defaultValue={afternoon?.start} hint="Après une pause de mi-journée." />
+            <TextField name="ranges.1.end" label="Fermeture du soir" type="time" required={false} defaultValue={afternoon?.end} />
+          </div>
+          <GroupErrors name="ranges" exact />
+          <div>
+            <SubmitButton>Enregistrer les heures ouvrables</SubmitButton>
           </div>
         </ActionForm>
       </Section>

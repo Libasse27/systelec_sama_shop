@@ -88,6 +88,24 @@ export function FormMessages({ state }: { state: ActionState }) {
   return null;
 }
 
+/**
+ * Erreur rattachée à un groupe de champs (cases à cocher, liste) : `exact` n'affiche que l'erreur du
+ * groupe lui-même, pas celles de ses sous-champs (déjà affichées sous chaque champ).
+ */
+export function GroupErrors({ name, exact = false }: { name: string; exact?: boolean }) {
+  const { fieldErrors } = useContext(FormStateContext).state;
+  const errors = exact ? fieldErrors?.[name] : errorsUnder(fieldErrors, name);
+  if (!errors || errors.length === 0) return null;
+  return <p className="text-sm text-red-700">{errors[0]}</p>;
+}
+
+function errorsUnder(fieldErrors: Record<string, string[] | undefined> | undefined, name: string): string[] | undefined {
+  if (!fieldErrors) return undefined;
+  return Object.entries(fieldErrors)
+    .filter(([key]) => key === name || key.startsWith(`${name}.`))
+    .flatMap(([, messages]) => messages ?? []);
+}
+
 interface FieldShellProps {
   name: string;
   label: string;
@@ -242,16 +260,16 @@ export function CheckboxField({ name, label, defaultChecked }: { name: string; l
   );
 }
 
-export function FileField({ name, label, accept, hint }: { name: string; label: string; accept: string; hint?: string }) {
+export function FileField({ name, label, accept, hint, required = true }: { name: string; label: string; accept: string; hint?: string; required?: boolean }) {
   return (
-    <FieldShell name={name} label={label} required hint={hint}>
+    <FieldShell name={name} label={label} required={required} hint={hint}>
       {({ id, describedBy, invalid }) => (
         <input
           id={id}
           name={name}
           type="file"
           accept={accept}
-          required
+          required={required}
           aria-invalid={invalid || undefined}
           aria-describedby={describedBy}
           className="text-sm file:mr-3 file:rounded-md file:border-0 file:bg-surface-muted file:px-3 file:py-2"

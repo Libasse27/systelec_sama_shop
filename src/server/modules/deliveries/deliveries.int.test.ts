@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import type { Actor } from "@/server/authz/service";
 import { syncRolesAndPermissions } from "@/server/authz/sync";
 import { db } from "@/server/db/client";
+import { getAdminOrder } from "@/server/modules/orders/queries";
 import { changeOrderStatus } from "@/server/modules/orders/status";
 import { resetDatabase } from "../../../../tests/setup/db";
 import { actorWith } from "../../../../tests/support/actors";
@@ -112,7 +113,40 @@ describe("livraisons détaillées (PostgreSQL)", () => {
     const order = await inTransit();
     await expect(changeOrderStatus(db, manager, order.id, { status: "CANCELLED", comment: "Client injoignable" })).rejects.toThrow(/Livraison en cours/);
     await payInFull(dispatcher, order);
-    await expect(changeOrderStatus(db, manager, order.id, { status: "CLOSED" })).rejects.toThrow(/marquant la livraison effectuée/);
+    await expect(changeOrderStatus(db, manager, order.id, { status: "CLOSED" })).rejects.toThrow(/uniquement par un livreur/);
+  });
+
+  it("décision 5 : une commande à livrer ne se remet jamais à la main, même soldée et sans livreur ; le retrait reste manuel", async () => {
+    const order = await deliveryOrder();
+    await readyOrder(manager, order, "DELIVERY");
+    await payInFull(dispatcher, order);
+    await expect(changeOrderStatus(db, manager, order.id, { status: "CLOSED" })).rejects.toThrow(/uniquement par un livreur/);
+    // Livreur assigné mais pas parti : toujours pas de remise manuelle.
+    await assignCourier(db, dispatcher, order.id, { courierId });
+    await expect(changeOrderStatus(db, manager, order.id, { status: "CLOSED" })).rejects.toThrow(/uniquement par un livreur/);
+    expect(await orderStatus(order.id)).toBe("READY_TO_SHIP");
+    // Le statut « Remise au client » n'est pas proposé pour une commande à livrer.
+    const view = await getAdminOrder(db, manager, order.id);
+    expect(view?.nextStatuses).toEqual(["CANCELLED"]);
+
+    // Seule la livraison effectuée la remet au client.
+    await startDelivery(db, dispatcher, order.id);
+    await completeDelivery(db, dispatcher, order.id, { recipientName: "Awa Diop" });
+    expect(await orderStatus(order.id)).toBe("CLOSED");
+
+    const pickup = await confirmedOrder(fixtures, manager);
+    await readyOrder(manager, pickup);
+    expect((await getAdminOrder(db, manager, pickup.id))?.nextStatuses).toEqual(["CLOSED", "CANCELLED"]);
+  });
+
+  it("décision 5 en base : clôture d'une commande à livrer sans livraison effectuée refusée, même par SQL direct", async () => {
+    const order = await deliveryOrder();
+    await readyOrder(manager, order, "DELIVERY");
+    await payInFull(dispatcher, order);
+    await expect(db.order.update({ where: { id: order.id }, data: { status: "CLOSED", closedAt: new Date() } })).rejects.toThrow(/que par une livraison effectuée/);
+    await assignCourier(db, dispatcher, order.id, { courierId });
+    await expect(db.order.update({ where: { id: order.id }, data: { status: "CLOSED", closedAt: new Date() } })).rejects.toThrow(/que par une livraison effectuée/);
+    expect(await orderStatus(order.id)).toBe("READY_TO_SHIP");
   });
 
   it("droits : seul deliveries.manage pilote les livraisons ; refus journalisé", async () => {

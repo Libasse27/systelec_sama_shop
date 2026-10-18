@@ -20,7 +20,7 @@ export function paymentStatusFor(total: number, amountPaid: number): PaymentStat
  */
 export function orderPaymentStatus(input: { total: number; amountPaid: number; refundedAmount: number; returns: readonly ReturnStatus[] }): PaymentStatus {
   if (input.returns.includes("REFUND_PENDING")) return "REFUND_PENDING";
-  if (input.returns.includes("RECEIVED")) return "TO_VERIFY";
+  if (input.returns.includes("RECEIVED") || input.returns.includes("VERIFICATION")) return "TO_VERIFY";
   if (input.refundedAmount > 0) return "REFUNDED";
   return paymentStatusFor(input.total, input.amountPaid + input.refundedAmount);
 }

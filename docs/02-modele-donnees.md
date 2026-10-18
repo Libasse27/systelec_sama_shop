@@ -63,17 +63,28 @@ Statuts (enums distincts) :
 
 `DeliveryStatus` (phase 9) : `ASSIGNED` (livreur assigné), `IN_TRANSIT`, `DELIVERED`, `FAILED` (motif obligatoire). Le retrait en boutique reste porté par le statut de la commande (`READY_FOR_PICKUP` → `CLOSED`).
 
+Décision 5 : une commande `DELIVERY` ne passe à `CLOSED` qu'avec une livraison `DELIVERED` dans la même transaction (trigger différé `orders_delivery_closed_by_courier`) ; aucune clôture manuelle.
+
 ## 6. Encaissements, factures, retours
 
 | Modèle | Champs clés | Notes |
 |---|---|---|
 | `Payment` | receiptNumber (unique), orderId? / interventionId? (exactement un — `CHECK`), amount (> 0, ou < 0 pour une contre-écriture), method (`CASH` uniquement), balanceAfter, recordedById, idempotencyKey?, reversesPaymentId? (unique), reason?, note (interne), createdAt | Ajout seul (trigger). Annulation = contre-écriture liée ; « annulé » se lit sur l'existence de la contre-écriture (pas de colonne `status` modifiable). Date d'encaissement = createdAt. `orders.amountPaid` et `interventions.amountPaid` = Σ amount, contrôlés par un trigger différé. Remplace `PaymentReceipt` (le reçu est généré depuis cette ligne) |
 | `Invoice` | number (unique), orderId? / interventionId? (exactement un — `CHECK`), issuedAt, lines (json), customer (json), total, issuedById | Document commercial figé (ajout seul), pas une comptabilité réglementaire. PDF généré à la demande (pas de `pdfUrl`) |
-| `Return` | number `RET-…` (unique), orderId, idempotencyKey (unique), status, reason, itemsValue, refundAmount, restocked?, decisionNote?, createdById, decidedById?, decidedAt?, refundedAt? | Commande remise (`CLOSED`) seulement. Contenu figé, décision définitive (triggers) |
+| `Return` | number `RET-…` (unique), orderId, idempotencyKey (unique), status, reason, itemsValue, refundAmount, restocked?, decisionNote?, createdById, decidedById?, decidedAt?, refundedAt?, handedOverAt, declarationDeadline, lateDeclaration, exceptionGround?, exceptionNote?, firstActionAt?, overdueNotifiedAt? | Commande remise (`CLOSED`) seulement. Contenu et délais figés, décision définitive, décidée par une autre personne que le déclarant (triggers) |
+| `ReturnEvent` | returnId, type, fromStatus?, toStatus, actorId?, comment?, verificationKind?, details (json), createdAt | Historique propre au retour, **ajout seul** (trigger) ; `toStatus` = statut du retour à l'écriture |
 | `ReturnItem` | returnId, orderItemId, quantity, unitPrice (figé) | Ajout seul ; quantité retournée ≤ quantité livrée, retours refusés exclus (trigger sous verrou de la ligne de commande) |
 | `Expense` | date, category, amount, label, recordedById | Module optionnel |
 
-`ReturnStatus` (phase 9) : `RECEIVED` (à vérifier), `REFUND_PENDING`, `COMPLETED`, `REJECTED`.
+`ReturnStatus` (phase 9, complété après la phase 9) : `RECEIVED` (à vérifier), `VERIFICATION` (vérification demandée, en attente de réponse), `REFUND_PENDING`, `COMPLETED`, `REJECTED`. Cycle : `RECEIVED` → (`VERIFICATION` → `RECEIVED`)* → `REFUND_PENDING` | `COMPLETED` | `REJECTED` ; `REFUND_PENDING` → `COMPLETED`.
+
+**Politique de retours (décision 2, voir `03-plan-et-decisions.md`)**, garantie en base :
+- `handedOverAt` (clôture de la commande), `declarationDeadline` (= remise + 48 h), `lateDeclaration` et `createdAt` sont **posés par le trigger d'insertion**, puis figés ; contrainte `returns_declaration_check`.
+- Décision (`RECEIVED` → décision) : `decidedById ≠ createdById` ; hors délai accepté seulement avec `exceptionGround` (`WARRANTY`, `HIDDEN_DEFECT`, `LEGAL_OBLIGATION`, `OTHER`) et `exceptionNote` (contrainte `returns_exception_check` et trigger).
+- `firstActionAt` posé par la base à la première sortie de `RECEIVED` (vérification ou décision) ; `overdueNotifiedAt` (alerte unique de délai) ; tous deux figés une fois posés.
+- Échéance de traitement : `createdAt` + 24 heures ouvrables (paramètre `businessHours`), calculée par l'application (non stockée : un changement d'horaires s'applique aux retours ouverts).
+- `ReturnVerificationKind` : `INSPECTION`, `PHOTOS`, `INVOICE`, `INFORMATION` ; `ReturnEventType` : `DECLARED`, `VERIFICATION_REQUESTED`, `VERIFICATION_ANSWERED`, `ACCEPTED`, `REJECTED`, `REFUNDED`, `OVERDUE_NOTIFIED`.
+- Reprise : les retours existants reçoivent leur date de remise (clôture de la commande), leur délai, leur indicateur, `firstActionAt` = date de décision, et un historique reconstitué (marqué `reprise`).
 
 **Remboursements (phase 9)** : un remboursement est une écriture `Payment` négative liée au retour (`returnId`, unique), distincte d'une contre-écriture (`reversesPaymentId`). `Order.refundedAmount` = somme des remboursements ; `Order.amountPaid` reste la somme de toutes les écritures (net). Contrôles en base : `amountPaid + refundedAmount ≤ total`, `amountPaid ≥ 0` (jamais plus remboursé qu'encaissé), montant égal au remboursement décidé, retour en attente de remboursement, cohérence vérifiée à la validation (trigger différé). Un remboursement ne s'annule pas.
 
@@ -102,10 +113,11 @@ Statuts (enums distincts) :
 
 | Modèle | Champs clés | Notes |
 |---|---|---|
-| `SiteSetting` | key (unique), value (json), updatedById | Valeurs validées par schéma Zod par clé ; **aucune clé de paiement électronique**. Clés : `company` (dont NINEA, RCCM, logo téléversé ou URL https), `commerce` (D1, D2, D3), `payments`, `tax` (D6, phase 9), `features` (D8, phase 9) |
+| `SiteSetting` | key (unique), value (json), updatedById | Valeurs validées par schéma Zod par clé ; **aucune clé de paiement électronique**. Clés : `company` (dont NINEA, RCCM, logo **téléversé uniquement**, contrainte `site_settings_logo_check`), `commerce` (D1, D2, D3), `payments`, `tax` (D6, phase 9), `features` (D8, phase 9), `businessHours` (jours et plages ouvrables, décision 2) |
 | `Page` | slug, title, body, seo, isPublished | CGV, livraison, garantie, confidentialité, à propos |
 | `FaqItem`, `Banner` | … | |
-| `Notification` | channel (`EMAIL`/`SMS`/`WHATSAPP`), template, recipient, payload, status (`PENDING`/`SENT`/`FAILED`/`SKIPPED_NO_PROVIDER`), error, sentAt | Envoi réel uniquement si fournisseur configuré |
+| `Notification` | channel (`EMAIL`/`SMS`/`WHATSAPP`), template, recipient, payload, status (`PENDING`/`SENT`/`FAILED`/`SKIPPED_NO_PROVIDER`), error, sentAt, orderId? / quoteRequestId? / quoteId? / interventionId? / returnId? | Envoi réel uniquement si fournisseur configuré. `returnId` : alerte interne de délai de traitement d'un retour |
+| `Partner` | name, websiteUrl? (https), logoUrl (téléversé), isActive, position | Partenaires affichés sur l'accueil (actifs seulement). Logo téléversé uniquement et lien https : contrainte `partners_fields_check` |
 | `Review` | productId, customerId, orderItemId (achat vérifié), rating, body, status (`PENDING`/`APPROVED`/`REJECTED`) | Désactivable ; jamais d'avis fictifs |
 | `Sequence` | key, year, value | Numérotation |
 
@@ -123,3 +135,12 @@ Statuts (enums distincts) :
 - `Order.refundedAmount` ajouté ; `Payment.returnId` ajouté.
 - `Address` (adresses enregistrées du client) : reporté en phase 10, avec l'adaptation du formulaire de commande.
 - `Expense`, `Review`, `Banner`, `SupportTicket`, `Favorite` : non créés (hors périmètre de la phase 9).
+
+## Correctifs post-phase 9 (décisions du propriétaire)
+
+- `Return` : délais et exception (voir §6), `ReturnEvent` (historique propre), statut `VERIFICATION`, permission `returns.decide`.
+- `Notification.returnId` (alertes internes de délai).
+- `Partner` (logos téléversés uniquement).
+- `SiteSetting` : clé `businessHours` ; logo du site téléversé uniquement (contrainte en base).
+- `Order` : clôture d'une commande à livrer réservée à la livraison effectuée (trigger).
+- Migrations `20261018090000_return_verification_status` (valeur d'énumération, séparée : utilisable seulement après validation) et `20261018090100_owner_decisions`.
