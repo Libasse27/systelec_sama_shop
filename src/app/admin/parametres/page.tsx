@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { PageHeader, Section } from "@/components/admin/admin-ui";
-import { ActionForm, CheckboxField, FileField, GroupErrors, IntegerField, SubmitButton, TextField } from "@/components/forms/form-controls";
+import { ActionForm, CheckboxField, FileField, GroupErrors, IntegerField, SubmitButton, TextAreaField, TextField } from "@/components/forms/form-controls";
 import { requirePermission } from "@/server/auth/session";
 import { db } from "@/server/db/client";
 import { getAllSettings } from "@/server/modules/settings/admin";
@@ -121,11 +121,12 @@ export default async function SettingsPage() {
         </ActionForm>
       </Section>
 
-      <Section title="Heures ouvrables (retours)">
+      <Section title="Heures ouvrables et jours fériés (retours)">
         <ActionForm action={saveBusinessHoursAction}>
           <p className="text-sm text-ink-muted">
-            Le personnel dispose de {RETURN_PROCESSING_BUSINESS_HOURS} heures ouvrables pour commencer le traitement d&apos;un retour ; au-delà, les administrateurs
-            sont alertés une fois et la demande reste ouverte. Heure de Dakar. Les jours fériés ne sont pas déduits.
+            Tous les délais des retours se comptent en heures ouvrables, heure de Dakar : {RETURN_PROCESSING_BUSINESS_HOURS} heures pour commencer le traitement
+            (au-delà, les administrateurs sont alertés une fois et la demande reste ouverte). Les week-ends non cochés et
+            les jours fériés du calendrier ne sont jamais comptés.
           </p>
           <fieldset className="flex flex-wrap gap-x-4 gap-y-2">
             <legend className="mb-1 text-sm font-medium">Jours ouvrables</legend>
@@ -141,6 +142,14 @@ export default async function SettingsPage() {
             <TextField name="ranges.1.end" label="Fermeture du soir" type="time" required={false} defaultValue={afternoon?.end} />
           </div>
           <GroupErrors name="ranges" exact />
+          <TextAreaField
+            name="holidays"
+            label="Jours fériés"
+            rows={5}
+            required={false}
+            defaultValue={businessHours.holidays.join("\n")}
+            hint="Une date par ligne, au format AAAA-MM-JJ (ex. : 2026-12-25). Ajoutez chaque année les fêtes mobiles (Korité, Tabaski, Tamkharit, Maouloud, lundi de Pâques…)."
+          />
           <div>
             <SubmitButton>Enregistrer les heures ouvrables</SubmitButton>
           </div>

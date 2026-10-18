@@ -1,13 +1,15 @@
 /**
  * Heures ouvrables de la boutique (paramètre « businessHours »), à Dakar.
  * Dakar est à UTC+0 toute l'année (pas d'heure d'été) : l'heure locale est l'heure UTC.
- * Les jours fériés ne sont pas gérés : un jour férié ouvrable dans le paramètre compte comme ouvré.
+ * Les jours fériés du calendrier administrable (phase 10, décision 3) ne sont pas comptés.
  */
 export interface BusinessHours {
   /** Jours ouvrables, ISO : 1 = lundi … 7 = dimanche. */
   days: readonly number[];
   /** Plages horaires de chaque jour ouvrable (HH:MM, fin exclue), sans chevauchement. */
   ranges: readonly { start: string; end: string }[];
+  /** Jours fériés (AAAA-MM-JJ, heure de Dakar) : jamais comptés, même s'ils tombent un jour ouvrable. */
+  holidays?: readonly string[];
 }
 
 const MINUTE_MS = 60_000;
@@ -26,9 +28,17 @@ export function isoWeekday(date: Date): number {
   return ((date.getUTCDay() + 6) % 7) + 1;
 }
 
+/** Date civile (AAAA-MM-JJ) d'un instant, à Dakar. */
+const civilDate = (date: Date): string => date.toISOString().slice(0, 10);
+
+/** Vrai si le jour de cet instant est ouvrable et n'est pas férié. */
+export function isBusinessDay(date: Date, schedule: BusinessHours): boolean {
+  return schedule.days.includes(isoWeekday(date)) && !(schedule.holidays ?? []).includes(civilDate(date));
+}
+
 /**
  * Instant atteint après `hours` heures ouvrables comptées à partir de `start` : le temps hors des
- * plages (soirée, nuit, jours non ouvrables) n'est pas compté. Une demande faite le soir commence
+ * plages (soirée, nuit, jours non ouvrables, jours fériés) n'est pas compté. Une demande faite le soir commence
  * à courir à l'ouverture suivante.
  */
 export function addBusinessHours(start: Date, hours: number, schedule: BusinessHours): Date {
@@ -38,7 +48,7 @@ export function addBusinessHours(start: Date, hours: number, schedule: BusinessH
   const firstDay = Math.floor(start.getTime() / DAY_MS) * DAY_MS;
   for (let index = 0; index < MAX_DAYS_SCANNED; index += 1) {
     const dayStart = firstDay + index * DAY_MS;
-    if (!schedule.days.includes(isoWeekday(new Date(dayStart)))) continue;
+    if (!isBusinessDay(new Date(dayStart), schedule)) continue;
     for (const range of ranges) {
       const from = Math.max(start.getTime(), dayStart + range.start * MINUTE_MS);
       const to = dayStart + range.end * MINUTE_MS;

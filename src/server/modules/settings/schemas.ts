@@ -75,9 +75,23 @@ export const featureSettingsSchema = z
 const TIME_OF_DAY = /^(?:[01]\d|2[0-3]):[0-5]\d$/;
 const timeOfDay = z.string().regex(TIME_OF_DAY, "Heure au format HH:MM (00:00 à 23:59)");
 
+/** Date civile réelle AAAA-MM-JJ (le 30 février est refusé). */
+const civilDate = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, "Date au format AAAA-MM-JJ")
+  .refine((value) => {
+    const date = new Date(`${value}T00:00:00Z`);
+    return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
+  }, "Date invalide");
+
+/** Jours fériés enregistrables au plus (plusieurs années d'avance). */
+export const MAX_HOLIDAYS = 200;
+
 /**
- * Heures ouvrables (décision 2 : délai de traitement des retours), à Dakar (UTC+0 toute l'année).
- * Jours ISO (1 = lundi … 7 = dimanche) et une ou deux plages par jour ouvrable. Jours fériés non gérés.
+ * Heures ouvrables (délai de traitement des retours), à Dakar (UTC+0 toute l'année).
+ * Jours ISO (1 = lundi … 7 = dimanche), une ou deux plages par jour ouvrable, et calendrier des jours
+ * fériés (phase 10, décision 3) : un jour férié n'est jamais compté. Absent d'un paramètre enregistré
+ * avant la phase 10 : aucun jour férié.
  */
 export const businessHoursSchema = z
   .object({
@@ -98,6 +112,12 @@ export const businessHoursSchema = z
       .max(2, "Deux plages au plus")
       .transform((ranges) => [...ranges].sort((a, b) => a.start.localeCompare(b.start)))
       .refine((ranges) => ranges.every((range, index) => index === 0 || ranges[index - 1]!.end <= range.start), "Les plages horaires se chevauchent"),
+    holidays: z
+      .array(civilDate)
+      .max(MAX_HOLIDAYS, `${MAX_HOLIDAYS} jours fériés au plus`)
+      .refine((days) => new Set(days).size === days.length, "Jour férié en double")
+      .transform((days) => [...days].sort())
+      .default([]),
   })
   .strict();
 
@@ -143,6 +163,9 @@ export const settingsDefaults: { [K in SettingKey]: SettingValue<K> } = {
   },
   tax: { vatDetailEnabled: false, vatRate: 18 },
   features: { reviewsEnabled: false },
-  // Lundi à samedi, 8 h – 18 h : 24 heures ouvrables ≈ 2 jours et demi d'ouverture.
-  businessHours: { days: [1, 2, 3, 4, 5, 6], ranges: [{ start: "08:00", end: "18:00" }] },
+  // Horaires validés en phase 9 : lundi à samedi, 8 h – 18 h (24 heures ouvrables ≈ 2 jours et demi
+  // d'ouverture). La proposition lundi–vendredi, 9 h – 17 h (phase 10) n'est pas retenue par défaut tant
+  // qu'elle n'est pas formellement approuvée ; un administrateur peut changer les horaires à l'écran.
+  // Aucun jour férié n'est inventé : le calendrier se saisit dans l'administration.
+  businessHours: { days: [1, 2, 3, 4, 5, 6], ranges: [{ start: "08:00", end: "18:00" }], holidays: [] },
 };

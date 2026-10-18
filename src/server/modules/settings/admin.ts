@@ -14,7 +14,7 @@ const SETTING_LABELS: Record<SettingKey, string> = {
   payments: "Moyens de règlement",
   tax: "TVA",
   features: "Fonctions",
-  businessHours: "Heures ouvrables",
+  businessHours: "Heures ouvrables et jours fériés",
 };
 
 /** Paramètres modifiables par écran : tous, sauf la devise et le fuseau (imposés par le schéma). */

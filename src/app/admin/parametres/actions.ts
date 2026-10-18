@@ -112,7 +112,12 @@ export async function saveBusinessHoursAction(_state: ActionState, formData: For
     await saveSettings(db, actor, "businessHours", {
       days: [1, 2, 3, 4, 5, 6, 7].filter((day) => checkbox(formData, `day-${day}`)),
       ranges: businessRanges(formData),
+      // Une date par ligne (ou séparées par des virgules), AAAA-MM-JJ.
+      holidays: (text(formData, "holidays") ?? "")
+        .split(/[\n,;]+/)
+        .map((line) => line.trim())
+        .filter(Boolean),
     });
-    return "Heures ouvrables enregistrées.";
+    return "Heures ouvrables et jours fériés enregistrés.";
   });
 }

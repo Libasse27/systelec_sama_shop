@@ -40,9 +40,11 @@ describe("paramètres : schémas", () => {
 
   it("heures ouvrables : jours ISO, une ou deux plages ordonnées sans chevauchement", () => {
     const parse = (value: unknown) => settingsSchemas.businessHours.safeParse(value);
-    expect(settingsDefaults.businessHours).toEqual({ days: [1, 2, 3, 4, 5, 6], ranges: [{ start: "08:00", end: "18:00" }] });
+    // Horaires de la phase 9 conservés par défaut (lundi–samedi, 8 h – 18 h) ; jours fériés à saisir.
+    expect(settingsDefaults.businessHours).toEqual({ days: [1, 2, 3, 4, 5, 6], ranges: [{ start: "08:00", end: "18:00" }], holidays: [] });
     const split = parse({ days: [5, 1], ranges: [{ start: "15:00", end: "18:00" }, { start: "08:00", end: "13:00" }] });
-    expect(split.success && split.data).toEqual({ days: [1, 5], ranges: [{ start: "08:00", end: "13:00" }, { start: "15:00", end: "18:00" }] });
+    // Paramètre enregistré avant la phase 10 (sans jours fériés) : toujours lisible.
+    expect(split.success && split.data).toEqual({ days: [1, 5], ranges: [{ start: "08:00", end: "13:00" }, { start: "15:00", end: "18:00" }], holidays: [] });
     expect(parse({ days: [], ranges: [{ start: "08:00", end: "18:00" }] }).success).toBe(false);
     expect(parse({ days: [0], ranges: [{ start: "08:00", end: "18:00" }] }).success).toBe(false);
     expect(parse({ days: [1, 1], ranges: [{ start: "08:00", end: "18:00" }] }).success).toBe(false);
@@ -50,6 +52,16 @@ describe("paramètres : schémas", () => {
     expect(parse({ days: [1], ranges: [{ start: "8:00", end: "18:00" }] }).success).toBe(false);
     expect(parse({ days: [1], ranges: [{ start: "08:00", end: "14:00" }, { start: "13:00", end: "18:00" }] }).success).toBe(false);
     expect(parse({ days: [1], ranges: [] }).success).toBe(false);
+  });
+
+  it("jours fériés : dates réelles AAAA-MM-JJ, triées, sans doublon, en nombre borné", () => {
+    const parse = (holidays: unknown) => settingsSchemas.businessHours.safeParse({ ...settingsDefaults.businessHours, holidays });
+    const sorted = parse(["2026-12-25", "2026-04-04"]);
+    expect(sorted.success && sorted.data.holidays).toEqual(["2026-04-04", "2026-12-25"]);
+    expect(parse(["2026-02-30"]).success).toBe(false);
+    expect(parse(["25/12/2026"]).success).toBe(false);
+    expect(parse(["2026-12-25", "2026-12-25"]).success).toBe(false);
+    expect(parse(Array.from({ length: 201 }, (_, index) => new Date(Date.UTC(2026, 0, 1 + index)).toISOString().slice(0, 10))).success).toBe(false);
   });
 
   it("impose la devise XOF et le fuseau Africa/Dakar", () => {

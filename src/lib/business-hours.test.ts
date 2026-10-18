@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addBusinessHours, isoWeekday, type BusinessHours } from "./business-hours";
+import { addBusinessHours, isBusinessDay, isoWeekday, type BusinessHours } from "./business-hours";
 
 /** Lundi à samedi, 8 h – 18 h (valeur par défaut). */
 const DEFAULT: BusinessHours = { days: [1, 2, 3, 4, 5, 6], ranges: [{ start: "08:00", end: "18:00" }] };
@@ -48,6 +48,41 @@ describe("heures ouvrables (Dakar)", () => {
 
   it("une limite tombant exactement sur une fermeture reste dans la journée", () => {
     expect(addBusinessHours(at("2026-10-19T08:00:00"), 10, DEFAULT)).toEqual(at("2026-10-19T18:00:00"));
+  });
+
+  describe("jours fériés (calendrier administrable, phase 10)", () => {
+    /** Lundi à vendredi, 9 h – 17 h (horaires paramétrables), mardi 20 et mercredi 21 fériés. */
+    const WITH_HOLIDAYS: BusinessHours = { days: [1, 2, 3, 4, 5], ranges: [{ start: "09:00", end: "17:00" }], holidays: ["2026-10-20", "2026-10-21"] };
+
+    it("un jour férié ouvrable n'est pas compté : le décompte saute au jour ouvré suivant", () => {
+      // Lundi 16 h + 2 h : 1 h lundi, mardi et mercredi fériés, jeudi 9 h + 1 h → jeudi 10 h.
+      expect(addBusinessHours(at("2026-10-19T16:00:00"), 2, WITH_HOLIDAYS)).toEqual(at("2026-10-22T10:00:00"));
+    });
+
+    it("demande reçue un jour férié : rien ne court avant l'ouverture du jour ouvré suivant", () => {
+      expect(addBusinessHours(at("2026-10-20T10:00:00"), 1, WITH_HOLIDAYS)).toEqual(at("2026-10-22T10:00:00"));
+    });
+
+    it("vendredi 16 h + 24 heures ouvrables : ni samedi ni dimanche, puis lundi férié sauté", () => {
+      const schedule: BusinessHours = { days: [1, 2, 3, 4, 5], ranges: [{ start: "09:00", end: "17:00" }], holidays: ["2026-10-26"] };
+      // 1 h vendredi, week-end, lundi 26 férié, mardi 8 h, mercredi 8 h, jeudi 7 h → jeudi 16 h.
+      expect(addBusinessHours(at("2026-10-23T16:00:00"), 24, schedule)).toEqual(at("2026-10-29T16:00:00"));
+      // Sans jour férié : lundi 8 h, mardi 8 h, mercredi 7 h → mercredi 16 h.
+      expect(addBusinessHours(at("2026-10-23T16:00:00"), 24, { ...schedule, holidays: [] })).toEqual(at("2026-10-28T16:00:00"));
+    });
+
+    it("un jour férié tombant un jour non ouvrable ne change rien ; changement de jour à minuit", () => {
+      const sunday: BusinessHours = { ...WITH_HOLIDAYS, holidays: ["2026-10-25"] };
+      expect(addBusinessHours(at("2026-10-23T16:00:00"), 2, sunday)).toEqual(at("2026-10-26T10:00:00"));
+      // 23 h 59 la veille d'un férié : départ au jour ouvré suivant le férié.
+      expect(addBusinessHours(at("2026-10-19T23:59:00"), 1, WITH_HOLIDAYS)).toEqual(at("2026-10-22T10:00:00"));
+    });
+
+    it("isBusinessDay : jour ouvrable et non férié", () => {
+      expect(isBusinessDay(at("2026-10-19T12:00:00"), WITH_HOLIDAYS)).toBe(true);
+      expect(isBusinessDay(at("2026-10-20T12:00:00"), WITH_HOLIDAYS)).toBe(false);
+      expect(isBusinessDay(at("2026-10-24T12:00:00"), WITH_HOLIDAYS)).toBe(false);
+    });
   });
 
   it("refuse un nombre d'heures invalide et un paramètre sans jour ouvrable", () => {
