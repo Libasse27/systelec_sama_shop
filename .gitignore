@@ -22,9 +22,9 @@ coverage/
 playwright-report/
 test-results/
 
-# fichiers téléversés en local
-storage/
-storage-e2e/
+# fichiers téléversés en local (à la racine seulement : src/server/storage/ est du code versionné)
+/storage/
+/storage-e2e/
 
 # outils
 graphify-out/
