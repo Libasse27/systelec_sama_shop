@@ -1,0 +1,51 @@
+import Link from "next/link";
+import type { Permission } from "@/server/authz/permissions";
+import { getCurrentUser } from "@/server/auth/session";
+
+/** Entrée visible si l'utilisateur a l'une des permissions indiquées. */
+const NAVIGATION: { href: string; label: string; permission: Permission | readonly Permission[] }[] = [
+  { href: "/admin", label: "Tableau de bord", permission: "admin.access" },
+  { href: "/admin/commandes", label: "Commandes", permission: "orders.read" },
+  { href: "/admin/livraisons", label: "Livraisons", permission: "deliveries.manage" },
+  { href: "/admin/mes-livraisons", label: "Mes livraisons", permission: "deliveries.update_own" },
+  { href: "/admin/retours", label: "Retours", permission: "orders.read" },
+  { href: "/admin/encaissements", label: "Encaissements", permission: "payments.read" },
+  { href: "/admin/rapports", label: "Rapports", permission: "reports.read" },
+  { href: "/admin/demandes", label: "Demandes de devis", permission: "quotes.read" },
+  { href: "/admin/interventions", label: "Interventions", permission: ["interventions.read", "interventions.manage", "interventions.update_own"] },
+  { href: "/admin/planning", label: "Planning", permission: ["interventions.read", "interventions.manage", "interventions.update_own"] },
+  { href: "/admin/techniciens", label: "Techniciens", permission: "interventions.manage" },
+  { href: "/admin/produits", label: "Produits", permission: "products.read" },
+  { href: "/admin/categories", label: "Catégories", permission: "categories.manage" },
+  { href: "/admin/stock", label: "Stock", permission: "inventory.read" },
+  { href: "/admin/import-export", label: "Import / export", permission: "products.read" },
+  { href: "/admin/livraison", label: "Livraison et retrait", permission: "deliveries.manage" },
+  { href: "/admin/contenu", label: "Contenu", permission: "content.manage" },
+  { href: "/admin/utilisateurs", label: "Utilisateurs", permission: "users.manage" },
+  { href: "/admin/parametres", label: "Paramètres", permission: "settings.manage" },
+  { href: "/admin/audit", label: "Journal d'audit", permission: "audit.read" },
+];
+
+/** Navigation de l'administration. La garde d'accès reste dans chaque page et chaque service. */
+export default async function AdminLayout({ children }: { children: React.ReactNode }) {
+  const user = await getCurrentUser();
+  const links = user?.permissions.has("admin.access") ? NAVIGATION.filter((item) => [item.permission].flat().some((permission) => user.permissions.has(permission))) : [];
+  return (
+    <div className="mx-auto flex max-w-7xl flex-col gap-6 px-4 py-6 lg:flex-row">
+      {links.length > 0 && (
+        <nav aria-label="Administration" className="lg:w-52 lg:shrink-0">
+          <ul className="flex gap-1 overflow-x-auto lg:flex-col">
+            {links.map((item) => (
+              <li key={item.href}>
+                <Link href={item.href} className="block whitespace-nowrap rounded-lg px-3 py-2 text-sm font-medium hover:bg-surface-muted">
+                  {item.label}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </nav>
+      )}
+      <main className="min-w-0 flex-1">{children}</main>
+    </div>
+  );
+}

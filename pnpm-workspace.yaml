@@ -1,0 +1,6 @@
+# Scripts d'installation autorisés (tous les autres sont bloqués par pnpm).
+allowBuilds:
+  '@prisma/engines': true
+  esbuild: true
+  prisma: true
+  unrs-resolver: true

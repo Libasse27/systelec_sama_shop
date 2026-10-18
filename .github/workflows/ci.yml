@@ -1,0 +1,65 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: systelec
+          POSTGRES_PASSWORD: systelec_test
+          POSTGRES_DB: systelec_test
+        ports:
+          - 5434:5432
+        options: >-
+          --health-cmd "pg_isready -U systelec -d systelec_test"
+          --health-interval 5s --health-timeout 3s --health-retries 10
+    env:
+      APP_ENV: test
+      DATABASE_URL: postgresql://systelec:systelec_test@localhost:5434/systelec_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # Secret de session éphémère, propre à chaque exécution (jamais versionné).
+      - run: echo "AUTH_SECRET=$(openssl rand -base64 32)" >> "$GITHUB_ENV"
+      - run: |
+          cp .env.example .env.test
+          sed -i "s#^DATABASE_URL=.*#DATABASE_URL=${DATABASE_URL}#; s#^APP_ENV=.*#APP_ENV=test#; s#^AUTH_SECRET=.*#AUTH_SECRET=${AUTH_SECRET}#" .env.test
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm build
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm test:e2e
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: test-results/
+          retention-days: 7
+
+  # Image de production (phase 10) : les deux cibles se construisent, et l'image servie ne contient aucune
+  # vulnérabilité connue de gravité élevée ou critique (sinon l'intégration échoue).
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build --target app -t systelec-sama-shop:ci .
+      - run: docker build --target tools -t systelec-sama-shop-tools:ci .
+      - run: >-
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:0.67.2
+          image --quiet --scanners vuln,secret --severity HIGH,CRITICAL --exit-code 1 systelec-sama-shop:ci

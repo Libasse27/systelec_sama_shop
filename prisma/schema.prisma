@@ -1,0 +1,1217 @@
+// SYSTELEC SAMA-SHOP — schéma de données.
+// Les modèles sont ajoutés phase par phase (voir docs/02-modele-donnees.md).
+// Montants : Int en FCFA. Dates : timestamptz (UTC).
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── Identité (tables Better Auth + champs SYSTELEC) ──────────────────────────
+
+enum UserKind {
+  STAFF
+  CUSTOMER
+}
+
+/// Utilisateur. Le mot de passe (haché) est dans Account ; il n'est jamais lisible.
+model User {
+  id            String      @id
+  name          String
+  email         String      @unique
+  emailVerified Boolean     @default(false)
+  image         String?
+  phone         String?
+  kind          UserKind    @default(CUSTOMER)
+  isActive      Boolean     @default(true)
+  createdAt     DateTime    @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime    @updatedAt @db.Timestamptz(3)
+  sessions      Session[]
+  accounts      Account[]
+  roles         UserRole[]
+  payments      Payment[]
+  technician    Technician?
+  courier       Courier?
+
+  @@map("users")
+}
+
+model Session {
+  id        String   @id
+  token     String   @unique
+  expiresAt DateTime @db.Timestamptz(3)
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+model Account {
+  id                    String    @id
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime? @db.Timestamptz(3)
+  refreshTokenExpiresAt DateTime? @db.Timestamptz(3)
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt             DateTime  @updatedAt @db.Timestamptz(3)
+
+  @@index([userId])
+  @@map("accounts")
+}
+
+model Verification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime @db.Timestamptz(3)
+  createdAt  DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt  DateTime @updatedAt @db.Timestamptz(3)
+
+  @@index([identifier])
+  @@map("verifications")
+}
+
+enum LoginAttemptStatus {
+  PENDING
+  SUCCESS
+  FAILURE
+}
+
+/// Tentatives de connexion, pour la limitation de débit. Purgeable (contrairement à l'audit).
+model LoginAttempt {
+  id        String             @id @default(cuid())
+  email     String
+  ip        String?
+  status    LoginAttemptStatus @default(PENDING)
+  createdAt DateTime           @default(now()) @db.Timestamptz(3)
+
+  @@index([email, createdAt])
+  @@index([ip, createdAt])
+  @@map("login_attempts")
+}
+
+// ─── Rôles et permissions (RBAC) ─────────────────────────────────────────────
+
+/// Rôle. Les rôles système (11 depuis le livreur, phase 10) sont synchronisés depuis le code (src/server/authz/roles.ts).
+model Role {
+  id          String           @id @default(cuid())
+  code        String           @unique
+  label       String
+  isSystem    Boolean          @default(true)
+  permissions RolePermission[]
+  users       UserRole[]
+
+  @@map("roles")
+}
+
+/// Permission. La liste fait foi dans le code (src/server/authz/permissions.ts).
+model Permission {
+  id    String           @id @default(cuid())
+  code  String           @unique
+  roles RolePermission[]
+
+  @@map("permissions")
+}
+
+model RolePermission {
+  roleId       String
+  permissionId String
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+model UserRole {
+  userId    String
+  roleId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      Role     @relation(fields: [roleId], references: [id], onDelete: Restrict)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  @@id([userId, roleId])
+  @@index([roleId])
+  @@map("user_roles")
+}
+
+// ─── Catalogue ───────────────────────────────────────────────────────────────
+
+/// Catégorie de produits (arborescence). Une catégorie inactive masque son contenu public.
+model Category {
+  id             String     @id @default(cuid())
+  parentId       String?
+  parent         Category?  @relation("CategoryTree", fields: [parentId], references: [id], onDelete: Restrict)
+  children       Category[] @relation("CategoryTree")
+  name           String
+  slug           String     @unique
+  description    String?
+  position       Int        @default(0)
+  isActive       Boolean    @default(true)
+  seoTitle       String?
+  seoDescription String?
+  products       Product[]
+  createdAt      DateTime   @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime   @updatedAt @db.Timestamptz(3)
+
+  @@index([parentId, position])
+  @@map("categories")
+}
+
+model Brand {
+  id       String    @id @default(cuid())
+  name     String    @unique
+  slug     String    @unique
+  products Product[]
+
+  @@map("brands")
+}
+
+enum ProductCondition {
+  NEW
+  REFURBISHED
+  USED
+}
+
+/// « Épuisé » n'est pas un statut : il est calculé depuis le stock disponible.
+enum ProductStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+model Product {
+  id               String                 @id @default(cuid())
+  categoryId       String
+  category         Category               @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  brandId          String?
+  brand            Brand?                 @relation(fields: [brandId], references: [id], onDelete: SetNull)
+  name             String
+  slug             String                 @unique
+  model            String?
+  shortDescription String
+  description      String
+  condition        ProductCondition       @default(NEW)
+  warrantyMonths   Int?
+  warrantyText     String?
+  /// Caractéristiques techniques : liste de { label, value }.
+  specs            Json                   @default("[]")
+  weightGrams      Int?
+  dimensions       String?
+  status           ProductStatus          @default(DRAFT)
+  isFeatured       Boolean                @default(false)
+  seoTitle         String?
+  seoDescription   String?
+  publishedAt      DateTime?              @db.Timestamptz(3)
+  images           ProductImage[]
+  variants         ProductVariant[]
+  compatibleWith   ProductCompatibility[] @relation("ProductCompatibility")
+  compatibleFrom   ProductCompatibility[] @relation("CompatibleProduct")
+  createdAt        DateTime               @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime               @updatedAt @db.Timestamptz(3)
+
+  @@index([status, categoryId])
+  @@index([status, isFeatured])
+  @@index([brandId])
+  @@map("products")
+}
+
+model ProductImage {
+  id        String  @id @default(cuid())
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  url       String
+  alt       String
+  position  Int     @default(0)
+
+  @@index([productId, position])
+  @@map("product_images")
+}
+
+/// Tout produit a au moins une variante (par défaut) : prix et stock sont portés par la variante.
+model ProductVariant {
+  id                String             @id @default(cuid())
+  productId         String
+  product           Product            @relation(fields: [productId], references: [id], onDelete: Cascade)
+  sku               String             @unique
+  barcode           String?
+  name              String
+  /// Attributs de la variante (ex. { "Capacité": "1 To" }).
+  attributes        Json               @default("{}")
+  /// Prix de vente TTC en FCFA (entier).
+  price             Int
+  /// Prix barré facultatif (promotion affichée), en FCFA.
+  compareAtPrice    Int?
+  /// Prix d'achat interne : JAMAIS exposé au public (sélecteurs explicites).
+  costPrice         Int?
+  isDefault         Boolean            @default(false)
+  isActive          Boolean            @default(true)
+  position          Int                @default(0)
+  inventory         Inventory?
+  movements         StockMovement[]
+  cartItems         CartItem[]
+  orderItems        OrderItem[]
+  interventionParts InterventionPart[]
+  createdAt         DateTime           @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime           @updatedAt @db.Timestamptz(3)
+
+  @@index([productId, position])
+  @@map("product_variants")
+}
+
+/// Stock d'une variante. Disponible = onHand − reserved (contraintes CHECK en base).
+model Inventory {
+  id             String         @id @default(cuid())
+  variantId      String         @unique
+  variant        ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  onHand         Int            @default(0)
+  reserved       Int            @default(0)
+  alertThreshold Int            @default(0)
+  lastCountedAt  DateTime?      @db.Timestamptz(3)
+  lastCountedQty Int?
+  updatedAt      DateTime       @updatedAt @db.Timestamptz(3)
+
+  @@map("inventories")
+}
+
+enum StockMovementType {
+  IN
+  OUT
+  ADJUSTMENT
+  RESERVE
+  RELEASE
+  SALE
+  RETURN
+}
+
+/// Journal IMMUABLE des mouvements de stock (trigger PostgreSQL : ni UPDATE ni DELETE).
+/// Chaque ligne enregistre la quantité signée et l'état du stock qui en résulte.
+model StockMovement {
+  id            String            @id @default(cuid())
+  variantId     String
+  variant       ProductVariant    @relation(fields: [variantId], references: [id], onDelete: Restrict)
+  type          StockMovementType
+  /// Variation signée du stock physique (IN > 0, OUT < 0…), ou du réservé pour RESERVE/RELEASE.
+  quantity      Int
+  onHandAfter   Int
+  reservedAfter Int
+  reason        String
+  actorId       String?
+  orderId       String?
+  createdAt     DateTime          @default(now()) @db.Timestamptz(3)
+
+  @@index([variantId, createdAt])
+  @@index([createdAt])
+  @@map("stock_movements")
+}
+
+model ProductCompatibility {
+  productId           String
+  compatibleProductId String
+  product             Product @relation("ProductCompatibility", fields: [productId], references: [id], onDelete: Cascade)
+  compatibleProduct   Product @relation("CompatibleProduct", fields: [compatibleProductId], references: [id], onDelete: Cascade)
+
+  @@id([productId, compatibleProductId])
+  @@map("product_compatibilities")
+}
+
+// ─── Services techniques (catalogue) ─────────────────────────────────────────
+
+model ServiceCategory {
+  id          String    @id @default(cuid())
+  name        String
+  slug        String    @unique
+  description String?
+  position    Int       @default(0)
+  isActive    Boolean   @default(true)
+  services    Service[]
+
+  @@map("service_categories")
+}
+
+enum ServicePricingMode {
+  FIXED
+  INDICATIVE
+  QUOTE_ONLY
+}
+
+model Service {
+  id                String             @id @default(cuid())
+  categoryId        String
+  category          ServiceCategory    @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  name              String
+  slug              String             @unique
+  shortDescription  String
+  description       String
+  imageUrl          String?
+  pricingMode       ServicePricingMode @default(QUOTE_ONLY)
+  /// Tarif en FCFA ; obligatoire sauf « sur devis » (contrainte CHECK en base).
+  price             Int?
+  estimatedDuration String?
+  zonesText         String?
+  conditions        String?
+  isActive          Boolean            @default(true)
+  isFeatured        Boolean            @default(false)
+  position          Int                @default(0)
+  quoteRequests     QuoteRequest[]
+  interventions     Intervention[]
+  createdAt         DateTime           @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime           @updatedAt @db.Timestamptz(3)
+
+  @@index([categoryId, position])
+  @@map("services")
+}
+
+// ─── Contenu ─────────────────────────────────────────────────────────────────
+
+/// Page d'information (CGV, livraison, garantie, confidentialité, à propos). Texte brut par paragraphes.
+model Page {
+  id             String   @id @default(cuid())
+  slug           String   @unique
+  title          String
+  body           String
+  seoDescription String?
+  isPublished    Boolean  @default(false)
+  updatedAt      DateTime @updatedAt @db.Timestamptz(3)
+
+  @@map("pages")
+}
+
+model FaqItem {
+  id          String  @id @default(cuid())
+  question    String
+  answer      String
+  position    Int     @default(0)
+  isPublished Boolean @default(true)
+
+  @@map("faq_items")
+}
+
+// ─── Paramètres et numérotation ──────────────────────────────────────────────
+
+/// Paramètre administrable. La valeur est validée par un schéma Zod propre à chaque clé.
+model SiteSetting {
+  key         String   @id
+  value       Json
+  updatedById String?
+  updatedAt   DateTime @updatedAt @db.Timestamptz(3)
+
+  @@map("site_settings")
+}
+
+/// Compteur de numérotation métier (CMD-2026-000001…), incrémenté dans la transaction appelante.
+model Sequence {
+  key   String
+  year  Int
+  value Int    @default(0)
+
+  @@id([key, year])
+  @@map("sequences")
+}
+
+// ─── Audit ───────────────────────────────────────────────────────────────────
+
+enum AuditResult {
+  SUCCESS
+  FAILURE
+  DENIED
+}
+
+/// Journal d'audit append-only : un trigger PostgreSQL interdit UPDATE et DELETE.
+model AuditLog {
+  id            String      @id @default(cuid())
+  actorId       String?
+  action        String
+  entityType    String?
+  entityId      String?
+  before        Json?
+  after         Json?
+  result        AuditResult @default(SUCCESS)
+  ip            String?
+  correlationId String?
+  createdAt     DateTime    @default(now()) @db.Timestamptz(3)
+
+  @@index([entityType, entityId])
+  @@index([action, entityId, createdAt])
+  @@index([action, ip, createdAt])
+  @@index([actorId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+// ─── Phase 6 : panier, commandes, livraison, notifications ─────────────────────
+
+/// Panier d'un compte (userId) ou d'un visiteur (empreinte SHA-256 du jeton de cookie).
+model Cart {
+  id        String     @id @default(cuid())
+  userId    String?    @unique
+  tokenHash String?    @unique
+  items     CartItem[]
+  expiresAt DateTime   @db.Timestamptz(3)
+  createdAt DateTime   @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime   @updatedAt @db.Timestamptz(3)
+
+  @@index([expiresAt])
+  @@map("carts")
+}
+
+/// Aucun prix stocké : le prix est toujours relu en base.
+model CartItem {
+  id        String         @id @default(cuid())
+  cartId    String
+  cart      Cart           @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  variantId String
+  variant   ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  quantity  Int
+  createdAt DateTime       @default(now()) @db.Timestamptz(3)
+
+  @@unique([cartId, variantId])
+  @@map("cart_items")
+}
+
+/// Zone de livraison. Aucune zone réelle n'est inventée (D5) : saisie par SYSTELEC.
+model DeliveryZone {
+  id           String   @id @default(cuid())
+  name         String   @unique
+  description  String?
+  fee          Int
+  /// Livraison offerte à partir de ce sous-total (FCFA).
+  freeAbove    Int?
+  leadTimeText String?
+  isActive     Boolean  @default(true)
+  position     Int      @default(0)
+  orders       Order[]
+  createdAt    DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime @updatedAt @db.Timestamptz(3)
+
+  @@map("delivery_zones")
+}
+
+/// Point de retrait. Sans point actif, l'option « retrait » est masquée (D4).
+model PickupPoint {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  address   String
+  hours     String?
+  phone     String?
+  isActive  Boolean  @default(true)
+  orders    Order[]
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  @@map("pickup_points")
+}
+
+enum CustomerType {
+  INDIVIDUAL
+  BUSINESS
+}
+
+/// Client : rattaché à un compte, ou invité (userId nul). Les notes internes ne sont jamais exposées.
+model Customer {
+  id            String         @id @default(cuid())
+  userId        String?        @unique
+  type          CustomerType   @default(INDIVIDUAL)
+  name          String
+  companyName   String?
+  phone         String
+  email         String?
+  internalNotes String?
+  orders        Order[]
+  quoteRequests QuoteRequest[]
+  quotes        Quote[]
+  interventions Intervention[]
+  createdAt     DateTime       @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime       @updatedAt @db.Timestamptz(3)
+
+  @@index([phone])
+  @@map("customers")
+}
+
+enum OrderStatus {
+  PENDING_CONFIRMATION
+  CONFIRMED
+  PREPARING
+  READY_FOR_PICKUP
+  READY_TO_SHIP
+  CANCELLED
+  CLOSED
+}
+
+enum PaymentStatus {
+  UNPAID
+  PARTIALLY_PAID
+  PAID
+  TO_VERIFY
+  REFUND_PENDING
+  REFUNDED
+}
+
+enum FulfillmentMethod {
+  DELIVERY
+  PICKUP
+}
+
+model Order {
+  id                String               @id @default(cuid())
+  number            String               @unique
+  customerId        String
+  customer          Customer             @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  /// Clé d'idempotence envoyée par le formulaire : une double soumission ne crée qu'une commande.
+  idempotencyKey    String               @unique
+  /// Commande invitée : empreinte du panier d'origine. Seul ce navigateur peut rejouer la soumission.
+  guestCartHash     String?
+  status            OrderStatus          @default(PENDING_CONFIRMATION)
+  paymentStatus     PaymentStatus        @default(UNPAID)
+  fulfillmentMethod FulfillmentMethod
+  /// Coordonnées et adresse FIGÉES au moment de la commande.
+  contact           Json
+  shippingAddress   Json?
+  deliveryZoneId    String?
+  deliveryZone      DeliveryZone?        @relation(fields: [deliveryZoneId], references: [id], onDelete: Restrict)
+  pickupPointId     String?
+  pickupPoint       PickupPoint?         @relation(fields: [pickupPointId], references: [id], onDelete: Restrict)
+  subtotal          Int
+  deliveryFee       Int
+  discountTotal     Int                  @default(0)
+  total             Int
+  amountPaid        Int                  @default(0)
+  /// Somme remboursée en espèces suite à des retours (positive). amountPaid l'a déjà déduite.
+  refundedAmount    Int                  @default(0)
+  notes             String?
+  internalNotes     String?
+  /// Fin de la réservation du stock si la commande n'est pas confirmée (D3).
+  reservedUntil     DateTime?            @db.Timestamptz(3)
+  confirmedAt       DateTime?            @db.Timestamptz(3)
+  cancelledAt       DateTime?            @db.Timestamptz(3)
+  closedAt          DateTime?            @db.Timestamptz(3)
+  items             OrderItem[]
+  history           OrderStatusHistory[]
+  payments          Payment[]
+  delivery          Delivery?
+  returns           Return[]
+  invoice           Invoice?
+  createdAt         DateTime             @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime             @updatedAt @db.Timestamptz(3)
+
+  @@index([customerId, createdAt])
+  @@index([status, createdAt])
+  @@index([status, reservedUntil])
+  @@map("orders")
+}
+
+/// Ligne de commande : nom, référence et prix FIGÉS.
+model OrderItem {
+  id          String         @id @default(cuid())
+  orderId     String
+  order       Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  variantId   String
+  variant     ProductVariant @relation(fields: [variantId], references: [id], onDelete: Restrict)
+  productName String
+  variantName String
+  sku         String
+  unitPrice   Int
+  quantity    Int
+  lineTotal   Int
+  /// Prix d'achat au moment de la vente (marge) : interne, jamais exposé au client.
+  unitCost    Int?
+  returnItems ReturnItem[]
+
+  @@index([orderId])
+  @@map("order_items")
+}
+
+enum OrderHistoryField {
+  ORDER
+  DELIVERY
+  PAYMENT
+}
+
+model OrderStatusHistory {
+  id        String            @id @default(cuid())
+  orderId   String
+  order     Order             @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  field     OrderHistoryField @default(ORDER)
+  from      String?
+  to        String
+  actorId   String?
+  comment   String?
+  createdAt DateTime          @default(now()) @db.Timestamptz(3)
+
+  @@index([orderId, createdAt])
+  @@map("order_status_history")
+}
+
+/// Moyens de règlement PHYSIQUES uniquement : aucun moyen électronique n'existe.
+enum PaymentMethod {
+  CASH
+}
+
+/// Encaissement en espèces, en AJOUT SEUL (trigger) : une erreur se corrige par une
+/// contre-écriture liée (montant opposé), jamais par modification ni suppression.
+/// Le statut de paiement de la commande est recalculé à chaque écriture. Le reçu est
+/// généré depuis cette ligne.
+model Payment {
+  id                String        @id @default(cuid())
+  receiptNumber     String        @unique
+  /// Exactement l'un des deux : une commande ou une intervention (contrainte CHECK).
+  orderId           String?
+  order             Order?        @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  interventionId    String?
+  intervention      Intervention? @relation(fields: [interventionId], references: [id], onDelete: Restrict)
+  /// > 0 : encaissement ; < 0 : contre-écriture (annulation d'un encaissement) ou remboursement d'un retour.
+  amount            Int
+  method            PaymentMethod @default(CASH)
+  /// Reste à payer sur la commande juste après cette écriture (figé pour le reçu).
+  balanceAfter      Int
+  recordedById      String
+  recordedBy        User          @relation(fields: [recordedById], references: [id], onDelete: Restrict)
+  /// Clé envoyée par le formulaire : un double envoi n'encaisse qu'une fois.
+  idempotencyKey    String?       @unique
+  /// Contre-écriture : l'encaissement annulé (au plus une annulation par encaissement).
+  reversesPaymentId String?       @unique
+  reverses          Payment?      @relation("PaymentReversal", fields: [reversesPaymentId], references: [id], onDelete: Restrict)
+  reversedBy        Payment?      @relation("PaymentReversal")
+  /// Remboursement en espèces d'un retour (montant < 0, au plus un par retour).
+  returnId          String?       @unique
+  return            Return?       @relation(fields: [returnId], references: [id], onDelete: Restrict)
+  /// Motif d'une contre-écriture ou d'un remboursement (obligatoire), imprimé sur son reçu.
+  reason            String?
+  /// Note interne, jamais imprimée ni montrée au client.
+  note              String?
+  createdAt         DateTime      @default(now()) @db.Timestamptz(3)
+
+  @@index([orderId, createdAt])
+  @@index([interventionId, createdAt])
+  @@index([createdAt])
+  @@index([recordedById, createdAt])
+  @@map("payments")
+}
+
+enum NotificationChannel {
+  EMAIL
+  SMS
+  WHATSAPP
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  FAILED
+  SKIPPED_NO_PROVIDER
+}
+
+/// Notifications persistées : rien n'est simulé, l'absence de fournisseur est tracée (D11).
+model Notification {
+  id             String              @id @default(cuid())
+  channel        NotificationChannel
+  template       String
+  recipient      String
+  payload        Json
+  status         NotificationStatus  @default(PENDING)
+  error          String?
+  orderId        String?
+  quoteRequestId String?
+  quoteId        String?
+  interventionId String?
+  /// Alerte interne sur un retour (délai de traitement dépassé).
+  returnId       String?
+  sentAt         DateTime?           @db.Timestamptz(3)
+  createdAt      DateTime            @default(now()) @db.Timestamptz(3)
+
+  @@index([status, createdAt])
+  @@index([orderId])
+  @@index([quoteRequestId])
+  @@index([quoteId])
+  @@index([interventionId])
+  @@index([returnId])
+  @@map("notifications")
+}
+
+// ─── Services techniques ─────────────────────────────────────────────────────
+
+enum QuoteRequestStatus {
+  NEW
+  IN_REVIEW
+  QUOTED
+  ACCEPTED
+  CANCELLED
+}
+
+enum Urgency {
+  NORMAL
+  URGENT
+}
+
+/// Demande de devis ou d'intervention, déposée par un client (compte ou invité).
+model QuoteRequest {
+  id             String             @id @default(cuid())
+  number         String             @unique
+  /// Clé envoyée par le formulaire : une double soumission ne crée qu'une demande.
+  idempotencyKey String             @unique
+  customerId     String
+  customer       Customer           @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  serviceId      String?
+  service        Service?           @relation(fields: [serviceId], references: [id], onDelete: SetNull)
+  /// Coordonnées FIGÉES au dépôt.
+  contact        Json
+  address        String
+  description    String
+  urgency        Urgency            @default(NORMAL)
+  availability   String?
+  status         QuoteRequestStatus @default(NEW)
+  /// Motif d'annulation, ou réponse sans devis.
+  closingNote    String?
+  internalNotes  String?
+  quotes         Quote[]
+  interventions  Intervention[]
+  createdAt      DateTime           @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime           @updatedAt @db.Timestamptz(3)
+
+  @@index([status, createdAt])
+  @@index([customerId, createdAt])
+  @@map("quote_requests")
+}
+
+enum QuoteStatus {
+  DRAFT
+  SENT
+  ACCEPTED
+  REFUSED
+  EXPIRED
+}
+
+/// Devis détaillé. Modifiable en brouillon seulement ; figé une fois envoyé.
+model Quote {
+  id             String        @id @default(cuid())
+  number         String        @unique
+  quoteRequestId String?
+  quoteRequest   QuoteRequest? @relation(fields: [quoteRequestId], references: [id], onDelete: Restrict)
+  customerId     String
+  customer       Customer      @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  status         QuoteStatus   @default(DRAFT)
+  /// Fin de validité (fin de journée à Dakar).
+  validUntil     DateTime      @db.Timestamptz(3)
+  subtotal       Int           @default(0)
+  total          Int           @default(0)
+  /// Conditions et remarques imprimées sur le devis.
+  notes          String?
+  createdById    String
+  sentAt         DateTime?     @db.Timestamptz(3)
+  decidedAt      DateTime?     @db.Timestamptz(3)
+  /// Qui a décidé : le client en ligne, ou un membre du personnel (accord par téléphone).
+  decidedById    String?
+  decisionNote   String?
+  items          QuoteItem[]
+  intervention   Intervention?
+  createdAt      DateTime      @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime      @updatedAt @db.Timestamptz(3)
+
+  @@index([status, validUntil])
+  @@index([customerId, createdAt])
+  @@map("quotes")
+}
+
+enum QuoteItemKind {
+  MATERIAL
+  LABOR
+  TRAVEL
+  OTHER
+}
+
+model QuoteItem {
+  id        String        @id @default(cuid())
+  quoteId   String
+  quote     Quote         @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  position  Int
+  kind      QuoteItemKind
+  label     String
+  quantity  Int
+  unitPrice Int
+  lineTotal Int
+
+  @@index([quoteId, position])
+  @@map("quote_items")
+}
+
+/// Profil d'un technicien (compte du personnel portant le rôle TECHNICIAN).
+model Technician {
+  id            String         @id @default(cuid())
+  userId        String         @unique
+  user          User           @relation(fields: [userId], references: [id], onDelete: Restrict)
+  skills        String?
+  zones         String?
+  isActive      Boolean        @default(true)
+  interventions Intervention[]
+  appointments  Appointment[]
+  createdAt     DateTime       @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime       @updatedAt @db.Timestamptz(3)
+
+  @@map("technicians")
+}
+
+enum InterventionStatus {
+  TO_SCHEDULE
+  SCHEDULED
+  IN_PROGRESS
+  DONE
+  CANCELLED
+}
+
+/// Intervention chez le client : issue d'un devis accepté, ou créée par le personnel (prix fixe).
+model Intervention {
+  id              String              @id @default(cuid())
+  number          String              @unique
+  customerId      String
+  customer        Customer            @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  quoteRequestId  String?
+  quoteRequest    QuoteRequest?       @relation(fields: [quoteRequestId], references: [id], onDelete: Restrict)
+  quoteId         String?             @unique
+  quote           Quote?              @relation(fields: [quoteId], references: [id], onDelete: Restrict)
+  serviceId       String?
+  service         Service?            @relation(fields: [serviceId], references: [id], onDelete: SetNull)
+  contact         Json
+  address         String
+  problem         String
+  technicianId    String?
+  technician      Technician?         @relation(fields: [technicianId], references: [id], onDelete: Restrict)
+  status          InterventionStatus  @default(TO_SCHEDULE)
+  /// Montant dû (FCFA) : total du devis accepté, ou prix convenu à la création.
+  amountDue       Int
+  amountPaid      Int                 @default(0)
+  paymentStatus   PaymentStatus       @default(UNPAID)
+  startedAt       DateTime?           @db.Timestamptz(3)
+  completedAt     DateTime?           @db.Timestamptz(3)
+  cancelledAt     DateTime?           @db.Timestamptz(3)
+  /// Nom de la personne qui a constaté la fin des travaux chez le client.
+  customerSignOff String?
+  cancelReason    String?
+  report          InterventionReport?
+  parts           InterventionPart[]
+  appointments    Appointment[]
+  payments        Payment[]
+  invoice         Invoice?
+  createdAt       DateTime            @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime            @updatedAt @db.Timestamptz(3)
+
+  @@index([status, createdAt])
+  @@index([technicianId, status])
+  @@index([customerId, createdAt])
+  @@map("interventions")
+}
+
+/// Créneau du planning d'un technicien. Deux créneaux d'un même technicien ne se chevauchent jamais (contrainte d'exclusion).
+model Appointment {
+  id             String       @id @default(cuid())
+  interventionId String
+  intervention   Intervention @relation(fields: [interventionId], references: [id], onDelete: Cascade)
+  technicianId   String
+  technician     Technician   @relation(fields: [technicianId], references: [id], onDelete: Restrict)
+  startsAt       DateTime     @db.Timestamptz(3)
+  endsAt         DateTime     @db.Timestamptz(3)
+  createdAt      DateTime     @default(now()) @db.Timestamptz(3)
+
+  @@index([technicianId, startsAt])
+  @@index([interventionId])
+  @@map("appointments")
+}
+
+model InterventionReport {
+  id             String       @id @default(cuid())
+  interventionId String       @unique
+  intervention   Intervention @relation(fields: [interventionId], references: [id], onDelete: Cascade)
+  diagnosis      String
+  workDone       String
+  timeSpentMin   Int
+  observations   String?
+  authorId       String
+  createdAt      DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime     @updatedAt @db.Timestamptz(3)
+
+  @@map("intervention_reports")
+}
+
+/// Pièce utilisée. Avec une référence du catalogue, sa sortie de stock est tracée.
+model InterventionPart {
+  id             String          @id @default(cuid())
+  interventionId String
+  intervention   Intervention    @relation(fields: [interventionId], references: [id], onDelete: Cascade)
+  variantId      String?
+  variant        ProductVariant? @relation(fields: [variantId], references: [id], onDelete: Restrict)
+  label          String
+  quantity       Int
+  /// Coût interne unitaire (prix d'achat) : jamais montré au client.
+  unitCost       Int?
+  createdById    String
+  createdAt      DateTime        @default(now()) @db.Timestamptz(3)
+
+  @@index([interventionId])
+  @@map("intervention_parts")
+}
+
+/// Facture (document commercial, pas une comptabilité réglementaire). Figée à l'émission, en ajout seul.
+model Invoice {
+  id             String        @id @default(cuid())
+  number         String        @unique
+  /// Exactement l'un des deux : une intervention ou une commande (contrainte CHECK).
+  interventionId String?       @unique
+  intervention   Intervention? @relation(fields: [interventionId], references: [id], onDelete: Restrict)
+  orderId        String?       @unique
+  order          Order?        @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  issuedAt       DateTime      @default(now()) @db.Timestamptz(3)
+  /// Lignes, client et adresse FIGÉS à l'émission.
+  lines          Json
+  customer       Json
+  total          Int
+  issuedById     String
+
+  @@map("invoices")
+}
+
+// ─── Phase 9 : livraisons détaillées, retours et remboursements ──────────────
+
+/// Livreur (interne ou prestataire). Un livreur désactivé ne reçoit plus de livraison.
+/// Livreur interne (compte utilisateur individuel) ou transporteur externe (sans compte).
+enum CourierKind {
+  INTERNAL
+  EXTERNAL
+}
+
+/// Décision 5 (phase 10) : un livreur INTERNE est relié à un compte (ses livraisons seulement) ;
+/// un transporteur EXTERNE n'a pas de compte (contrainte couriers_account_check).
+model Courier {
+  id         String      @id @default(cuid())
+  name       String      @unique
+  phone      String
+  kind       CourierKind @default(EXTERNAL)
+  userId     String?     @unique
+  user       User?       @relation(fields: [userId], references: [id], onDelete: Restrict)
+  isActive   Boolean     @default(true)
+  deliveries Delivery[]
+  createdAt  DateTime    @default(now()) @db.Timestamptz(3)
+  updatedAt  DateTime    @updatedAt @db.Timestamptz(3)
+
+  @@map("couriers")
+}
+
+/// Statut d'une livraison à domicile. Le retrait en boutique n'a pas de livraison.
+enum DeliveryStatus {
+  ASSIGNED
+  IN_TRANSIT
+  DELIVERED
+  FAILED
+}
+
+/// Livraison d'une commande « livraison à domicile ». L'historique est dans order_status_history (champ DELIVERY).
+model Delivery {
+  id            String         @id @default(cuid())
+  orderId       String         @unique
+  order         Order          @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  courierId     String
+  courier       Courier        @relation(fields: [courierId], references: [id], onDelete: Restrict)
+  status        DeliveryStatus @default(ASSIGNED)
+  /// Tentatives de livraison (départs).
+  attempts      Int            @default(0)
+  scheduledFor  DateTime?      @db.Timestamptz(3)
+  startedAt     DateTime?      @db.Timestamptz(3)
+  deliveredAt   DateTime?      @db.Timestamptz(3)
+  /// Preuve de livraison : nom de la personne qui a reçu le colis, et observations.
+  recipientName String?
+  proofNote     String?
+  /// Motif du dernier échec.
+  failureReason String?
+  createdAt     DateTime       @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime       @updatedAt @db.Timestamptz(3)
+
+  @@index([status, updatedAt])
+  @@index([courierId, status])
+  @@map("deliveries")
+}
+
+/// RECEIVED : articles rapportés, à examiner ; VERIFICATION : vérification demandée (inspection,
+/// photos, facture, informations), en attente de sa réponse ; REFUND_PENDING : accepté, remboursement
+/// à verser ; COMPLETED : traité (remboursé ou sans remboursement) ; REJECTED : refusé, articles rendus.
+enum ReturnStatus {
+  RECEIVED
+  VERIFICATION
+  REFUND_PENDING
+  COMPLETED
+  REJECTED
+}
+
+/// Nature d'une vérification demandée avant la décision sur un retour.
+enum ReturnVerificationKind {
+  INSPECTION
+  PHOTOS
+  INVOICE
+  INFORMATION
+}
+
+/// Fondement de l'acceptation d'un retour déclaré hors délai (exception à la politique commerciale).
+enum ReturnExceptionGround {
+  WARRANTY
+  HIDDEN_DEFECT
+  LEGAL_OBLIGATION
+  OTHER
+}
+
+/// Étape de l'historique d'un retour (ajout seul).
+enum ReturnEventType {
+  DECLARED
+  VERIFICATION_REQUESTED
+  VERIFICATION_ANSWERED
+  ACCEPTED
+  REJECTED
+  REFUNDED
+  OVERDUE_NOTIFIED
+  /// Phase 10 (décision 4) : relance d'une vérification sans réponse, puis escalade aux administrateurs.
+  VERIFICATION_REMINDED
+  VERIFICATION_ESCALATED
+}
+
+/// Qui a déclaré le retour : le personnel au nom du client, ou le client lui-même (phase 10, décision 2).
+enum ReturnDeclarationSource {
+  STAFF
+  CUSTOMER
+}
+
+/// Retour d'articles d'une commande remise au client. Quantités et montants contrôlés en base.
+model Return {
+  id                        String                  @id @default(cuid())
+  number                    String                  @unique
+  orderId                   String
+  order                     Order                   @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  /// Clé envoyée par le formulaire : un double envoi n'enregistre qu'un retour.
+  idempotencyKey            String                  @unique
+  status                    ReturnStatus            @default(RECEIVED)
+  /// Motif du client.
+  reason                    String
+  /// Valeur des articles retournés (prix figés de la commande).
+  itemsValue                Int
+  /// Montant à rembourser décidé (≤ valeur des articles).
+  refundAmount              Int                     @default(0)
+  /// Décision : articles remis en stock ou non, avec son motif.
+  restocked                 Boolean?
+  decisionNote              String?
+  /// Personnel déclarant ; nul quand le client déclare lui-même (declaredBy = CUSTOMER).
+  createdById               String?
+  declaredBy                ReturnDeclarationSource @default(STAFF)
+  decidedById               String?
+  decidedAt                 DateTime?               @db.Timestamptz(3)
+  refundedAt                DateTime?               @db.Timestamptz(3)
+  /// Remise au client (livraison ou retrait) : date de référence du délai de déclaration (trigger).
+  handedOverAt              DateTime                @db.Timestamptz(3)
+  /// Fin du délai commercial de déclaration (remise + 48 h), calculée par la base.
+  declarationDeadline       DateTime                @db.Timestamptz(3)
+  /// Déclaré après ce délai : accepté à l'enregistrement, mais signalé (calculé par la base).
+  lateDeclaration           Boolean                 @default(false)
+  /// Fondement et motif de l'acceptation d'un retour hors délai (garantie, vice caché, obligation légale).
+  exceptionGround           ReturnExceptionGround?
+  exceptionNote             String?
+  /// Première action du personnel (vérification demandée ou décision), posée par la base.
+  firstActionAt             DateTime?               @db.Timestamptz(3)
+  /// Alerte « délai de traitement dépassé » envoyée (une seule fois par retour).
+  overdueNotifiedAt         DateTime?               @db.Timestamptz(3)
+  /// Vérification en attente : date de la demande et dernière relance envoyée (0 à 3), posées par la base.
+  verificationRequestedAt   DateTime?               @db.Timestamptz(3)
+  verificationReminderStage Int                     @default(0)
+  /// Décision 1 (phase 10) : remboursement versé par la personne qui a décidé, à titre d'exception motivée.
+  refundExceptionNote       String?
+  items                     ReturnItem[]
+  events                    ReturnEvent[]
+  attachments               ReturnAttachment[]
+  refund                    Payment?
+  createdAt                 DateTime                @default(now()) @db.Timestamptz(3)
+  updatedAt                 DateTime                @updatedAt @db.Timestamptz(3)
+
+  @@index([orderId, createdAt])
+  @@index([status, createdAt])
+  @@index([lateDeclaration, createdAt])
+  @@map("returns")
+}
+
+/// Historique propre à un retour (ajout seul, trigger) : qui, quand, statut, motif, décision.
+model ReturnEvent {
+  id               String                  @id @default(cuid())
+  returnId         String
+  return           Return                  @relation(fields: [returnId], references: [id], onDelete: Restrict)
+  type             ReturnEventType
+  fromStatus       ReturnStatus?
+  toStatus         ReturnStatus
+  /// Auteur ; nul pour une action du système (alerte de délai).
+  actorId          String?
+  /// Motif, demande de vérification, réponse ou motif de la décision.
+  comment          String?
+  verificationKind ReturnVerificationKind?
+  /// Décision : montant, remise en stock, exception hors délai ; remboursement : reçu.
+  details          Json?
+  createdAt        DateTime                @default(now()) @db.Timestamptz(3)
+
+  @@index([returnId, createdAt])
+  @@map("return_events")
+}
+
+/// Photo jointe à un retour par le client (déclaration ou réponse à une vérification). Ajout seul.
+/// Fichier PRIVÉ (dossier retours/), jamais servi par /medias : seulement par une route contrôlée.
+model ReturnAttachment {
+  id          String   @id @default(cuid())
+  returnId    String
+  return      Return   @relation(fields: [returnId], references: [id], onDelete: Restrict)
+  storageKey  String   @unique
+  contentType String
+  byteSize    Int
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+
+  @@index([returnId, createdAt])
+  @@map("return_attachments")
+}
+
+/// Ligne d'un retour (ajout seul) : quantité retournée d'une ligne de commande, au prix figé.
+model ReturnItem {
+  id          String    @id @default(cuid())
+  returnId    String
+  return      Return    @relation(fields: [returnId], references: [id], onDelete: Restrict)
+  orderItemId String
+  orderItem   OrderItem @relation(fields: [orderItemId], references: [id], onDelete: Restrict)
+  quantity    Int
+  unitPrice   Int
+
+  @@unique([returnId, orderItemId])
+  @@index([orderItemId])
+  @@map("return_items")
+}
+
+// ─── Correctifs post-phase 9 : partenaires ───────────────────────────────────
+
+/// Partenaire affiché sur la boutique publique. Logo TÉLÉVERSÉ uniquement (contrainte CHECK).
+model Partner {
+  id         String   @id @default(cuid())
+  name       String
+  /// Site du partenaire (https uniquement), facultatif.
+  websiteUrl String?
+  /// Logo téléversé, servi par /medias/partenaires/… : jamais d'adresse externe.
+  logoUrl    String
+  isActive   Boolean  @default(true)
+  position   Int      @default(0)
+  createdAt  DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt  DateTime @updatedAt @db.Timestamptz(3)
+
+  @@index([isActive, position])
+  @@map("partners")
+}

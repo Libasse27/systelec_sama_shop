@@ -1,0 +1,19 @@
+# Contexte de construction : sources seulement. Jamais de secrets, de données ni de sauvegardes.
+.git
+.github
+.claude
+node_modules
+.next
+.env
+.env.*
+!.env.example
+storage
+storage-e2e
+sauvegardes
+*.dump
+coverage
+test-results
+playwright-report
+graphify-out
+*.tsbuildinfo
+docs

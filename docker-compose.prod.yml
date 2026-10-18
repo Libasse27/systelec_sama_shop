@@ -1,0 +1,104 @@
+# Déploiement de production de SYSTELEC SAMA-SHOP (voir docs/04-mise-en-service.md).
+#
+#   docker compose -f docker-compose.prod.yml --env-file .env.production up -d db app
+#   docker compose -f docker-compose.prod.yml --env-file .env.production run --rm migrate      # migrations
+#   docker compose -f docker-compose.prod.yml --env-file .env.production run --rm tasks pnpm orders:expire
+#
+# Aucun secret ici : tout vient de .env.production (non versionné, modèle : .env.production.example).
+# Le site est servi derrière un reverse proxy TLS (Caddy, Nginx…) qui transmet vers 127.0.0.1:${APP_PORT}.
+
+name: systelec-sama-shop
+
+x-app-env: &app-env
+  APP_ENV: production
+  APP_URL: ${APP_URL:?APP_URL requis (https, sans slash final)}
+  AUTH_SECRET: ${AUTH_SECRET:?AUTH_SECRET requis (openssl rand -base64 32)}
+  # Rôle RESTREINT (scripts/ops/app-role.sql) : jamais le propriétaire de la base.
+  DATABASE_URL: postgresql://${APP_DB_USER:-systelec_app}:${APP_DB_PASSWORD:?APP_DB_PASSWORD requis}@db:5432/${POSTGRES_DB:-systelec}
+  DATABASE_POOL_MAX: ${DATABASE_POOL_MAX:-10}
+  STORAGE_DRIVER: local
+  STORAGE_LOCAL_DIR: /app/storage
+  TRUSTED_PROXY_HOPS: ${TRUSTED_PROXY_HOPS:-1}
+  SMTP_HOST: ${SMTP_HOST:-}
+  SMTP_PORT: ${SMTP_PORT:-}
+  SMTP_USER: ${SMTP_USER:-}
+  SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+  SMTP_FROM: ${SMTP_FROM:-}
+
+# Durcissement vérifié : aucune capacité Linux. « security_opt: [no-new-privileges:true] » est recommandé
+# en plus, mais à activer seulement après vérification sur le serveur cible (certains couples noyau /
+# AppArmor / Docker refusent alors tout exec, même pour les images officielles) :
+#   docker run --rm --security-opt no-new-privileges:true alpine true
+x-hardening: &hardening
+  cap_drop:
+    - ALL
+
+services:
+  db:
+    image: postgres:17.11-alpine@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24
+    restart: unless-stopped
+    environment:
+      # Propriétaire de la base : utilisé seulement par les migrations et l'exploitation.
+      POSTGRES_USER: ${POSTGRES_USER:-systelec_owner}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD requis}
+      POSTGRES_DB: ${POSTGRES_DB:-systelec}
+      TZ: UTC
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    # Aucun port publié : la base n'est joignable que par les services de ce projet.
+
+  app:
+    image: ${APP_IMAGE:-systelec-sama-shop}:${APP_VERSION:?APP_VERSION requis}
+    restart: unless-stopped
+    <<: *hardening
+    read_only: true
+    tmpfs:
+      - /tmp
+    environment:
+      <<: *app-env
+    volumes:
+      - storage:/app/storage
+      - nextcache:/app/.next/cache
+    ports:
+      # Local seulement : exposé au public par le reverse proxy TLS.
+      - "127.0.0.1:${APP_PORT:-3000}:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # Migrations : rôle propriétaire (crée et modifie le schéma). Lancé à chaque mise à jour.
+  migrate:
+    image: ${TOOLS_IMAGE:-systelec-sama-shop-tools}:${APP_VERSION:?APP_VERSION requis}
+    profiles: ["tools"]
+    <<: *hardening
+    environment:
+      <<: *app-env
+      DATABASE_URL: postgresql://${POSTGRES_USER:-systelec_owner}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD requis}@db:5432/${POSTGRES_DB:-systelec}
+    command: ["pnpm", "db:deploy"]
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # Tâches d'exploitation avec le rôle restreint : pnpm orders:expire (planifiée), db:seed, admin:create…
+  tasks:
+    image: ${TOOLS_IMAGE:-systelec-sama-shop-tools}:${APP_VERSION:?APP_VERSION requis}
+    profiles: ["tools"]
+    <<: *hardening
+    environment:
+      <<: *app-env
+    volumes:
+      - storage:/app/storage
+    command: ["pnpm", "orders:expire"]
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  pgdata:
+  storage:
+  nextcache:
