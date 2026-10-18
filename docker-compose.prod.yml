@@ -33,10 +33,19 @@ x-hardening: &hardening
   cap_drop:
     - ALL
 
+# Rotation des journaux Docker : 5 fichiers de 20 Mo au plus par conteneur.
+x-logging: &logging
+  logging:
+    driver: json-file
+    options:
+      max-size: "20m"
+      max-file: "5"
+
 services:
   db:
     image: postgres:17.11-alpine@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24
     restart: unless-stopped
+    <<: *logging
     environment:
       # Propriétaire de la base : utilisé seulement par les migrations et l'exploitation.
       POSTGRES_USER: ${POSTGRES_USER:-systelec_owner}
@@ -55,7 +64,7 @@ services:
   app:
     image: ${APP_IMAGE:-systelec-sama-shop}:${APP_VERSION:?APP_VERSION requis}
     restart: unless-stopped
-    <<: *hardening
+    <<: [*hardening, *logging]
     read_only: true
     tmpfs:
       - /tmp
@@ -88,7 +97,7 @@ services:
   tasks:
     image: ${TOOLS_IMAGE:-systelec-sama-shop-tools}:${APP_VERSION:?APP_VERSION requis}
     profiles: ["tools"]
-    <<: *hardening
+    <<: [*hardening, *logging]
     environment:
       <<: *app-env
     volumes:

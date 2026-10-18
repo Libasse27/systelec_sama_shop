@@ -1,0 +1,24 @@
+# Reverse proxy TLS de SYSTELEC SAMA-SHOP (Caddy 2). Voir docs/04-mise-en-service.md, section 5.
+# Copier en /etc/caddy/Caddyfile, remplacer le domaine, puis : sudo systemctl reload caddy
+# Caddy obtient et renouvelle le certificat (ports 80 et 443 ouverts). L'application pose déjà ses
+# en-têtes de sécurité (CSP, HSTS…) : ne pas les dupliquer ici. Un seul proxy : TRUSTED_PROXY_HOPS=1.
+
+votre-domaine.sn {
+	encode zstd gzip
+	# Envois de formulaires : 7 Mo au plus côté application (serverActions.bodySizeLimit), petite marge ici.
+	request_body {
+		max_size 8MB
+	}
+	reverse_proxy 127.0.0.1:3000
+	log {
+		output file /var/log/caddy/systelec-acces.log {
+			roll_size 50MiB
+			roll_keep 10
+		}
+	}
+}
+
+# Redirection du www vers le domaine principal (facultatif).
+www.votre-domaine.sn {
+	redir https://votre-domaine.sn{uri} permanent
+}
