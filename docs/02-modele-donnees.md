@@ -9,7 +9,7 @@ Les numéros métier lisibles (`CMD-2026-000123`, `DEV-…`, `INT-…`, `REC-…
 |---|---|---|
 | `User` | email (unique), name, phone, isActive, kind (`STAFF`/`CUSTOMER`) | Mot de passe géré par Better Auth (`Account`, haché) ; jamais lisible |
 | `Session`, `Account`, `Verification` | — | Tables Better Auth |
-| `Role` | code (unique), label, isSystem | 10 rôles du §14 |
+| `Role` | code (unique), label, isSystem | 10 rôles du §14, plus `COURIER` (livreur, phase 10) |
 | `Permission` | code (unique, ex. `payments.record`) | Liste figée dans le code, synchronisée par le seed |
 | `RolePermission` | roleId, permissionId | |
 | `UserRole` | userId, roleId | Garde-fou : impossible de retirer le dernier `SUPER_ADMIN` actif |
@@ -58,7 +58,7 @@ Statuts (enums distincts) :
 |---|---|---|
 | `DeliveryZone` | name, description, fee, freeAbove?, leadTimeText, isActive, position | Aucune zone réelle inventée |
 | `PickupPoint` | name, address, hours, phone, isActive | Vide tant que non renseigné → option retrait masquée |
-| `Courier` | name (unique), phone, isActive | Livreurs (phase 9) |
+| `Courier` | name (unique), phone, kind (`INTERNAL`/`EXTERNAL`), userId? (unique), isActive | Livreurs (phase 9). Phase 10 : livreur interne relié à un compte (rôle `COURIER`), transporteur externe sans compte (contrainte `couriers_account_check`) |
 | `Delivery` | orderId (unique), courierId, status, attempts, scheduledFor?, startedAt?, deliveredAt?, recipientName?, proofNote?, failureReason? | Commandes « livraison à domicile » seulement (trigger). Historique dans `OrderStatusHistory` (champ `DELIVERY`), en ajout seul |
 
 `DeliveryStatus` (phase 9) : `ASSIGNED` (livreur assigné), `IN_TRANSIT`, `DELIVERED`, `FAILED` (motif obligatoire). Le retrait en boutique reste porté par le statut de la commande (`READY_FOR_PICKUP` → `CLOSED`).
@@ -144,3 +144,14 @@ Décision 5 : une commande `DELIVERY` ne passe à `CLOSED` qu'avec une livraison
 - `SiteSetting` : clé `businessHours` ; logo du site téléversé uniquement (contrainte en base).
 - `Order` : clôture d'une commande à livrer réservée à la livraison effectuée (trigger).
 - Migrations `20261018090000_return_verification_status` (valeur d'énumération, séparée : utilisable seulement après validation) et `20261018090100_owner_decisions`.
+
+## Phase 10 (décisions du propriétaire sur les retours et les livraisons)
+
+- `Return.createdById` facultatif et `Return.declaredBy` (`ReturnDeclarationSource` : `STAFF` / `CUSTOMER`) : le client peut déclarer lui-même ; déclarant interne présent si et seulement si le personnel déclare (contrainte `returns_declarer_check`), figés (trigger).
+- `Return.verificationRequestedAt` et `Return.verificationReminderStage` (0 à 3) : suivi des relances posé par la base (date à la demande, remise à zéro à la réponse, palier croissant ; contrainte `returns_reminder_check`). `ReturnEventType` : `VERIFICATION_REMINDED`, `VERIFICATION_ESCALATED` (événements système, sans auteur).
+- `Return.refundExceptionNote` : remboursement versé par la personne qui a décidé, à titre d'exception motivée ; écrit seulement au versement ; sans lui, le trigger refuse le versement par le décideur.
+- `ReturnAttachment` (returnId, storageKey unique, contentType, byteSize, createdAt) : photos jointes par le client, **ajout seul**, fichier privé `retours/<retour>/photo-<uuid>.<jpg|png|webp>`, 2 Mo au plus (contrainte `return_attachments_file_check`). Jamais servies par `/medias`.
+- `ReturnEvent` : une étape sans auteur interne est une action du système ou du client (`details.by = customer`).
+- `SiteSetting` : `businessHours.holidays` (jours fériés AAAA-MM-JJ, jamais comptés) ; défaut inchangé (lundi–samedi 8 h–18 h, horaires de la phase 9) ; nouvelle clé `returnReminders` (12 / 24 / 48 heures ouvrables).
+- Permissions `deliveries.update_own` (livreur) et `returns.refund_own_decision` (administrateur principal seulement).
+- Migrations `20261018120000_return_reminder_events` (valeurs d'énumération, séparée) et `20261018120100_phase10_returns_couriers`.

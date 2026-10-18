@@ -27,9 +27,11 @@ le **Journal d'audit**. Les rapports financiers s'exportent en CSV, Excel (.xlsx
 Sans fournisseur e-mail configuré, un lien de réinitialisation de mot de passe se génère avec
 `pnpm admin:reset-link <email>` (après vérification de l'identité du demandeur).
 
-Les commandes non confirmées libèrent leur stock après le délai de réservation (48 h par défaut), et les
-retours sans action après 24 heures ouvrables déclenchent une alerte unique aux administrateurs :
-planifier `pnpm orders:expire` (par exemple toutes les 15 minutes).
+Les commandes non confirmées libèrent leur stock après le délai de réservation (48 h par défaut), les
+retours sans action après 24 heures ouvrables déclenchent une alerte unique aux administrateurs, et les
+vérifications de retour restées sans réponse sont relancées (12 et 24 heures ouvrables) puis escaladées
+(48 heures ouvrables) : planifier `pnpm orders:expire` (par exemple toutes les 15 minutes). Heures
+ouvrables, jours fériés et délais de relance : **Administration → Paramètres**.
 
 Vérifications : `pnpm lint && pnpm typecheck && pnpm test && pnpm build && pnpm test:e2e`.
 
