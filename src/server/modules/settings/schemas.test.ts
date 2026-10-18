@@ -64,6 +64,17 @@ describe("paramètres : schémas", () => {
     expect(parse(Array.from({ length: 201 }, (_, index) => new Date(Date.UTC(2026, 0, 1 + index)).toISOString().slice(0, 10))).success).toBe(false);
   });
 
+  it("relances des vérifications (décision 4) : 12, 24 puis 48 heures ouvrables par défaut, paliers croissants", () => {
+    const parse = (value: unknown) => settingsSchemas.returnReminders.safeParse(value);
+    expect(settingsDefaults.returnReminders).toEqual({ firstReminderHours: 12, secondReminderHours: 24, escalationHours: 48 });
+    expect(parse({ firstReminderHours: 4, secondReminderHours: 8, escalationHours: 16 }).success).toBe(true);
+    expect(parse({ firstReminderHours: 24, secondReminderHours: 24, escalationHours: 48 }).success).toBe(false);
+    expect(parse({ firstReminderHours: 12, secondReminderHours: 48, escalationHours: 24 }).success).toBe(false);
+    expect(parse({ firstReminderHours: 0, secondReminderHours: 24, escalationHours: 48 }).success).toBe(false);
+    expect(parse({ firstReminderHours: 12, secondReminderHours: 24, escalationHours: 1000 }).success).toBe(false);
+    expect(parse({ ...settingsDefaults.returnReminders, extra: 1 }).success).toBe(false);
+  });
+
   it("impose la devise XOF et le fuseau Africa/Dakar", () => {
     expect(settingsSchemas.commerce.safeParse({ ...settingsDefaults.commerce, currency: "EUR" }).success).toBe(false);
     expect(settingsSchemas.commerce.safeParse({ ...settingsDefaults.commerce, timezone: "UTC" }).success).toBe(false);

@@ -1,5 +1,5 @@
 import "server-only";
-import type { DeliveryStatus, OrderStatus, Prisma } from "@/generated/prisma/client";
+import type { CourierKind, DeliveryStatus, OrderStatus, Prisma } from "@/generated/prisma/client";
 import { assertPermission, type Actor } from "@/server/authz/service";
 import type { Db } from "@/server/db/client";
 import type { ShippingAddress } from "@/server/modules/orders/schemas";
@@ -23,6 +23,10 @@ export interface CourierRow {
   id: string;
   name: string;
   phone: string;
+  /** Décision 5 : livreur interne (compte relié) ou transporteur externe (sans compte). */
+  kind: CourierKind;
+  userId: string | null;
+  accountName: string | null;
   isActive: boolean;
   activeDeliveries: number;
 }
@@ -36,11 +40,90 @@ export async function listCouriers(client: Db, actor: Actor): Promise<CourierRow
       id: true,
       name: true,
       phone: true,
+      kind: true,
+      userId: true,
+      user: { select: { name: true, email: true } },
       isActive: true,
       _count: { select: { deliveries: { where: { status: { in: ["ASSIGNED", "IN_TRANSIT"] }, order: { status: { not: "CANCELLED" } } } } } },
     },
   });
-  return couriers.map(({ _count, ...courier }) => ({ ...courier, activeDeliveries: _count.deliveries }));
+  return couriers.map(({ _count, user, ...courier }) => ({ ...courier, accountName: user ? `${user.name} (${user.email})` : null, activeDeliveries: _count.deliveries }));
+}
+
+/** Comptes reliables à un livreur interne : personnel actif portant le rôle « Livreur » (deliveries.manage). */
+export async function listCourierAccounts(client: Db, actor: Actor): Promise<{ id: string; label: string }[]> {
+  await assertPermission(client, actor, "deliveries.manage");
+  const users = await client.user.findMany({
+    where: { isActive: true, kind: "STAFF", roles: { some: { role: { code: "COURIER" } } } },
+    orderBy: { name: "asc" },
+    select: { id: true, name: true, email: true },
+  });
+  return users.map((user) => ({ id: user.id, label: `${user.name} (${user.email})` }));
+}
+
+export interface MyDeliveryRow {
+  orderId: string;
+  orderNumber: string;
+  orderStatus: OrderStatus;
+  status: DeliveryStatus;
+  scheduledFor: Date | null;
+  attempts: number;
+  failureReason: string | null;
+  customerName: string;
+  customerPhone: string;
+  address: string;
+  /** Reste à encaisser à la livraison. */
+  balance: number;
+  items: { productName: string; variantName: string; quantity: number }[];
+}
+
+/** Livraisons terminées encore affichées au livreur (confirmation de sa tournée). */
+const RECENT_DELIVERED_HOURS = 24;
+
+/**
+ * Livraisons du livreur connecté (deliveries.update_own, décision 5) : celles qui lui sont attribuées et
+ * restent à faire, plus celles livrées depuis 24 h. Seulement ce qu'il faut pour livrer et encaisser :
+ * client, téléphone, adresse, articles, reste à payer ; rien d'autre de la commande ni de la caisse.
+ */
+export async function listMyDeliveries(client: Db, actor: Actor, now: Date = new Date()): Promise<MyDeliveryRow[]> {
+  await assertPermission(client, actor, "deliveries.update_own");
+  const deliveries = await client.delivery.findMany({
+    where: {
+      courier: { userId: actor.id },
+      OR: [PENDING_DELIVERY_WHERE, { status: "DELIVERED", deliveredAt: { gte: new Date(now.getTime() - RECENT_DELIVERED_HOURS * 3_600_000) } }],
+    },
+    orderBy: [{ scheduledFor: { sort: "asc", nulls: "last" } }, { updatedAt: "asc" }],
+    take: 100,
+    select: {
+      status: true,
+      scheduledFor: true,
+      attempts: true,
+      failureReason: true,
+      order: {
+        select: {
+          id: true,
+          number: true,
+          status: true,
+          total: true,
+          amountPaid: true,
+          shippingAddress: true,
+          customer: { select: { name: true, phone: true } },
+          items: { orderBy: { id: "asc" }, select: { productName: true, variantName: true, quantity: true } },
+        },
+      },
+    },
+  });
+  return deliveries.map(({ order, ...delivery }) => ({
+    ...delivery,
+    orderId: order.id,
+    orderNumber: order.number,
+    orderStatus: order.status,
+    customerName: order.customer.name,
+    customerPhone: order.customer.phone,
+    address: addressText(order.shippingAddress as unknown as ShippingAddress | null),
+    balance: Math.max(0, order.total - order.amountPaid),
+    items: order.items,
+  }));
 }
 
 export interface DeliveryRow {

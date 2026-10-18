@@ -260,7 +260,21 @@ export function CheckboxField({ name, label, defaultChecked }: { name: string; l
   );
 }
 
-export function FileField({ name, label, accept, hint, required = true }: { name: string; label: string; accept: string; hint?: string; required?: boolean }) {
+export function FileField({
+  name,
+  label,
+  accept,
+  hint,
+  required = true,
+  multiple = false,
+}: {
+  name: string;
+  label: string;
+  accept: string;
+  hint?: string;
+  required?: boolean;
+  multiple?: boolean;
+}) {
   return (
     <FieldShell name={name} label={label} required={required} hint={hint}>
       {({ id, describedBy, invalid }) => (
@@ -269,6 +283,7 @@ export function FileField({ name, label, accept, hint, required = true }: { name
           name={name}
           type="file"
           accept={accept}
+          multiple={multiple}
           required={required}
           aria-invalid={invalid || undefined}
           aria-describedby={describedBy}

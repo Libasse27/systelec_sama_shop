@@ -46,7 +46,11 @@ export async function decideReturnAction(returnId: string, _state: ActionState, 
 
 export async function refundReturnAction(returnId: string, _state: ActionState, formData: FormData): Promise<ActionState> {
   return adminAction(returnPath(returnId), async (actor) => {
-    const { receiptNumber, replayed } = await refundReturn(db, actor, returnId, { idempotencyKey: text(formData, "idempotencyKey"), note: text(formData, "note") });
+    const { receiptNumber, replayed } = await refundReturn(db, actor, returnId, {
+      idempotencyKey: text(formData, "idempotencyKey"),
+      note: text(formData, "note"),
+      selfApprovalNote: text(formData, "selfApprovalNote"),
+    });
     return replayed ? `Remboursement déjà enregistré (reçu ${receiptNumber}).` : `Remboursement versé : reçu ${receiptNumber}.`;
   });
 }

@@ -121,3 +121,14 @@ export async function saveBusinessHoursAction(_state: ActionState, formData: For
     return "Heures ouvrables et jours fériés enregistrés.";
   });
 }
+
+export async function saveReturnRemindersAction(_state: ActionState, formData: FormData): Promise<ActionState> {
+  return adminAction(PATH, async (actor) => {
+    await saveSettings(db, actor, "returnReminders", {
+      firstReminderHours: int(formData, "firstReminderHours"),
+      secondReminderHours: int(formData, "secondReminderHours"),
+      escalationHours: int(formData, "escalationHours"),
+    });
+    return "Délais de relance enregistrés.";
+  });
+}

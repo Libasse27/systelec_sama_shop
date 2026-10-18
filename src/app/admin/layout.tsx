@@ -7,6 +7,7 @@ const NAVIGATION: { href: string; label: string; permission: Permission | readon
   { href: "/admin", label: "Tableau de bord", permission: "admin.access" },
   { href: "/admin/commandes", label: "Commandes", permission: "orders.read" },
   { href: "/admin/livraisons", label: "Livraisons", permission: "deliveries.manage" },
+  { href: "/admin/mes-livraisons", label: "Mes livraisons", permission: "deliveries.update_own" },
   { href: "/admin/retours", label: "Retours", permission: "orders.read" },
   { href: "/admin/encaissements", label: "Encaissements", permission: "payments.read" },
   { href: "/admin/rapports", label: "Rapports", permission: "reports.read" },

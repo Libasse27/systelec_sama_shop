@@ -15,6 +15,7 @@ const SETTING_LABELS: Record<SettingKey, string> = {
   tax: "TVA",
   features: "Fonctions",
   businessHours: "Heures ouvrables et jours fériés",
+  returnReminders: "Relances des vérifications",
 };
 
 /** Paramètres modifiables par écran : tous, sauf la devise et le fuseau (imposés par le schéma). */

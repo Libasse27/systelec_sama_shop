@@ -13,6 +13,7 @@ import {
   saveCompanyAction,
   saveFeaturesAction,
   savePaymentsAction,
+  saveReturnRemindersAction,
   saveTaxAction,
   uploadLogoAction,
 } from "./actions";
@@ -39,7 +40,7 @@ const WEEKDAYS = [
 export default async function SettingsPage() {
   const user = await requirePermission("settings.manage", "/admin/parametres");
   const settings = await getAllSettings(db, user);
-  const { company, commerce, payments, tax, features, businessHours } = settings;
+  const { company, commerce, payments, tax, features, businessHours, returnReminders } = settings;
   const [morning, afternoon] = businessHours.ranges;
 
   return (
@@ -125,7 +126,7 @@ export default async function SettingsPage() {
         <ActionForm action={saveBusinessHoursAction}>
           <p className="text-sm text-ink-muted">
             Tous les délais des retours se comptent en heures ouvrables, heure de Dakar : {RETURN_PROCESSING_BUSINESS_HOURS} heures pour commencer le traitement
-            (au-delà, les administrateurs sont alertés une fois et la demande reste ouverte). Les week-ends non cochés et
+            (au-delà, les administrateurs sont alertés une fois et la demande reste ouverte) et relances des vérifications ci-dessous. Les week-ends non cochés et
             les jours fériés du calendrier ne sont jamais comptés.
           </p>
           <fieldset className="flex flex-wrap gap-x-4 gap-y-2">
@@ -152,6 +153,24 @@ export default async function SettingsPage() {
           />
           <div>
             <SubmitButton>Enregistrer les heures ouvrables</SubmitButton>
+          </div>
+        </ActionForm>
+      </Section>
+
+      <Section title="Relances des vérifications (retours)">
+        <ActionForm action={saveReturnRemindersAction}>
+          <p className="text-sm text-ink-muted">
+            Quand une vérification demandée sur un retour reste sans réponse : première relance (client et responsable qui l&apos;a demandée), seconde relance, puis
+            escalade aux administrateurs. Délais en heures ouvrables depuis la demande. Les relances s&apos;arrêtent dès la réponse ; la demande n&apos;est jamais
+            annulée.
+          </p>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <IntegerField name="firstReminderHours" label="Première relance (heures)" defaultValue={returnReminders.firstReminderHours} />
+            <IntegerField name="secondReminderHours" label="Seconde relance (heures)" defaultValue={returnReminders.secondReminderHours} />
+            <IntegerField name="escalationHours" label="Escalade (heures)" defaultValue={returnReminders.escalationHours} />
+          </div>
+          <div>
+            <SubmitButton>Enregistrer les délais de relance</SubmitButton>
           </div>
         </ActionForm>
       </Section>

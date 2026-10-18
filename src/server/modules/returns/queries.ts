@@ -1,5 +1,5 @@
 import "server-only";
-import type { Prisma, ReturnEventType, ReturnExceptionGround, ReturnStatus, ReturnVerificationKind } from "@/generated/prisma/client";
+import type { Prisma, ReturnDeclarationSource, ReturnEventType, ReturnExceptionGround, ReturnStatus, ReturnVerificationKind } from "@/generated/prisma/client";
 import type { BusinessHours } from "@/lib/business-hours";
 import { assertPermission, type Actor } from "@/server/authz/service";
 import type { Db } from "@/server/db/client";
@@ -68,9 +68,14 @@ export interface ReturnView {
   createdAt: Date;
   decidedAt: Date | null;
   refundedAt: Date | null;
-  createdById: string;
+  /** Personnel déclarant ; nul quand le client a déclaré lui-même (declaredBy = CUSTOMER). */
+  createdById: string | null;
+  declaredBy: ReturnDeclarationSource;
   createdBy: string | null;
+  decidedById: string | null;
   decidedBy: string | null;
+  /** Décision 1 : remboursement versé par le décideur, à titre d'exception motivée. */
+  refundExceptionNote: string | null;
   refundReceipt: string | null;
   /** Politique de retours (décision 2). */
   handedOverAt: Date;
@@ -86,6 +91,11 @@ export interface ReturnView {
   pendingVerification: { kind: ReturnVerificationKind; request: string; requestedAt: Date; requestedBy: string | null } | null;
   items: { productName: string; variantName: string; sku: string; quantity: number; unitPrice: number }[];
   events: ReturnEventView[];
+  /** Vérification en attente : date de la demande et dernier palier de relance envoyé (décision 4). */
+  verificationRequestedAt: Date | null;
+  verificationReminderStage: number;
+  /** Photos jointes par le client (servies par /admin/retours/[id]/photos/[photoId]). */
+  attachments: { id: string; createdAt: Date }[];
 }
 
 const RETURN_SELECT = {
@@ -102,7 +112,9 @@ const RETURN_SELECT = {
   decidedAt: true,
   refundedAt: true,
   createdById: true,
+  declaredBy: true,
   decidedById: true,
+  refundExceptionNote: true,
   handedOverAt: true,
   declarationDeadline: true,
   lateDeclaration: true,
@@ -110,6 +122,9 @@ const RETURN_SELECT = {
   exceptionNote: true,
   firstActionAt: true,
   overdueNotifiedAt: true,
+  verificationRequestedAt: true,
+  verificationReminderStage: true,
+  attachments: { orderBy: [{ createdAt: "asc" }, { id: "asc" }], select: { id: true, createdAt: true } },
   refund: { select: { receiptNumber: true } },
   items: { orderBy: { id: "asc" }, select: { quantity: true, unitPrice: true, orderItem: { select: { productName: true, variantName: true, sku: true } } } },
   events: {
@@ -123,20 +138,20 @@ type ReturnRow = Prisma.ReturnGetPayload<{ select: typeof RETURN_SELECT }>;
 async function toViews(client: Db, rows: ReturnRow[], order: { subtotal: number; discountTotal: number }, schedule: BusinessHours): Promise<ReturnView[]> {
   const ids = new Set<string>();
   for (const row of rows) {
-    ids.add(row.createdById);
+    if (row.createdById) ids.add(row.createdById);
     if (row.decidedById) ids.add(row.decidedById);
     for (const event of row.events) if (event.actorId) ids.add(event.actorId);
   }
   const users = await client.user.findMany({ where: { id: { in: [...ids] } }, select: { id: true, name: true } });
   const names = new Map(users.map((user) => [user.id, user.name]));
   const now = new Date();
-  return rows.map(({ decidedById, refund, items, events, ...row }) => {
+  return rows.map(({ refund, items, events, ...row }) => {
     const eventViews = events.map(({ actorId, ...event }) => ({ ...event, actorName: actorId ? (names.get(actorId) ?? null) : null }));
     const lastRequest = [...eventViews].reverse().find((event) => event.type === "VERIFICATION_REQUESTED");
     return {
       ...row,
-      createdBy: names.get(row.createdById) ?? null,
-      decidedBy: decidedById ? (names.get(decidedById) ?? null) : null,
+      createdBy: row.createdById ? (names.get(row.createdById) ?? null) : null,
+      decidedBy: row.decidedById ? (names.get(row.decidedById) ?? null) : null,
       refundReceipt: refund?.receiptNumber ?? null,
       maxRefund: maxRefundFor(row.itemsValue, order),
       processingDueAt: processingDueAt(row.createdAt, schedule),
@@ -261,4 +276,55 @@ export async function listReturns(
     page,
     pageCount,
   };
+}
+
+export type ReturnAlertKind = "PROCESSING_OVERDUE" | "VERIFICATION_REMINDED" | "VERIFICATION_ESCALATED" | "CUSTOMER_DECLARED";
+
+export interface ReturnAlert {
+  id: string;
+  number: string;
+  kind: ReturnAlertKind;
+  /** Palier de relance atteint (vérification sans réponse). */
+  stage: number;
+  since: Date;
+}
+
+const ALERTS_SHOWN = 10;
+
+/**
+ * Notifications internes du tableau de bord sur les retours (phase 10, décision 4) : traitement non
+ * commencé dans le délai, vérification relancée ou escaladée, demande déclarée en ligne par le client
+ * et pas encore examinée. Calculées à la lecture (rien n'est à « marquer lu ») ; les plus urgentes d'abord.
+ */
+export async function getReturnAlerts(client: Db, actor: Actor, now: Date = new Date()): Promise<{ total: number; rows: ReturnAlert[] }> {
+  await assertPermission(client, actor, "orders.read");
+  const [schedule, waiting, verifications] = await Promise.all([
+    getBusinessHours(client),
+    client.return.findMany({
+      where: { status: "RECEIVED", firstActionAt: null },
+      orderBy: { createdAt: "asc" },
+      take: 200,
+      select: { id: true, number: true, status: true, createdAt: true, firstActionAt: true, overdueNotifiedAt: true, declaredBy: true },
+    }),
+    client.return.findMany({
+      where: { status: "VERIFICATION", verificationReminderStage: { gt: 0 } },
+      orderBy: [{ verificationReminderStage: "desc" }, { verificationRequestedAt: "asc" }],
+      take: 200,
+      select: { id: true, number: true, verificationReminderStage: true, verificationRequestedAt: true },
+    }),
+  ]);
+  const verificationAlerts: ReturnAlert[] = verifications.map((row) => ({
+    id: row.id,
+    number: row.number,
+    kind: row.verificationReminderStage >= 3 ? "VERIFICATION_ESCALATED" : "VERIFICATION_REMINDED",
+    stage: row.verificationReminderStage,
+    since: row.verificationRequestedAt ?? now,
+  }));
+  const waitingAlerts: ReturnAlert[] = waiting.flatMap((row): ReturnAlert[] => {
+    if (isOpenAndOverdue(row, schedule, now)) return [{ id: row.id, number: row.number, kind: "PROCESSING_OVERDUE", stage: 0, since: row.createdAt }];
+    return row.declaredBy === "CUSTOMER" ? [{ id: row.id, number: row.number, kind: "CUSTOMER_DECLARED", stage: 0, since: row.createdAt }] : [];
+  });
+  const rank: Record<ReturnAlertKind, number> = { VERIFICATION_ESCALATED: 0, PROCESSING_OVERDUE: 1, VERIFICATION_REMINDED: 2, CUSTOMER_DECLARED: 3 };
+  const all = [...verificationAlerts, ...waitingAlerts].sort((a, b) => rank[a.kind] - rank[b.kind] || a.since.getTime() - b.since.getTime());
+  return { total: all.length, rows: all.slice(0, ALERTS_SHOWN) };
 }

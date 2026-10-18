@@ -39,6 +39,8 @@ export const decideReturnSchema = z.discriminatedUnion("decision", [
 export const refundReturnSchema = z.object({
   idempotencyKey: z.uuid(),
   note: optionalText(300),
+  // Décision 1 (phase 10) : exception motivée quand la personne qui a décidé verse elle-même le remboursement.
+  selfApprovalNote: optionalText(500),
 });
 
 /** Demande de vérification avant la décision : nature et précisions (photos attendues, points à inspecter…). */
@@ -50,4 +52,18 @@ export const requestVerificationSchema = z.object({
 /** Réponse ou résultat de la vérification demandée. */
 export const answerVerificationSchema = z.object({
   response: z.string().trim().min(3, "Indiquez la réponse ou le résultat de la vérification").max(1_000),
+});
+
+/** Motifs proposés au client qui déclare lui-même un retour (phase 10, décision 2). */
+export const CUSTOMER_RETURN_REASONS = ["DAMAGED", "DEFECTIVE", "NOT_CONFORMING", "OTHER"] as const;
+
+export const customerReturnSchema = z.object({
+  idempotencyKey: z.uuid(),
+  category: z.enum(CUSTOMER_RETURN_REASONS, { error: "Choisissez le motif du retour" }),
+  description: z.string().trim().min(10, "Décrivez le problème rencontré (10 caractères au moins)").max(450),
+  items: createReturnSchema.shape.items,
+});
+
+export const customerAnswerSchema = z.object({
+  response: z.string().trim().min(3, "Indiquez votre réponse").max(1_000),
 });

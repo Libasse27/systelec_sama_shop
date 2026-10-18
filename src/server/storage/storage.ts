@@ -14,6 +14,16 @@ export function isValidStorageKey(key: string): boolean {
   return KEY_PATTERN.test(key);
 }
 
+/**
+ * Dossiers PRIVÉS : jamais servis par /medias (photos des retours envoyées par les clients, données
+ * personnelles). Ils ne se lisent que par une route qui contrôle les droits.
+ */
+const PRIVATE_FOLDERS = ["retours/"] as const;
+
+export function isPublicStorageKey(key: string): boolean {
+  return isValidStorageKey(key) && !PRIVATE_FOLDERS.some((folder) => key.startsWith(folder));
+}
+
 export interface FileStorage {
   put(key: string, bytes: Uint8Array): Promise<void>;
   /** Contenu du fichier, ou null s'il n'existe pas. */
@@ -65,9 +75,9 @@ export function getStorage(): FileStorage {
 
 export const mediaUrl = (key: string): string => `${MEDIA_URL_PREFIX}${key}`;
 
-/** Clé d'un fichier géré par l'application, ou null pour une URL externe. */
+/** Clé d'un fichier PUBLIC géré par l'application, ou null (URL externe, dossier privé). */
 export function keyFromMediaUrl(url: string): string | null {
   if (!url.startsWith(MEDIA_URL_PREFIX)) return null;
   const key = url.slice(MEDIA_URL_PREFIX.length);
-  return isValidStorageKey(key) ? key : null;
+  return isPublicStorageKey(key) ? key : null;
 }

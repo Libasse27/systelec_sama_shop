@@ -1,3 +1,4 @@
+import type { ReturnVerificationKind } from "@/generated/prisma/client";
 import { addBusinessHours, type BusinessHours } from "@/lib/business-hours";
 
 /**
@@ -25,3 +26,11 @@ export function processingDueAt(declaredAt: Date, schedule: BusinessHours): Date
 export function isProcessingOverdue(entry: { createdAt: Date; firstActionAt: Date | null }, schedule: BusinessHours, now: Date = new Date()): boolean {
   return entry.firstActionAt === null && now.getTime() > processingDueAt(entry.createdAt, schedule).getTime();
 }
+
+/**
+ * Vérifications qui attendent quelque chose du client (photos, facture, informations) : il en est averti,
+ * peut y répondre en ligne et est relancé (décision 4). L'inspection physique se fait en boutique.
+ */
+const CUSTOMER_VERIFICATION_KINDS: readonly ReturnVerificationKind[] = ["PHOTOS", "INVOICE", "INFORMATION"];
+
+export const customerConcernedBy = (kind: ReturnVerificationKind): boolean => CUSTOMER_VERIFICATION_KINDS.includes(kind);

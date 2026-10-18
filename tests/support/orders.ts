@@ -71,9 +71,15 @@ export async function readyOrder(manager: Actor, order: PlacedOrder, method: "DE
   await changeOrderStatus(db, manager, order.id, { status: method === "PICKUP" ? "READY_FOR_PICKUP" : "READY_TO_SHIP" });
 }
 
-/** Commande en retrait payée et remise au client (stock sorti). */
-export async function closedPickupOrder(fixtures: OrderFixtures, manager: Actor, cashier: Actor, lines?: Partial<Record<keyof typeof PRICES, number>>): Promise<PlacedOrder> {
-  const order = await confirmedOrder(fixtures, manager, { lines });
+/** Commande en retrait payée et remise au client (stock sorti) ; d'un compte client si `userId` est donné. */
+export async function closedPickupOrder(
+  fixtures: OrderFixtures,
+  manager: Actor,
+  cashier: Actor,
+  lines?: Partial<Record<keyof typeof PRICES, number>>,
+  userId?: string,
+): Promise<PlacedOrder> {
+  const order = await confirmedOrder(fixtures, manager, { lines, userId });
   await payInFull(cashier, order);
   await readyOrder(manager, order);
   await changeOrderStatus(db, manager, order.id, { status: "CLOSED" });

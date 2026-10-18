@@ -2,7 +2,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { createLocalStorage, isValidStorageKey, keyFromMediaUrl, mediaUrl, type FileStorage } from "./storage";
+import { createLocalStorage, isPublicStorageKey, isValidStorageKey, keyFromMediaUrl, mediaUrl, type FileStorage } from "./storage";
 
 describe("stockage local", () => {
   let dir: string;
@@ -31,6 +31,12 @@ describe("stockage local", () => {
       expect(isValidStorageKey(key)).toBe(false);
       await expect(storage.read(key)).rejects.toMatchObject({ code: "VALIDATION" });
     }
+  });
+
+  it("les photos des retours (dossier retours/) sont privées : jamais servies par /medias", () => {
+    expect(isPublicStorageKey("produits/p1/abc.png")).toBe(true);
+    expect(isPublicStorageKey("retours/abc123/photo-0b6c1c55-6f9c-4b0b-9a43-5b3f0e4f7d11.jpg")).toBe(false);
+    expect(isPublicStorageKey("../retours/x.png")).toBe(false);
   });
 
   it("convertit clé ↔ URL publique, et ignore les URL externes", () => {

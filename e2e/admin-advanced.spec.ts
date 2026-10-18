@@ -144,8 +144,10 @@ test.describe("administration avancée (phase 9)", () => {
     const courier = `Livreur E2E ${unique()}`;
     await staff.goto("/admin/livraison");
     const couriers = staff.getByRole("region", { name: "Livreurs" });
-    await couriers.getByLabel("Nom du livreur").last().fill(courier);
+    await couriers.getByLabel("Nom du livreur ou du transporteur").last().fill(courier);
     await couriers.getByLabel("Téléphone").last().fill("77 000 00 00");
+    // Sans compte : transporteur externe (décision 5, phase 10).
+    await couriers.getByLabel("Type").last().selectOption({ label: "Transporteur externe" });
     await couriers.getByRole("button", { name: "Ajouter le livreur" }).click();
     await expect(staff.getByText("Livreur ajouté.")).toBeVisible();
 

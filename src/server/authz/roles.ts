@@ -9,13 +9,14 @@ export interface RoleDefinition {
 }
 
 /**
- * Les 10 rôles système (§14) et leur matrice de permissions.
- * L'administrateur principal et l'administrateur ont toutes les permissions ;
- * seul un administrateur principal peut attribuer ou retirer le rôle d'administrateur principal.
+ * Les rôles système (§14, livreur ajouté en phase 10) et leur matrice de permissions.
+ * L'administrateur principal a toutes les permissions ; l'administrateur aussi, sauf l'exception de
+ * remboursement par le décideur (décision 1, phase 10). Seul un administrateur principal peut
+ * attribuer ou retirer le rôle d'administrateur principal.
  */
 export const ROLE_DEFINITIONS: readonly RoleDefinition[] = [
   { code: SUPER_ADMIN, label: "Administrateur principal", permissions: PERMISSIONS },
-  { code: "ADMIN", label: "Administrateur", permissions: PERMISSIONS },
+  { code: "ADMIN", label: "Administrateur", permissions: PERMISSIONS.filter((permission) => permission !== "returns.refund_own_decision") },
   {
     code: "CATALOG_MANAGER",
     label: "Gestionnaire de catalogue",
@@ -87,6 +88,11 @@ export const ROLE_DEFINITIONS: readonly RoleDefinition[] = [
     code: "TECHNICIAN",
     label: "Technicien",
     permissions: ["admin.access", "interventions.update_own"],
+  },
+  {
+    code: "COURIER",
+    label: "Livreur",
+    permissions: ["admin.access", "deliveries.update_own"],
   },
   {
     code: "CUSTOMER_SERVICE",

@@ -14,8 +14,13 @@ export const PERMISSIONS = [
   "orders.read",
   "orders.update",
   "deliveries.manage",
+  // Décision 5 (phase 10) : le livreur interne travaille sur SES livraisons (départ, encaissement, résultat).
+  "deliveries.update_own",
   // Décision 2 : examiner (vérification) et décider un retour, jamais celui qu'on a déclaré.
   "returns.decide",
+  // Décision 1 (phase 10) : verser soi-même le remboursement d'un retour qu'on a décidé, à titre
+  // d'exception motivée (un seul administrateur disponible). Réservé à l'administrateur principal.
+  "returns.refund_own_decision",
   "payments.read",
   "payments.record",
   "payments.correct",

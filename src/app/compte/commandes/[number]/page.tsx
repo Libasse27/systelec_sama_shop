@@ -3,9 +3,11 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ActionForm, SubmitButton } from "@/components/forms/form-controls";
 import { OrderDetails } from "@/components/orders/order-details";
+import { CustomerReturns } from "@/components/returns/customer-returns";
 import { requireUser } from "@/server/auth/session";
 import { db } from "@/server/db/client";
 import { getCustomerOrder } from "@/server/modules/orders/queries";
+import { getCustomerReturns } from "@/server/modules/returns/customer";
 import { cancelOwnOrderAction } from "../../actions";
 
 export const metadata: Metadata = { title: "Ma commande", robots: { index: false } };
@@ -18,6 +20,7 @@ export default async function AccountOrderPage({ params, searchParams }: Props) 
   const user = await requireUser(`/compte/commandes/${number}`);
   const order = await getCustomerOrder(db, user.id, number);
   if (!order) notFound();
+  const returns = await getCustomerReturns(db, { userId: user.id }, number);
 
   return (
     <main className="mx-auto max-w-3xl px-4 py-8">
@@ -35,6 +38,7 @@ export default async function AccountOrderPage({ params, searchParams }: Props) 
       <div className="mt-6">
         <OrderDetails order={order} receiptHref={(receipt) => `/recus/${receipt}`} invoiceHref={(invoice) => `/factures/${invoice}`} />
       </div>
+      {returns && <CustomerReturns orderNumber={order.number} token={null} {...returns} />}
       {order.status === "PENDING_CONFIRMATION" && (
         <ActionForm action={cancelOwnOrderAction.bind(null, order.number)} className="mt-6">
           <div>

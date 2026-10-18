@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
 import { PageHeader, Section } from "@/components/admin/admin-ui";
-import { ActionForm, CheckboxField, IntegerField, SubmitButton, TextField } from "@/components/forms/form-controls";
+import { ActionForm, CheckboxField, IntegerField, SelectField, SubmitButton, TextField } from "@/components/forms/form-controls";
+import { COURIER_KIND_LABELS } from "@/lib/labels";
 import { requirePermission } from "@/server/auth/session";
 import { db } from "@/server/db/client";
-import { listCouriers, type CourierRow } from "@/server/modules/deliveries/queries";
+import { listCourierAccounts, listCouriers, type CourierRow } from "@/server/modules/deliveries/queries";
 import { listDeliverySettings } from "@/server/modules/orders/delivery-settings";
 import { saveCourierAction, savePickupPointAction, saveZoneAction } from "./actions";
 
@@ -48,12 +49,28 @@ function PickupForm({ point }: { point?: Point }) {
   );
 }
 
-function CourierForm({ courier }: { courier?: CourierRow }) {
+const courierKinds = Object.entries(COURIER_KIND_LABELS).map(([value, label]) => ({ value, label }));
+
+/** Décision 5 : livreur interne relié à un compte (ses livraisons seulement) ou transporteur externe sans compte. */
+function CourierForm({ courier, accounts }: { courier?: CourierRow; accounts: { id: string; label: string }[] }) {
+  // Le compte déjà relié reste proposé même s'il n'a plus le rôle (pour pouvoir le changer).
+  const accountOptions = courier?.userId && !accounts.some((account) => account.id === courier.userId)
+    ? [...accounts, { id: courier.userId, label: courier.accountName ?? "Compte actuel" }]
+    : accounts;
   return (
     <ActionForm action={saveCourierAction.bind(null, courier?.id ?? null)} resetOnSuccess={!courier}>
       <div className="grid gap-3 sm:grid-cols-2">
-        <TextField name="name" label="Nom du livreur" defaultValue={courier?.name} />
+        <TextField name="name" label="Nom du livreur ou du transporteur" defaultValue={courier?.name} />
         <TextField name="phone" label="Téléphone" type="tel" defaultValue={courier?.phone} />
+        <SelectField name="kind" label="Type" options={courierKinds} defaultValue={courier?.kind ?? "INTERNAL"} />
+        <SelectField
+          name="userId"
+          label="Compte du livreur interne"
+          options={accountOptions.map((account) => ({ value: account.id, label: account.label }))}
+          defaultValue={courier?.userId}
+          required={false}
+          hint="Obligatoire pour un livreur interne : compte portant le rôle « Livreur ». Ignoré pour un transporteur externe."
+        />
       </div>
       <CheckboxField name="isActive" label="Disponible pour les livraisons" defaultChecked={courier?.isActive ?? true} />
       <div>
@@ -65,7 +82,7 @@ function CourierForm({ courier }: { courier?: CourierRow }) {
 
 export default async function DeliverySettingsPage() {
   const user = await requirePermission("deliveries.manage", "/admin/livraison");
-  const [{ zones, pickupPoints }, couriers] = await Promise.all([listDeliverySettings(db, user), listCouriers(db, user)]);
+  const [{ zones, pickupPoints }, couriers, accounts] = await Promise.all([listDeliverySettings(db, user), listCouriers(db, user), listCourierAccounts(db, user)]);
 
   return (
     <div className="flex flex-col gap-6">
@@ -94,15 +111,17 @@ export default async function DeliverySettingsPage() {
           {couriers.map((courier) => (
             <details key={courier.id} className="rounded-lg border border-line p-3">
               <summary className="cursor-pointer font-medium">
-                {courier.name} · {courier.activeDeliveries} livraison(s) en cours {!courier.isActive && <span className="text-sm text-ink-muted">(indisponible)</span>}
+                {courier.name} · {COURIER_KIND_LABELS[courier.kind]}
+                {courier.accountName && ` : ${courier.accountName}`} · {courier.activeDeliveries} livraison(s) en cours{" "}
+                {!courier.isActive && <span className="text-sm text-ink-muted">(indisponible)</span>}
               </summary>
               <div className="mt-3">
-                <CourierForm courier={courier} />
+                <CourierForm courier={courier} accounts={accounts} />
               </div>
             </details>
           ))}
-          <h3 className="font-semibold">Nouveau livreur</h3>
-          <CourierForm />
+          <h3 className="font-semibold">Nouveau livreur ou transporteur</h3>
+          <CourierForm accounts={accounts} />
         </div>
       </Section>
       <Section title="Points de retrait">

@@ -32,8 +32,8 @@ describe("RBAC (PostgreSQL)", () => {
   });
 
   it("synchronise les rôles de façon idempotente et journalise la création", async () => {
-    expect(await db.role.count()).toBe(10);
-    expect(await db.auditLog.count({ where: { action: "rbac.role.create" } })).toBe(10);
+    expect(await db.role.count()).toBe(11);
+    expect(await db.auditLog.count({ where: { action: "rbac.role.create" } })).toBe(11);
     expect(await syncRolesAndPermissions(db)).toEqual({ permissionsCreated: 0, rolesCreated: 0, rolesUpdated: [] });
   });
 

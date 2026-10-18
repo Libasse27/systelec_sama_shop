@@ -11,9 +11,10 @@ const rolesWith = (permission: Permission) =>
  * Matrice attendue, écrite indépendamment de roles.ts : toute modification des droits
  * d'un rôle doit être reportée ici consciemment (§20 n° 3).
  */
-const EXPECTED: Record<string, readonly Permission[] | "ALL"> = {
+const EXPECTED: Record<string, readonly Permission[] | "ALL" | "ALL_BUT_SELF_REFUND"> = {
   SUPER_ADMIN: "ALL",
-  ADMIN: "ALL",
+  // Décision 1 (phase 10) : l'exception « décider puis rembourser soi-même » est réservée à l'administrateur principal.
+  ADMIN: "ALL_BUT_SELF_REFUND",
   CATALOG_MANAGER: ["admin.access", "categories.manage", "inventory.read", "products.archive", "products.create", "products.read", "products.update"],
   STOCK_MANAGER: ["admin.access", "inventory.adjust", "inventory.read", "products.read", "reports.read"],
   ORDER_MANAGER: ["admin.access", "customers.read", "deliveries.manage", "inventory.read", "orders.read", "orders.update", "payments.read", "products.read", "returns.decide"],
@@ -22,17 +23,25 @@ const EXPECTED: Record<string, readonly Permission[] | "ALL"> = {
   TECH_MANAGER: ["admin.access", "customers.read", "interventions.manage", "interventions.read", "inventory.read", "payments.record", "products.read", "quotes.manage", "quotes.read"],
   TECHNICIAN: ["admin.access", "interventions.update_own"],
   CUSTOMER_SERVICE: ["admin.access", "customers.read", "interventions.read", "orders.read", "payments.read", "products.read", "quotes.read"],
+  // Décision 5 (phase 10) : ses livraisons seulement (encaissement compris), rien d'autre.
+  COURIER: ["admin.access", "deliveries.update_own"],
+};
+
+const expectedPermissions = (expected: (typeof EXPECTED)[string]): Permission[] => {
+  if (expected === "ALL") return [...PERMISSIONS].sort();
+  if (expected === "ALL_BUT_SELF_REFUND") return PERMISSIONS.filter((permission) => permission !== "returns.refund_own_decision").sort();
+  return [...expected].sort();
 };
 
 describe("matrice des rôles (§14)", () => {
   it.each(Object.entries(EXPECTED))("le rôle %s a exactement les permissions attendues", (code, expected) => {
     const actual = [...(findRoleDefinition(code)?.permissions ?? [])].sort();
-    expect(actual).toEqual(expected === "ALL" ? [...PERMISSIONS].sort() : [...expected].sort());
+    expect(actual).toEqual(expectedPermissions(expected));
   });
 
-  it("définit exactement 10 rôles aux codes uniques, avec des permissions connues", () => {
-    expect(ROLE_DEFINITIONS).toHaveLength(10);
-    expect(new Set(ROLE_CODES).size).toBe(10);
+  it("définit exactement 11 rôles aux codes uniques, avec des permissions connues", () => {
+    expect(ROLE_DEFINITIONS).toHaveLength(11);
+    expect(new Set(ROLE_CODES).size).toBe(11);
     for (const role of ROLE_DEFINITIONS) {
       expect(role.permissions.every((p) => PERMISSIONS.includes(p))).toBe(true);
       expect(new Set(role.permissions).size).toBe(role.permissions.length);
@@ -56,6 +65,18 @@ describe("matrice des rôles (§14)", () => {
 
   it("réserve la décision sur un retour aux responsables (décision 2), le remboursement aux finances", () => {
     expect(rolesWith("returns.decide")).toEqual(["ADMIN", "ORDER_MANAGER", "SUPER_ADMIN"]);
+  });
+
+  it("réserve l'exception de remboursement par le décideur à l'administrateur principal (décision 1)", () => {
+    expect(rolesWith("returns.refund_own_decision")).toEqual([SUPER_ADMIN]);
+  });
+
+  it("limite le livreur à ses propres livraisons : ni remboursement, ni comptabilité, ni administration (décision 5)", () => {
+    expect(rolesWith("deliveries.update_own")).toEqual(["ADMIN", "COURIER", "SUPER_ADMIN"]);
+    const courier = findRoleDefinition("COURIER")?.permissions ?? [];
+    for (const forbidden of ["payments.record", "payments.correct", "payments.read", "reports.read", "orders.read", "customers.read", "deliveries.manage"] as const) {
+      expect(courier).not.toContain(forbidden);
+    }
   });
 
   it("réserve la gestion des rôles, des utilisateurs, des paramètres et l'audit aux administrateurs", () => {

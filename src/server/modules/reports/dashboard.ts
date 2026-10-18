@@ -5,6 +5,7 @@ import { assertPermission, type Actor } from "@/server/authz/service";
 import type { Db } from "@/server/db/client";
 import { PENDING_DELIVERY_WHERE } from "@/server/modules/deliveries/queries";
 import { listInventory } from "@/server/modules/inventory/queries";
+import { getReturnAlerts, type ReturnAlert } from "@/server/modules/returns/queries";
 
 type Counts<K extends string> = Partial<Record<K, number>>;
 
@@ -25,6 +26,10 @@ export interface Dashboard {
   deliveries: Counts<DeliveryStatus> | null;
   /** products.read : catalogue par statut. */
   catalog: Counts<ProductStatus> | null;
+  /** orders.read : notifications internes sur les retours (retards, relances, demandes en ligne). */
+  returnAlerts: { total: number; rows: ReturnAlert[] } | null;
+  /** deliveries.update_own sans deliveries.manage : livraisons attribuées au livreur connecté, à faire. */
+  myDeliveries: number | null;
 }
 
 const OPEN_ORDER_STATUSES: OrderStatus[] = ["PENDING_CONFIRMATION", "CONFIRMED", "PREPARING", "READY_FOR_PICKUP", "READY_TO_SHIP"];
@@ -52,7 +57,7 @@ export async function getDashboard(client: Db, actor: Actor, now: Date = new Dat
   const today = businessDateKey(now);
   const todayRange = businessDayRange(today)!;
 
-  const [orders, sales, cashToday, lowStock, quoteRequests, interventions, deliveries, catalog] = await Promise.all([
+  const [orders, sales, cashToday, lowStock, quoteRequests, interventions, deliveries, catalog, returnAlerts, myDeliveries] = await Promise.all([
     has("orders.read")
       ? Promise.all([
           client.order.groupBy({ by: ["status"], where: { status: { in: OPEN_ORDER_STATUSES } }, _count: { _all: true } }),
@@ -96,6 +101,9 @@ export async function getDashboard(client: Db, actor: Actor, now: Date = new Dat
     has("products.read")
       ? client.product.groupBy({ by: ["status"], _count: { _all: true } }).then((groups) => countsOf(groups.map((group) => ({ key: group.status, count: group._count._all }))))
       : null,
+    has("orders.read") ? getReturnAlerts(client, actor, now) : null,
+    // Livreur interne seulement : un responsable voit déjà toutes les livraisons.
+    has("deliveries.update_own") && !has("deliveries.manage") ? client.delivery.count({ where: { ...PENDING_DELIVERY_WHERE, courier: { userId: actor.id } } }) : null,
   ]);
-  return { orders, sales, cashToday, lowStock, quoteRequests, interventions, deliveries, catalog };
+  return { orders, sales, cashToday, lowStock, quoteRequests, interventions, deliveries, catalog, returnAlerts, myDeliveries };
 }

@@ -1,5 +1,5 @@
 import "server-only";
-import type { PrismaClient } from "@/generated/prisma/client";
+import type { Prisma, PrismaClient } from "@/generated/prisma/client";
 import { businessYear } from "@/lib/dates";
 import { formatFcfa } from "@/lib/money";
 import { recordAudit } from "@/server/audit/audit";
@@ -17,6 +17,22 @@ import { lockTarget, targetLink, targetOf, type PaymentTarget } from "./targets"
 const sameTarget = (payment: { orderId: string | null; interventionId: string | null }, target: PaymentTarget) =>
   target.kind === "order" ? payment.orderId === target.id : payment.interventionId === target.id;
 
+/**
+ * Décision 5 (phase 10) : sans payments.record, le livreur interne encaisse le solde de la commande
+ * qu'il est en train de livrer (livraison « en cours », assignée à son compte), et rien d'autre.
+ */
+async function isOwnDeliveryInTransit(client: Prisma.TransactionClient | PrismaClient, actor: Actor, target: PaymentTarget): Promise<boolean> {
+  if (target.kind !== "order" || !actor.permissions.has("deliveries.update_own")) return false;
+  const delivery = await client.delivery.findUnique({ where: { orderId: target.id }, select: { status: true, courier: { select: { userId: true, isActive: true } } } });
+  return delivery?.status === "IN_TRANSIT" && delivery.courier.isActive && delivery.courier.userId === actor.id;
+}
+
+/** Contrôle AVANT la transaction (refus journalisé) ; revérifié sous verrou pour un livreur. */
+async function authorizeRecord(client: PrismaClient, actor: Actor, target: PaymentTarget): Promise<void> {
+  if (actor.permissions.has("payments.record") || (await isOwnDeliveryInTransit(client, actor, target))) return;
+  await assertPermission(client, actor, "payments.record");
+}
+
 export interface RecordedPayment {
   id: string;
   receiptNumber: string;
@@ -25,12 +41,12 @@ export interface RecordedPayment {
 }
 
 /**
- * Enregistre un encaissement en espèces (permission payments.record) sur une commande ou une
- * intervention : montant contrôlé sous verrou (jamais au-delà du solde ; solde complet si le
+ * Enregistre un encaissement en espèces (permission payments.record, ou livreur interne sur sa
+ * livraison en cours) sur une commande ou une intervention : montant contrôlé sous verrou (jamais au-delà du solde ; solde complet si le
  * partiel est désactivé), reçu numéroté, statut de paiement recalculé, audité et notifié.
  */
 export async function recordPayment(client: PrismaClient, actor: Actor, target: PaymentTarget, input: unknown): Promise<RecordedPayment> {
-  await assertPermission(client, actor, "payments.record");
+  await authorizeRecord(client, actor, target);
   const { amount, note, idempotencyKey } = parseInput(recordPaymentSchema, input, "Encaissement");
   const { partialPaymentEnabled } = await getSetting("commerce", client);
 
@@ -38,6 +54,10 @@ export async function recordPayment(client: PrismaClient, actor: Actor, target: 
   try {
     recorded = await client.$transaction(async (tx) => {
       const locked = await lockTarget(tx, target);
+      // Livreur : revérifié sous le verrou de la commande (livraison réassignée ou terminée entre-temps).
+      if (!actor.permissions.has("payments.record") && !(await isOwnDeliveryInTransit(tx, actor, target))) {
+        throw new AppError("FORBIDDEN", "Cette livraison n'est plus en cours avec vous.");
+      }
       const existing = await tx.payment.findUnique({
         where: { idempotencyKey },
         select: { id: true, receiptNumber: true, orderId: true, interventionId: true, recordedById: true, amount: true },

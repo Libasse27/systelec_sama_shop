@@ -2,15 +2,13 @@ import "server-only";
 import type { PrismaClient } from "@/generated/prisma/client";
 import { formatDateTime } from "@/lib/dates";
 import { recordAudit } from "@/server/audit/audit";
-import { SUPER_ADMIN } from "@/server/authz/roles";
 import { logger } from "@/server/logger";
 import { dispatchNotifications, queueNotifications } from "@/server/notifications/queue";
 import { isProcessingOverdue, processingDueAt, RETURN_PROCESSING_BUSINESS_HOURS } from "./policy";
 import { getBusinessHours } from "./queries";
 import { recordReturnEvent } from "./service";
+import { activeAdmins } from "./staff";
 
-/** Rôles alertés quand un retour attend au-delà du délai de traitement. */
-const ALERTED_ROLES = [SUPER_ADMIN, "ADMIN"] as const;
 const BATCH = 500;
 
 /**
@@ -47,13 +45,7 @@ export async function notifyOverdueReturns(client: PrismaClient, now: Date = new
       if (current.status !== "RECEIVED" || current.firstActionAt !== null || current.overdueNotifiedAt !== null) return null;
       // Destinataires lus AVANT de marquer l'alerte : sans destinataire joignable, rien n'est marqué
       // (l'alerte sera retentée au prochain passage) et l'anomalie est journalisée.
-      const admins = (
-        await tx.user.findMany({
-          where: { isActive: true, roles: { some: { role: { code: { in: [...ALERTED_ROLES] } } } } },
-          orderBy: { createdAt: "asc" },
-          select: { email: true, phone: true },
-        })
-      ).filter((admin) => admin.email || admin.phone);
+      const admins = await activeAdmins(tx);
       if (admins.length === 0) {
         logger.error("Retour en retard de traitement : aucun administrateur actif joignable, alerte reportée", { returnId: candidate.id });
         return null;

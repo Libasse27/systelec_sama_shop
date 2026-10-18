@@ -88,7 +88,7 @@ const civilDate = z
 export const MAX_HOLIDAYS = 200;
 
 /**
- * Heures ouvrables (délai de traitement des retours), à Dakar (UTC+0 toute l'année).
+ * Heures ouvrables (délais de traitement et relances des retours), à Dakar (UTC+0 toute l'année).
  * Jours ISO (1 = lundi … 7 = dimanche), une ou deux plages par jour ouvrable, et calendrier des jours
  * fériés (phase 10, décision 3) : un jour férié n'est jamais compté. Absent d'un paramètre enregistré
  * avant la phase 10 : aucun jour férié.
@@ -121,6 +121,23 @@ export const businessHoursSchema = z
   })
   .strict();
 
+/** Délai d'une relance, en heures ouvrables (un mois ouvré au plus). */
+const reminderHours = z.number().int("Nombre d'heures entier").min(1, "Au moins 1 heure").max(720, "720 heures au plus");
+
+/**
+ * Relances d'une vérification restée sans réponse (phase 10, décision 4), en heures ouvrables depuis
+ * la demande : première relance, seconde relance, puis escalade aux administrateurs.
+ */
+export const returnRemindersSchema = z
+  .object({
+    firstReminderHours: reminderHours,
+    secondReminderHours: reminderHours,
+    escalationHours: reminderHours,
+  })
+  .strict()
+  .refine((value) => value.firstReminderHours < value.secondReminderHours, { message: "La seconde relance doit suivre la première", path: ["secondReminderHours"] })
+  .refine((value) => value.secondReminderHours < value.escalationHours, { message: "L'escalade doit suivre la seconde relance", path: ["escalationHours"] });
+
 export const settingsSchemas = {
   company: companySettingsSchema,
   commerce: commerceSettingsSchema,
@@ -128,6 +145,7 @@ export const settingsSchemas = {
   tax: taxSettingsSchema,
   features: featureSettingsSchema,
   businessHours: businessHoursSchema,
+  returnReminders: returnRemindersSchema,
 } as const;
 
 export type SettingKey = keyof typeof settingsSchemas;
@@ -168,4 +186,5 @@ export const settingsDefaults: { [K in SettingKey]: SettingValue<K> } = {
   // qu'elle n'est pas formellement approuvée ; un administrateur peut changer les horaires à l'écran.
   // Aucun jour férié n'est inventé : le calendrier se saisit dans l'administration.
   businessHours: { days: [1, 2, 3, 4, 5, 6], ranges: [{ start: "08:00", end: "18:00" }], holidays: [] },
+  returnReminders: { firstReminderHours: 12, secondReminderHours: 24, escalationHours: 48 },
 };

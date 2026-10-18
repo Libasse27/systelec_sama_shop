@@ -37,7 +37,13 @@ export async function savePickupPointAction(id: string | null, _state: ActionSta
 
 export async function saveCourierAction(id: string | null, _state: ActionState, formData: FormData): Promise<ActionState> {
   return adminAction("/admin/livraison", async (actor) => {
-    await saveCourier(db, actor, id, { name: text(formData, "name"), phone: text(formData, "phone"), isActive: checkbox(formData, "isActive") });
+    await saveCourier(db, actor, id, {
+      name: text(formData, "name"),
+      phone: text(formData, "phone"),
+      kind: text(formData, "kind"),
+      userId: text(formData, "userId"),
+      isActive: checkbox(formData, "isActive"),
+    });
     return id ? "Livreur enregistré." : "Livreur ajouté.";
   });
 }

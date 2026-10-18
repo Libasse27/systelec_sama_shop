@@ -2,7 +2,9 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { PageHeader, Section } from "@/components/admin/admin-ui";
 import { DELIVERY_STATUS_LABELS, INTERVENTION_STATUS_LABELS, ORDER_STATUS_LABELS, PRODUCT_STATUS_LABELS, QUOTE_REQUEST_STATUS_LABELS } from "@/lib/labels";
+import { formatDateTime } from "@/lib/dates";
 import { formatFcfa } from "@/lib/money";
+import type { ReturnAlert } from "@/server/modules/returns/queries";
 import { findRoleDefinition } from "@/server/authz/roles";
 import { requirePermission } from "@/server/auth/session";
 import { db } from "@/server/db/client";
@@ -38,6 +40,48 @@ function Amount({ label, value, strong = false }: { label: string; value: number
   );
 }
 
+function alertText(alert: ReturnAlert): string {
+  switch (alert.kind) {
+    case "VERIFICATION_ESCALATED":
+      return `vérification sans réponse, escaladée (demandée le ${formatDateTime(alert.since)})`;
+    case "VERIFICATION_REMINDED":
+      return `vérification sans réponse, relance ${alert.stage} (demandée le ${formatDateTime(alert.since)})`;
+    case "PROCESSING_OVERDUE":
+      return `traitement non commencé dans le délai (déclaré le ${formatDateTime(alert.since)})`;
+    case "CUSTOMER_DECLARED":
+      return `déclaré en ligne par le client le ${formatDateTime(alert.since)}, à examiner`;
+  }
+}
+
+/** Notifications internes sur les retours (phase 10, décision 4). */
+function ReturnAlerts({ alerts }: { alerts: { total: number; rows: ReturnAlert[] } }) {
+  return (
+    <Section title="Alertes retours">
+      {alerts.total === 0 ? (
+        <p className="text-ink-muted">Aucun retour en retard ni en attente d&apos;examen.</p>
+      ) : (
+        <>
+          <ul className="space-y-1 text-sm">
+            {alerts.rows.map((alert) => (
+              <li key={`${alert.id}-${alert.kind}`}>
+                <Link href={`/admin/retours/${alert.id}`} className={`font-medium ${linkClass}`}>
+                  {alert.number}
+                </Link>{" "}
+                <span className={alert.kind === "CUSTOMER_DECLARED" ? "text-ink-muted" : "text-red-700"}>{alertText(alert)}</span>
+              </li>
+            ))}
+          </ul>
+          {alerts.total > alerts.rows.length && (
+            <Link href="/admin/retours" className={`mt-3 inline-block text-sm ${linkClass}`}>
+              Voir les {alerts.total} alertes
+            </Link>
+          )}
+        </>
+      )}
+    </Section>
+  );
+}
+
 const OPEN_ORDER_LABELS = {
   PENDING_CONFIRMATION: ORDER_STATUS_LABELS.PENDING_CONFIRMATION,
   CONFIRMED: ORDER_STATUS_LABELS.CONFIRMED,
@@ -51,7 +95,7 @@ export default async function AdminHomePage() {
   const user = await requirePermission("admin.access", "/admin");
   const roleLabels = user.roles.map((code) => findRoleDefinition(code)?.label ?? code);
   const dashboard = await getDashboard(db, user);
-  const { orders, sales, cashToday, lowStock, quoteRequests, interventions, deliveries, catalog } = dashboard;
+  const { orders, sales, cashToday, lowStock, quoteRequests, interventions, deliveries, catalog, returnAlerts, myDeliveries } = dashboard;
 
   return (
     <div className="flex flex-col gap-6">
@@ -95,6 +139,17 @@ export default async function AdminHomePage() {
                 Retours à traiter
               </Link>
               <strong>{orders.returnsToProcess}</strong>
+            </p>
+          </Section>
+        )}
+        {returnAlerts && <ReturnAlerts alerts={returnAlerts} />}
+        {myDeliveries !== null && (
+          <Section title="Mes livraisons">
+            <p className="flex justify-between text-sm">
+              <Link href="/admin/mes-livraisons" className={linkClass}>
+                Livraisons qui me sont attribuées, à faire
+              </Link>
+              <strong>{myDeliveries}</strong>
             </p>
           </Section>
         )}

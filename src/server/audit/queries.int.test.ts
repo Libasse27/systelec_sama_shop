@@ -25,7 +25,8 @@ describe("consultation du journal d'audit (PostgreSQL)", () => {
   it("filtre par acteur (nom, e-mail, système), action (exacte ou préfixe), entité, résultat et période", async () => {
     expect((await listAuditLogs(db, auditor, { actor: "FINANCE" })).total).toBe(3);
     expect((await listAuditLogs(db, auditor, { actor: other.id.slice(0, 8) })).total).toBe(3); // e-mail = <id>@test.sn
-    expect((await listAuditLogs(db, auditor, { actor: "systeme" })).total).toBe(10);
+    // Une création par rôle système (11 depuis le rôle Livreur, phase 10).
+    expect((await listAuditLogs(db, auditor, { actor: "systeme" })).total).toBe(11);
     expect((await listAuditLogs(db, auditor, { action: "payment." })).rows.map((row) => row.action)).toEqual(["payment.void", "payment.record"]);
     expect((await listAuditLogs(db, auditor, { action: "payment" })).total).toBe(0);
     expect((await listAuditLogs(db, auditor, { entityType: "Payment", entityId: "p1" })).total).toBe(2);
@@ -41,7 +42,7 @@ describe("consultation du journal d'audit (PostgreSQL)", () => {
     expect(first).toMatchObject({ total: AUDIT_PAGE_SIZE, pageCount: 1 });
     const all = await listAuditLogs(db, auditor, { page: 2 });
     expect(all.page).toBe(2);
-    expect(all.rows.length).toBe(AUDIT_PAGE_SIZE + 14 - AUDIT_PAGE_SIZE);
+    expect(all.rows.length).toBe(AUDIT_PAGE_SIZE + 15 - AUDIT_PAGE_SIZE);
     const outOfRange = await listAuditLogs(db, auditor, { page: 99 });
     expect(outOfRange.page).toBe(outOfRange.pageCount);
   });

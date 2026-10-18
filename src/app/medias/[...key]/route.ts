@@ -1,10 +1,10 @@
 import { IMAGE_TYPES, type ImageExtension } from "@/server/storage/image-type";
-import { getStorage, isValidStorageKey } from "@/server/storage/storage";
+import { getStorage, isPublicStorageKey } from "@/server/storage/storage";
 
-/** Images téléversées depuis l'administration. Noms aléatoires : mise en cache longue durée. */
+/** Images téléversées depuis l'administration. Noms aléatoires : mise en cache longue durée. Dossiers privés exclus. */
 export async function GET(_request: Request, { params }: { params: Promise<{ key: string[] }> }) {
   const key = (await params).key.join("/");
-  if (!isValidStorageKey(key)) return new Response("Introuvable", { status: 404 });
+  if (!isPublicStorageKey(key)) return new Response("Introuvable", { status: 404 });
   const bytes = await getStorage().read(key);
   if (!bytes) return new Response("Introuvable", { status: 404 });
   const extension = key.slice(key.lastIndexOf(".") + 1) as ImageExtension;

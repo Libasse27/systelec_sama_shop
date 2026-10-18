@@ -39,6 +39,19 @@ function Deadlines({ entry }: { entry: ReturnView }) {
           </span>
         )}
       </dd>
+      {entry.verificationRequestedAt && (
+        <>
+          <dt className="text-ink-muted">Vérification demandée le</dt>
+          <dd>
+            {formatDateTime(entry.verificationRequestedAt)}
+            {entry.verificationReminderStage > 0 && (
+              <span className="ml-2 rounded-md bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-900">
+                {entry.verificationReminderStage >= 3 ? "Sans réponse : escaladée aux administrateurs" : `Sans réponse : relance ${entry.verificationReminderStage} envoyée`}
+              </span>
+            )}
+          </dd>
+        </>
+      )}
     </dl>
   );
 }
@@ -111,7 +124,7 @@ function DecisionForm({ entry, user }: { entry: ReturnView; user: CurrentUser })
               defaultValue={entry.maxRefund}
               hint={`Au plus ${formatFcfa(entry.maxRefund)} (remise de la commande déduite, frais de livraison non compris). 0 : aucun remboursement. Le versement sera validé à part.`}
             />
-            <TextField name="note" label="Motif de la décision" hint="État des articles, remise en stock ou non, motif du refus." />
+            <TextField name="note" label="Motif de la décision" hint="État des articles, remise en stock ou non, motif du refus. Le motif d'un refus est communiqué au client." />
           </div>
           <CheckboxField name="restock" label="Remettre les articles en stock (intacts et revendables)" defaultChecked />
           {entry.lateDeclaration && (
@@ -135,6 +148,44 @@ function DecisionForm({ entry, user }: { entry: ReturnView; user: CurrentUser })
   );
 }
 
+/**
+ * Versement du remboursement (payments.correct). Décision 1 : par une autre personne que celle qui a
+ * décidé ; le décideur ne le verse qu'à titre d'exception motivée (administrateur principal).
+ */
+function RefundForm({ entry, user }: { entry: ReturnView; user: CurrentUser }) {
+  if (!user.permissions.has("payments.correct") || entry.refundAmount <= 0) return null;
+  const isDecider = entry.decidedById === user.id;
+  const canSelfApprove = user.permissions.has("returns.refund_own_decision");
+  if (entry.status === "REFUND_PENDING" && isDecider && !canSelfApprove) {
+    return <p className="text-sm text-ink-muted">Vous avez décidé ce retour : une autre personne autorisée verse le remboursement (séparation des responsabilités).</p>;
+  }
+  return (
+    <ActionForm action={refundReturnAction.bind(null, entry.id)}>
+      {entry.status === "REFUND_PENDING" ? (
+        <>
+          {isDecider && (
+            <fieldset className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+              <legend className="px-1 text-sm font-semibold">Exception : vous avez décidé ce retour</legend>
+              <TextField
+                name="selfApprovalNote"
+                label="Motif de l'exception"
+                hint="Obligatoire (ex. : seul administrateur disponible). Inscrit dans l'historique du retour et au journal d'audit."
+              />
+            </fieldset>
+          )}
+          <div className="flex flex-wrap items-end gap-2">
+            <input type="hidden" name="idempotencyKey" value={randomUUID()} />
+            <TextField name="note" label="Note interne" required={false} className="min-w-56 flex-1" />
+            <SubmitButton confirm={`Valider et verser ${formatFcfa(entry.refundAmount)} en espèces au client ?`}>
+              Rembourser {formatFcfa(entry.refundAmount)} en espèces
+            </SubmitButton>
+          </div>
+        </>
+      ) : null}
+    </ActionForm>
+  );
+}
+
 function DecisionSummary({ entry }: { entry: ReturnView }) {
   if (!entry.decidedAt) return null;
   return (
@@ -154,6 +205,7 @@ function DecisionSummary({ entry }: { entry: ReturnView }) {
           <a href={`/recus/${entry.refundReceipt}`} target="_blank" rel="noopener" className="text-brand-blue underline">
             reçu {entry.refundReceipt}
           </a>
+          {entry.refundExceptionNote && ` · versé par le décideur, exception : ${entry.refundExceptionNote}`}
         </div>
       )}
     </div>
@@ -181,7 +233,8 @@ export default async function ReturnPage({ params }: { params: Promise<{ id: str
           </p>
           <p>
             Déclaré le {formatDateTime(entry.createdAt)}
-            {entry.createdBy && ` par ${entry.createdBy}`}, au nom du client. Motif : {entry.reason}
+            {entry.declaredBy === "CUSTOMER" ? " par le client lui-même (en ligne)" : `${entry.createdBy ? ` par ${entry.createdBy}` : ""}, au nom du client`}. Motif :{" "}
+            {entry.reason}
           </p>
           <ul>
             {entry.items.map((item) => (
@@ -191,6 +244,25 @@ export default async function ReturnPage({ params }: { params: Promise<{ id: str
             ))}
           </ul>
           <p>Valeur : {formatFcfa(entry.itemsValue)}</p>
+          {entry.attachments.length > 0 && (
+            <div>
+              <p className="font-medium">Photos envoyées par le client</p>
+              <ul className="mt-1 flex flex-wrap gap-2">
+                {entry.attachments.map((photo, index) => (
+                  <li key={photo.id}>
+                    <a href={`/admin/retours/${entry.id}/photos/${photo.id}`} target="_blank" rel="noopener" className="block">
+                      {/* eslint-disable-next-line @next/next/no-img-element -- photo privée servie par une route contrôlée, sans optimisation d'image */}
+                      <img
+                        src={`/admin/retours/${entry.id}/photos/${photo.id}`}
+                        alt={`Photo ${index + 1} du client, envoyée le ${formatDateTime(photo.createdAt)}`}
+                        className="h-24 w-24 rounded-md border border-line object-cover"
+                      />
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
           <DecisionSummary entry={entry} />
         </div>
       </Section>
@@ -209,19 +281,7 @@ export default async function ReturnPage({ params }: { params: Promise<{ id: str
         <div className="flex flex-col gap-4">
           <VerificationForms entry={entry} user={user} />
           <DecisionForm entry={entry} user={user} />
-          {user.permissions.has("payments.correct") && entry.refundAmount > 0 && (
-            <ActionForm action={refundReturnAction.bind(null, entry.id)}>
-              {entry.status === "REFUND_PENDING" ? (
-                <div className="flex flex-wrap items-end gap-2">
-                  <input type="hidden" name="idempotencyKey" value={randomUUID()} />
-                  <TextField name="note" label="Note interne" required={false} className="min-w-56 flex-1" />
-                  <SubmitButton confirm={`Valider et verser ${formatFcfa(entry.refundAmount)} en espèces au client ?`}>
-                    Rembourser {formatFcfa(entry.refundAmount)} en espèces
-                  </SubmitButton>
-                </div>
-              ) : null}
-            </ActionForm>
-          )}
+          <RefundForm entry={entry} user={user} />
           {entry.status === "REFUND_PENDING" && !user.permissions.has("payments.correct") && (
             <p className="text-sm text-ink-muted">Remboursement à valider et verser par une personne autorisée (finances).</p>
           )}

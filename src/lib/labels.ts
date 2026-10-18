@@ -144,4 +144,27 @@ export const RETURN_EVENT_LABELS = {
   REJECTED: "Retour refusé",
   REFUNDED: "Remboursement versé",
   OVERDUE_NOTIFIED: "Délai de traitement dépassé : administrateur alerté",
+  VERIFICATION_REMINDED: "Relance : vérification sans réponse",
+  VERIFICATION_ESCALATED: "Escalade aux administrateurs : vérification sans réponse",
+} as const;
+
+export const CUSTOMER_RETURN_REASON_LABELS = {
+  DAMAGED: "Produit endommagé",
+  DEFECTIVE: "Produit défectueux ou en panne",
+  NOT_CONFORMING: "Produit non conforme à la commande",
+  OTHER: "Autre motif",
+} as const;
+
+/** Statut d'un retour tel que le client le voit (phase 10, décision 2). */
+export const RETURN_CUSTOMER_STATUS_LABELS = {
+  RECEIVED: "Demande reçue, en cours d'examen",
+  VERIFICATION: "Informations demandées",
+  REFUND_PENDING: "Acceptée : remboursement en préparation",
+  COMPLETED: "Traitée",
+  REJECTED: "Refusée",
+} as const;
+
+export const COURIER_KIND_LABELS = {
+  INTERNAL: "Livreur interne (compte)",
+  EXTERNAL: "Transporteur externe",
 } as const;

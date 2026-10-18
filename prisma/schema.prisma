@@ -35,6 +35,7 @@ model User {
   roles         UserRole[]
   payments      Payment[]
   technician    Technician?
+  courier       Courier?
 
   @@map("users")
 }
@@ -107,7 +108,7 @@ model LoginAttempt {
 
 // ─── Rôles et permissions (RBAC) ─────────────────────────────────────────────
 
-/// Rôle. Les 10 rôles système sont synchronisés depuis le code (src/server/authz/roles.ts).
+/// Rôle. Les rôles système (11 depuis le livreur, phase 10) sont synchronisés depuis le code (src/server/authz/roles.ts).
 model Role {
   id          String           @id @default(cuid())
   code        String           @unique
@@ -986,14 +987,25 @@ model Invoice {
 // ─── Phase 9 : livraisons détaillées, retours et remboursements ──────────────
 
 /// Livreur (interne ou prestataire). Un livreur désactivé ne reçoit plus de livraison.
+/// Livreur interne (compte utilisateur individuel) ou transporteur externe (sans compte).
+enum CourierKind {
+  INTERNAL
+  EXTERNAL
+}
+
+/// Décision 5 (phase 10) : un livreur INTERNE est relié à un compte (ses livraisons seulement) ;
+/// un transporteur EXTERNE n'a pas de compte (contrainte couriers_account_check).
 model Courier {
-  id         String     @id @default(cuid())
-  name       String     @unique
+  id         String      @id @default(cuid())
+  name       String      @unique
   phone      String
-  isActive   Boolean    @default(true)
+  kind       CourierKind @default(EXTERNAL)
+  userId     String?     @unique
+  user       User?       @relation(fields: [userId], references: [id], onDelete: Restrict)
+  isActive   Boolean     @default(true)
   deliveries Delivery[]
-  createdAt  DateTime   @default(now()) @db.Timestamptz(3)
-  updatedAt  DateTime   @updatedAt @db.Timestamptz(3)
+  createdAt  DateTime    @default(now()) @db.Timestamptz(3)
+  updatedAt  DateTime    @updatedAt @db.Timestamptz(3)
 
   @@map("couriers")
 }
@@ -1068,48 +1080,65 @@ enum ReturnEventType {
   REJECTED
   REFUNDED
   OVERDUE_NOTIFIED
+  /// Phase 10 (décision 4) : relance d'une vérification sans réponse, puis escalade aux administrateurs.
+  VERIFICATION_REMINDED
+  VERIFICATION_ESCALATED
+}
+
+/// Qui a déclaré le retour : le personnel au nom du client, ou le client lui-même (phase 10, décision 2).
+enum ReturnDeclarationSource {
+  STAFF
+  CUSTOMER
 }
 
 /// Retour d'articles d'une commande remise au client. Quantités et montants contrôlés en base.
 model Return {
-  id                  String                 @id @default(cuid())
-  number              String                 @unique
-  orderId             String
-  order               Order                  @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  id                        String                  @id @default(cuid())
+  number                    String                  @unique
+  orderId                   String
+  order                     Order                   @relation(fields: [orderId], references: [id], onDelete: Restrict)
   /// Clé envoyée par le formulaire : un double envoi n'enregistre qu'un retour.
-  idempotencyKey      String                 @unique
-  status              ReturnStatus           @default(RECEIVED)
+  idempotencyKey            String                  @unique
+  status                    ReturnStatus            @default(RECEIVED)
   /// Motif du client.
-  reason              String
+  reason                    String
   /// Valeur des articles retournés (prix figés de la commande).
-  itemsValue          Int
+  itemsValue                Int
   /// Montant à rembourser décidé (≤ valeur des articles).
-  refundAmount        Int                    @default(0)
+  refundAmount              Int                     @default(0)
   /// Décision : articles remis en stock ou non, avec son motif.
-  restocked           Boolean?
-  decisionNote        String?
-  createdById         String
-  decidedById         String?
-  decidedAt           DateTime?              @db.Timestamptz(3)
-  refundedAt          DateTime?              @db.Timestamptz(3)
+  restocked                 Boolean?
+  decisionNote              String?
+  /// Personnel déclarant ; nul quand le client déclare lui-même (declaredBy = CUSTOMER).
+  createdById               String?
+  declaredBy                ReturnDeclarationSource @default(STAFF)
+  decidedById               String?
+  decidedAt                 DateTime?               @db.Timestamptz(3)
+  refundedAt                DateTime?               @db.Timestamptz(3)
   /// Remise au client (livraison ou retrait) : date de référence du délai de déclaration (trigger).
-  handedOverAt        DateTime               @db.Timestamptz(3)
+  handedOverAt              DateTime                @db.Timestamptz(3)
   /// Fin du délai commercial de déclaration (remise + 48 h), calculée par la base.
-  declarationDeadline DateTime               @db.Timestamptz(3)
+  declarationDeadline       DateTime                @db.Timestamptz(3)
   /// Déclaré après ce délai : accepté à l'enregistrement, mais signalé (calculé par la base).
-  lateDeclaration     Boolean                @default(false)
+  lateDeclaration           Boolean                 @default(false)
   /// Fondement et motif de l'acceptation d'un retour hors délai (garantie, vice caché, obligation légale).
-  exceptionGround     ReturnExceptionGround?
-  exceptionNote       String?
+  exceptionGround           ReturnExceptionGround?
+  exceptionNote             String?
   /// Première action du personnel (vérification demandée ou décision), posée par la base.
-  firstActionAt       DateTime?              @db.Timestamptz(3)
+  firstActionAt             DateTime?               @db.Timestamptz(3)
   /// Alerte « délai de traitement dépassé » envoyée (une seule fois par retour).
-  overdueNotifiedAt   DateTime?              @db.Timestamptz(3)
-  items               ReturnItem[]
-  events              ReturnEvent[]
-  refund              Payment?
-  createdAt           DateTime               @default(now()) @db.Timestamptz(3)
-  updatedAt           DateTime               @updatedAt @db.Timestamptz(3)
+  overdueNotifiedAt         DateTime?               @db.Timestamptz(3)
+  /// Vérification en attente : date de la demande et dernière relance envoyée (0 à 3), posées par la base.
+  verificationRequestedAt   DateTime?               @db.Timestamptz(3)
+  verificationReminderStage Int                     @default(0)
+  /// Décision 1 (phase 10) : remboursement versé par la personne qui a décidé, à titre d'exception motivée.
+  refundExceptionNote       String?
+  items                     ReturnItem[]
+  events                    ReturnEvent[]
+  attachments               ReturnAttachment[]
+  refund                    Payment?
+  createdAt                 DateTime                @default(now()) @db.Timestamptz(3)
+  updatedAt                 DateTime                @updatedAt @db.Timestamptz(3)
 
   @@index([orderId, createdAt])
   @@index([status, createdAt])
@@ -1136,6 +1165,21 @@ model ReturnEvent {
 
   @@index([returnId, createdAt])
   @@map("return_events")
+}
+
+/// Photo jointe à un retour par le client (déclaration ou réponse à une vérification). Ajout seul.
+/// Fichier PRIVÉ (dossier retours/), jamais servi par /medias : seulement par une route contrôlée.
+model ReturnAttachment {
+  id          String   @id @default(cuid())
+  returnId    String
+  return      Return   @relation(fields: [returnId], references: [id], onDelete: Restrict)
+  storageKey  String   @unique
+  contentType String
+  byteSize    Int
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+
+  @@index([returnId, createdAt])
+  @@map("return_attachments")
 }
 
 /// Ligne d'un retour (ajout seul) : quantité retournée d'une ligne de commande, au prix figé.

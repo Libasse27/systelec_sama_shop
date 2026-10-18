@@ -94,7 +94,7 @@ describe("utilisateurs et rôles (PostgreSQL)", () => {
     const target = await customer("Cible");
     const detail = await getUserDetail(db, admin, target);
     expect(detail?.assignableRoles.map((role) => role.code)).not.toContain(SUPER_ADMIN);
-    expect(detail?.assignableRoles).toHaveLength(9);
+    expect(detail?.assignableRoles).toHaveLength(10);
     const superAdmin = await actorWith(SUPER_ADMIN);
     expect((await getUserDetail(db, superAdmin, target))?.assignableRoles.map((role) => role.code)).toContain(SUPER_ADMIN);
     expect(await getUserDetail(db, admin, "inconnu")).toBeNull();

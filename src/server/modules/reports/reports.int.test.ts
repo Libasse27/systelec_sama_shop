@@ -118,7 +118,18 @@ describe("rapports financiers et tableau de bord (PostgreSQL)", () => {
     expect(admin.catalog).toEqual({ PUBLISHED: 2 });
 
     const technician = await getDashboard(db, await actorWith("TECHNICIAN"));
-    expect(technician).toEqual({ orders: null, sales: null, cashToday: null, lowStock: null, quoteRequests: null, interventions: null, deliveries: null, catalog: null });
+    expect(technician).toEqual({
+      orders: null,
+      sales: null,
+      cashToday: null,
+      lowStock: null,
+      quoteRequests: null,
+      interventions: null,
+      deliveries: null,
+      catalog: null,
+      returnAlerts: null,
+      myDeliveries: null,
+    });
 
     const orders = await getDashboard(db, manager);
     expect(orders.sales).toBeNull(); // pas de reports.read
