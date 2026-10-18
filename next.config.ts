@@ -12,6 +12,9 @@ const securityHeaders = [
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,
+  // Image Docker de production : serveur autonome (voir Dockerfile). Hors image (développement, E2E) :
+  // sortie standard servie par « next start ».
+  ...(process.env.NEXT_OUTPUT === "standalone" && { output: "standalone" as const }),
   experimental: {
     // Téléversements : images de l'administration (5 Mo), imports CSV (2 Mo), photos d'un retour
     // envoyées par le client (3 × 2 Mo, plus les champs du formulaire).
