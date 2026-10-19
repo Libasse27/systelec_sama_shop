@@ -52,7 +52,7 @@ export const RETRY_DELAYS_MINUTES = [15, 60, 240] as const;
 export const MAX_EMAIL_ATTEMPTS = RETRY_DELAYS_MINUTES.length + 1;
 /** Notifications traitées au plus par passage de la tâche planifiée (durée bornée). */
 const RETRY_BATCH_SIZE = 50;
-/** Une notification restée en attente sans envoi au-delà de ce délai est rattrapée (envoi interrompu). */
+/** Une notification restée en attente au-delà de ce délai est rattrapée (envoi jamais fait ou interrompu). */
 const ORPHAN_AFTER_MINUTES = 10;
 /** …mais pas au-delà de 24 heures : un message périmé n'est pas expédié après coup. */
 const ORPHAN_MAX_AGE_MINUTES = 24 * 60;
@@ -123,13 +123,49 @@ export interface RetryReport {
   skipped: number;
 }
 
+type DueNotification = SendableNotification & { status: string; sentAt: Date | null };
+
+/**
+ * Remet en attente d'envoi une notification due, par une mise à jour conditionnelle sur l'état lu :
+ * si un autre passage l'a déjà prise ou modifiée, rien n'est fait (false).
+ *  - échec arrivé à échéance : redevient PENDING ;
+ *  - réservation abandonnée (processus arrêté pendant l'envoi) : réservation levée ;
+ *  - attente jamais réservée : rien à lever, la réservation de sendOne départage.
+ */
+async function release(client: Db, notification: DueNotification, now: Date): Promise<boolean> {
+  if (notification.status === "FAILED") {
+    const reopened = await client.notification.updateMany({
+      where: { id: notification.id, status: "FAILED", nextAttemptAt: { lte: now } },
+      data: { status: "PENDING", nextAttemptAt: null },
+    });
+    return reopened.count === 1;
+  }
+  if (notification.sentAt === null) return true;
+  const unclaimed = await client.notification.updateMany({
+    where: { id: notification.id, status: "PENDING", sentAt: notification.sentAt },
+    data: { sentAt: null },
+  });
+  return unclaimed.count === 1;
+}
+
+/** Envois épuisés (réservation abandonnée au 4e envoi) : échec définitif, jamais de 5e envoi. */
+async function abandon(client: Db, notification: DueNotification): Promise<boolean> {
+  const closed = await client.notification.updateMany({
+    where: { id: notification.id, status: notification.status as "PENDING" | "FAILED", sentAt: notification.sentAt },
+    data: { status: "FAILED", sentAt: null, nextAttemptAt: null, error: `Abandon : ${MAX_EMAIL_ATTEMPTS} envois tentés.` },
+  });
+  return closed.count === 1;
+}
+
 /**
  * Tâche planifiée : renvoie les e-mails en échec dont l'heure de nouvel essai est passée, et rattrape
- * ceux restés en attente sans envoi (processus interrompu). Une notification FAILED est remise en
- * attente par une mise à jour conditionnelle : deux passages simultanés ne l'envoient qu'une fois.
+ * ceux restés en attente (jamais envoyés, ou réservés par un processus arrêté pendant l'envoi) entre
+ * 10 minutes et 24 heures après leur création. Une réservation abandonnée a pu être expédiée avant
+ * l'arrêt : le rattrapage garantit « au moins un envoi », jamais plus de MAX_EMAIL_ATTEMPTS.
  */
 export async function retryNotifications(client: Db, now: Date = new Date()): Promise<RetryReport> {
   const report: RetryReport = { sent: 0, failed: 0, skipped: 0 };
+  const stale = new Date(now.getTime() - ORPHAN_AFTER_MINUTES * MINUTE_MS);
   const due = await client.notification.findMany({
     where: {
       channel: "EMAIL",
@@ -137,8 +173,8 @@ export async function retryNotifications(client: Db, now: Date = new Date()): Pr
         { status: "FAILED", nextAttemptAt: { lte: now } },
         {
           status: "PENDING",
-          sentAt: null,
-          createdAt: { lte: new Date(now.getTime() - ORPHAN_AFTER_MINUTES * MINUTE_MS), gte: new Date(now.getTime() - ORPHAN_MAX_AGE_MINUTES * MINUTE_MS) },
+          createdAt: { gte: new Date(now.getTime() - ORPHAN_MAX_AGE_MINUTES * MINUTE_MS) },
+          OR: [{ sentAt: null, createdAt: { lte: stale } }, { sentAt: { lte: stale } }],
         },
       ],
     },
@@ -146,13 +182,11 @@ export async function retryNotifications(client: Db, now: Date = new Date()): Pr
     take: RETRY_BATCH_SIZE,
   });
   for (const notification of due) {
-    if (notification.status === "FAILED") {
-      const reopened = await client.notification.updateMany({
-        where: { id: notification.id, status: "FAILED", nextAttemptAt: { lte: now } },
-        data: { status: "PENDING", nextAttemptAt: null },
-      });
-      if (reopened.count !== 1) continue;
+    if (notification.attempts >= MAX_EMAIL_ATTEMPTS) {
+      if (await abandon(client, notification)) report.failed += 1;
+      continue;
     }
+    if (!(await release(client, notification, now))) continue;
     const outcome = await sendOne(client, notification);
     if (outcome === "SENT") report.sent += 1;
     else if (outcome === "FAILED") report.failed += 1;

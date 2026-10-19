@@ -57,6 +57,23 @@ export async function sendEmail(message: EmailMessage): Promise<EmailResult> {
     logger.warn("E-mail non envoyé : aucun fournisseur SMTP configuré", { subject: message.subject });
     return { sent: false, reason: "NOT_CONFIGURED" };
   }
-  await getTransport().sendMail({ from: getServerEnv().SMTP_FROM, to: message.to, subject: message.subject, text: message.text });
+  const env = getServerEnv();
+  try {
+    await getTransport().sendMail({ from: env.SMTP_FROM, to: message.to, subject: message.subject, text: message.text });
+  } catch (error) {
+    throw redactSmtpError(error, env.SMTP_PASSWORD);
+  }
   return { sent: true };
+}
+
+/**
+ * Erreur d'envoi sans secret : la clé SMTP (en clair ou en base64, forme de l'authentification SMTP)
+ * est masquée si le serveur la renvoyait dans sa réponse. Le code SMTP est conservé : il décide du renvoi.
+ */
+export function redactSmtpError(error: unknown, password: string | undefined): Error {
+  const message = error instanceof Error ? error.message : "Échec d'envoi SMTP";
+  const secrets = password ? [password, Buffer.from(password).toString("base64")] : [];
+  const redacted = secrets.reduce((text, secret) => text.split(secret).join("***"), message);
+  const responseCode = (error as { responseCode?: unknown } | null)?.responseCode;
+  return Object.assign(new Error(redacted), typeof responseCode === "number" ? { responseCode } : {});
 }

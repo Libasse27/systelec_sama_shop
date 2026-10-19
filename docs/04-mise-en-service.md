@@ -92,8 +92,11 @@ Valeurs à confirmer dans l'interface de Brevo, ainsi que les limites de l'offre
 
 Comportement :
 - Configuration incomplète (port ou expéditeur absent, identifiant sans clé) : l'application refuse de démarrer, et `preflight.sh` échoue.
-- Fournisseur injoignable : l'envoi abandonne après 10 à 20 secondes. La notification passe en `FAILED` avec la cause ; la commande ou l'action elle-même aboutit.
-- **Renvoi automatique** par la tâche planifiée (section 6) : nouvel essai 15 minutes, 1 heure puis 4 heures après chaque échec, soit 4 envois au plus. Un refus définitif du destinataire (codes SMTP 550, 551, 553 : adresse inexistante ou invalide) n'est jamais renvoyé. Un e-mail resté en attente sans envoi (processus interrompu) est rattrapé entre 10 minutes et 24 heures après sa création ; au-delà, il est jugé périmé. La fiche commande affiche le nombre d'essais et l'heure du prochain, ou l'abandon définitif.
+- Fournisseur injoignable : l'envoi abandonne après 10 à 20 secondes. La notification passe en `FAILED` avec la cause, la clé SMTP étant masquée si le serveur la renvoyait. La commande ou l'action elle-même aboutit.
+- **Renvoi automatique** par la tâche planifiée (section 6) : nouvel essai 15 minutes, 1 heure puis 4 heures après chaque échec, soit **4 envois au plus**, jamais davantage. Un refus définitif du destinataire (codes SMTP 550, 551, 553 : adresse inexistante ou invalide) n'est jamais renvoyé. Les notifications envoyées (`SENT`) ou sans fournisseur (`SKIPPED_NO_PROVIDER`) ne sont jamais renvoyées.
+- **Rattrapage** : un e-mail resté en attente, jamais envoyé ou interrompu pendant l'envoi (processus arrêté), est repris entre 10 minutes et 24 heures après sa création ; au-delà, il est jugé périmé et n'est pas envoyé. Un envoi interrompu a pu partir juste avant l'arrêt : le client peut alors recevoir le message deux fois (« au moins un envoi »). Une ligne qui a déjà épuisé ses 4 envois passe en échec définitif sans nouvel envoi.
+- Deux passages simultanés de la tâche, ou un envoi immédiat et la tâche, n'envoient jamais deux fois la même notification (mises à jour conditionnelles en base).
+- La fiche commande affiche le nombre d'essais et l'heure du prochain, ou l'abandon définitif.
 - Les échecs antérieurs à cette version ne sont pas renvoyés après coup.
 - La demande de réinitialisation répond sans attendre l'envoi (aucune différence de durée selon que le compte existe ou non).
 

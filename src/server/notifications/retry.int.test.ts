@@ -5,7 +5,7 @@ import { resetDatabase } from "../../../tests/setup/db";
 import { actorWith } from "../../../tests/support/actors";
 import { confirmedOrder, seedOrderCatalog } from "../../../tests/support/orders";
 import { sendEmail } from "./mailer";
-import { MAX_EMAIL_ATTEMPTS, retryNotifications } from "./queue";
+import { dispatchNotifications, MAX_EMAIL_ATTEMPTS, retryNotifications } from "./queue";
 
 vi.mock("./mailer", () => ({ sendEmail: vi.fn() }));
 const send = vi.mocked(sendEmail);
@@ -18,12 +18,30 @@ let orderId: string;
 const smtpError = (message: string, responseCode?: number) => Object.assign(new Error(message), { responseCode });
 
 /** Notification e-mail de la commande de test, dans l'état donné. */
-async function notification(data: { status: "FAILED" | "PENDING" | "SENT" | "SKIPPED_NO_PROVIDER"; attempts?: number; nextAttemptAt?: Date | null; createdAt?: Date; channel?: "EMAIL" | "SMS" }) {
+async function notification(data: { status: "FAILED" | "PENDING" | "SENT" | "SKIPPED_NO_PROVIDER"; attempts?: number; nextAttemptAt?: Date | null; createdAt?: Date; sentAt?: Date | null; channel?: "EMAIL" | "SMS" }) {
   return db.notification.create({
     data: { channel: "EMAIL", template: "order.placed", recipient: "awa@example.sn", payload, orderId, ...data },
   });
 }
 const row = (id: string) => db.notification.findUniqueOrThrow({ where: { id } });
+
+let heldCalls = 0;
+/** Client dont la première mise à jour de notification attend `gate` (ordre d'exécution imposé entre deux passages). */
+function heldClient(gate: Promise<void>): typeof db {
+  heldCalls = 0;
+  const notifications = new Proxy(db.notification, {
+    get(target, property) {
+      const value = Reflect.get(target, property) as unknown;
+      if (property !== "updateMany" || typeof value !== "function") return typeof value === "function" ? value.bind(target) : value;
+      return async (...args: unknown[]) => {
+        heldCalls += 1;
+        if (heldCalls === 1) await gate;
+        return (value as (...a: unknown[]) => unknown).apply(target, args);
+      };
+    },
+  });
+  return new Proxy(db, { get: (target, property) => (property === "notification" ? notifications : Reflect.get(target, property)) });
+}
 
 describe("renvoi automatique des e-mails en échec (PostgreSQL)", () => {
   beforeEach(async () => {
@@ -95,6 +113,73 @@ describe("renvoi automatique des e-mails en échec (PostgreSQL)", () => {
     expect(await row(orphan.id)).toMatchObject({ status: "SENT", attempts: 1 });
     expect(await row(recent.id)).toMatchObject({ status: "PENDING", attempts: 0 });
     expect(await row(stale.id)).toMatchObject({ status: "PENDING", attempts: 0 });
+  });
+
+  it("réservation abandonnée (processus arrêté pendant l'envoi) : rattrapée après 10 min, ni avant, ni au-delà de 24 h", async () => {
+    send.mockResolvedValue({ sent: true });
+    const abandoned = await notification({ status: "PENDING", attempts: 1, sentAt: new Date(NOW.getTime() - 11 * MINUTE), createdAt: new Date(NOW.getTime() - 12 * MINUTE) });
+    const inFlight = await notification({ status: "PENDING", attempts: 1, sentAt: new Date(NOW.getTime() - 2 * MINUTE), createdAt: new Date(NOW.getTime() - 12 * MINUTE) });
+    const stale = await notification({ status: "PENDING", attempts: 1, sentAt: new Date(NOW.getTime() - 25 * 60 * MINUTE), createdAt: new Date(NOW.getTime() - 25 * 60 * MINUTE) });
+    expect(await retryNotifications(db, NOW)).toEqual({ sent: 1, failed: 0, skipped: 0 });
+    expect(await row(abandoned.id)).toMatchObject({ status: "SENT", attempts: 2 });
+    expect(await row(inFlight.id)).toMatchObject({ status: "PENDING", attempts: 1 });
+    expect(await row(stale.id)).toMatchObject({ status: "PENDING", attempts: 1 });
+  });
+
+  it("jamais plus de 4 envois : une réservation abandonnée au 4e envoi passe en échec définitif sans renvoi", async () => {
+    const exhausted = await notification({ status: "PENDING", attempts: MAX_EMAIL_ATTEMPTS, sentAt: new Date(NOW.getTime() - 11 * MINUTE), createdAt: new Date(NOW.getTime() - 5 * 60 * MINUTE) });
+    expect(await retryNotifications(db, NOW)).toEqual({ sent: 0, failed: 1, skipped: 0 });
+    expect(send).not.toHaveBeenCalled();
+    expect(await row(exhausted.id)).toMatchObject({ status: "FAILED", attempts: MAX_EMAIL_ATTEMPTS, nextAttemptAt: null, sentAt: null, error: expect.stringContaining("Abandon") });
+  });
+
+  it("deux travailleurs sur la même notification en attente (envoi initial) : une seule réservation, un seul envoi", async () => {
+    send.mockImplementation(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      return { sent: true };
+    });
+    // Éligible au rattrapage (plus de 10 min) : envoi initial et tâche planifiée se disputent la même ligne, horloge réelle.
+    const pending = await notification({ status: "PENDING", createdAt: new Date(Date.now() - 11 * MINUTE) });
+    await Promise.all([dispatchNotifications(db, { orderId }), dispatchNotifications(db, { orderId }), retryNotifications(db), retryNotifications(db)]);
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(await row(pending.id)).toMatchObject({ status: "SENT", attempts: 1 });
+  });
+
+  it("deux passages sur une réservation abandonnée, le second lisant avant la reprise du premier : un seul renvoi", async () => {
+    const abandoned = await notification({ status: "PENDING", attempts: 1, sentAt: new Date(NOW.getTime() - 11 * MINUTE), createdAt: new Date(NOW.getTime() - 12 * MINUTE) });
+    // Passage B : lit la ligne (réservation abandonnée), puis sa mise à jour est retenue jusqu'à ce que A envoie.
+    let openGate!: () => void;
+    const gate = new Promise<void>((resolve) => (openGate = resolve));
+    const passB = retryNotifications(heldClient(gate), NOW);
+    await vi.waitFor(() => expect(heldCalls).toBe(1));
+    let passBDone = Promise.resolve<unknown>(undefined);
+    send.mockImplementation(async () => {
+      if (send.mock.calls.length === 1) {
+        // A a repris la ligne et l'envoie : B tente alors de la reprendre à son tour.
+        openGate();
+        passBDone = passB;
+        await passB;
+      }
+      return { sent: true };
+    });
+    await retryNotifications(db, NOW);
+    await passBDone;
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(await row(abandoned.id)).toMatchObject({ status: "SENT", attempts: 2 });
+  });
+
+  it("un échec déjà renvoyé par un passage n'est pas rouvert par un second passage qui l'avait lu avant", async () => {
+    send.mockResolvedValue({ sent: true });
+    const failed = await notification({ status: "FAILED", attempts: 1, nextAttemptAt: NOW });
+    let openGate!: () => void;
+    const gate = new Promise<void>((resolve) => (openGate = resolve));
+    const passB = retryNotifications(heldClient(gate), NOW);
+    await vi.waitFor(() => expect(heldCalls).toBe(1));
+    expect(await retryNotifications(db, NOW)).toEqual({ sent: 1, failed: 0, skipped: 0 });
+    openGate();
+    expect(await passB).toEqual({ sent: 0, failed: 0, skipped: 0 });
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(await row(failed.id)).toMatchObject({ status: "SENT", attempts: 2, nextAttemptAt: null });
   });
 
   it("deux passages simultanés : chaque e-mail n'est envoyé qu'une fois", async () => {
