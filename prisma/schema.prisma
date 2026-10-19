@@ -733,9 +733,14 @@ model Notification {
   /// Alerte interne sur un retour (délai de traitement dépassé).
   returnId       String?
   sentAt         DateTime?           @db.Timestamptz(3)
+  /// Envois tentés (renvoi automatique des échecs par la tâche planifiée, 4 au plus).
+  attempts       Int                 @default(0)
+  /// Prochain essai d'une notification FAILED ; NULL = aucun renvoi prévu (abandon définitif).
+  nextAttemptAt  DateTime?           @db.Timestamptz(3)
   createdAt      DateTime            @default(now()) @db.Timestamptz(3)
 
   @@index([status, createdAt])
+  @@index([status, nextAttemptAt])
   @@index([orderId])
   @@index([quoteRequestId])
   @@index([quoteId])

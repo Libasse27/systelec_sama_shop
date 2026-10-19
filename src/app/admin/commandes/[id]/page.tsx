@@ -144,6 +144,10 @@ export default async function AdminOrderPage({ params }: { params: Promise<{ id:
               <li key={`${notification.channel}-${notification.template}-${notification.createdAt.toISOString()}-${notification.recipient}`}>
                 {formatDateTime(notification.createdAt)} — {notification.channel} à {notification.recipient} ({notification.template}) :{" "}
                 {NOTIFICATION_STATUS[notification.status as keyof typeof NOTIFICATION_STATUS] ?? notification.status}
+                {notification.status === "FAILED" &&
+                  (notification.nextAttemptAt
+                    ? ` après ${notification.attempts} essai(s), nouvel essai prévu le ${formatDateTime(notification.nextAttemptAt)}`
+                    : ` définitif après ${notification.attempts} essai(s)`)}
               </li>
             ))}
           </ul>

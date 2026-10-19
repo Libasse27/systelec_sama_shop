@@ -232,7 +232,7 @@ export interface AdminOrder extends Omit<OrderView, "history"> {
   reservedUntil: Date | null;
   nextStatuses: OrderStatus[];
   history: { field: OrderHistoryField; from: string | null; to: string; comment: string | null; createdAt: Date; actorName: string | null }[];
-  notifications: { channel: string; template: string; recipient: string; status: string; createdAt: Date }[];
+  notifications: { channel: string; template: string; recipient: string; status: string; attempts: number; nextAttemptAt: Date | null; createdAt: Date }[];
 }
 
 export async function getAdminOrder(client: Db, actor: Actor, id: string): Promise<AdminOrder | null> {
@@ -254,7 +254,7 @@ export async function getAdminOrder(client: Db, actor: Actor, id: string): Promi
     client.notification.findMany({
       where: { orderId: id },
       orderBy: { createdAt: "asc" },
-      select: { channel: true, template: true, recipient: true, status: true, createdAt: true },
+      select: { channel: true, template: true, recipient: true, status: true, attempts: true, nextAttemptAt: true, createdAt: true },
     }),
   ]);
   const names = new Map(actors.map((user) => [user.id, user.name]));
