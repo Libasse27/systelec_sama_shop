@@ -5,6 +5,7 @@ import { nextCookies } from "better-auth/next-js";
 import { getServerEnv } from "@/lib/env";
 import { recordAudit } from "@/server/audit/audit";
 import { db } from "@/server/db/client";
+import { logger } from "@/server/logger";
 import { sendEmail } from "@/server/notifications/mailer";
 import { PASSWORD_MAX_LENGTH, PASSWORD_MIN_LENGTH } from "./schemas";
 
@@ -53,8 +54,13 @@ export function createAuth({ withNextCookies = false, deliverResetLink = emailRe
       revokeSessionsOnPasswordReset: true,
       resetPasswordTokenExpiresIn: RESET_TOKEN_SECONDS,
       // Lien vers notre page (et non vers la route HTTP Better Auth, non exposée).
-      sendResetPassword: async ({ user, token }) =>
-        deliverResetLink({ email: user.email, url: `${env.APP_URL}${RESET_PASSWORD_PATH}?token=${encodeURIComponent(token)}` }),
+      // Envoi non attendu : la réponse ne doit pas durer plus longtemps quand le compte existe (le temps
+      // d'un échange SMTP révélerait son existence). Un échec est journalisé, jamais signalé au demandeur.
+      sendResetPassword: async ({ user, token }) => {
+        deliverResetLink({ email: user.email, url: `${env.APP_URL}${RESET_PASSWORD_PATH}?token=${encodeURIComponent(token)}` }).catch((error: unknown) =>
+          logger.error("Lien de réinitialisation non envoyé", { error: error instanceof Error ? error.message : "inconnue" }),
+        );
+      },
       // Journalisé ici car c'est le seul point où le compte concerné est connu.
       onPasswordReset: async ({ user }) =>
         recordAudit(db, { actorId: user.id, action: "auth.password_reset", entityType: "User", entityId: user.id }),

@@ -40,8 +40,8 @@ Les choix techniques réversibles (bibliothèques, structure) sont documentés d
 | # | Question | Recommandation |
 |---|---|---|
 | D9 | Identifiant de connexion client : e-mail ou téléphone ? | E-mail + mot de passe au lancement ; téléphone (OTP SMS) plus tard, nécessite un fournisseur SMS |
-| D10 | Hébergement cible | VPS (Docker Compose : app + PostgreSQL + sauvegardes automatiques). Alternative : Vercel + PostgreSQL managé (stockage fichiers externe obligatoire) |
-| D11 | Fournisseurs e-mail (SMTP) / SMS / WhatsApp Business | Adaptateurs prêts mais inactifs jusqu'à configuration |
+| D10 | Hébergement cible | VPS (Docker Compose : app + PostgreSQL + sauvegardes automatiques). Alternative : Vercel + PostgreSQL managé (stockage fichiers externe obligatoire). **Confirmé le 2026-10-19 après audit** : serveur Docker en Europe, maintenu par le propriétaire ; Vercel écarté (stockage local, tâche planifiée toutes les 15 min, envois jusqu'à 7 Mo, sauvegardes Docker) |
+| D11 | Fournisseurs e-mail (SMTP) / SMS / WhatsApp Business | **E-mail** : adaptateur SMTP générique (`notifications/mailer.ts`, nodemailer), inactif tant que `SMTP_HOST` est vide ; fournisseur de départ **Brevo** (retenu le 2026-10-19). Échec d'envoi tracé (`FAILED`), jamais simulé. **SMS / WhatsApp** : aucun adaptateur ni fournisseur, notifications tracées `SKIPPED_NO_PROVIDER` |
 | D12 | Conservation des données clients inactifs | 3 ans après la dernière commande, puis anonymisation (déclaration CDP à votre charge) |
 
 ### Identité & processus

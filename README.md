@@ -24,8 +24,10 @@ Le premier administrateur principal gère ensuite les comptes depuis **Administr
 désactivation), les paramètres (mentions légales, TVA, règles de commande) depuis **Paramètres**, et consulte
 le **Journal d'audit**. Les rapports financiers s'exportent en CSV, Excel (.xlsx) et PDF.
 
-Sans fournisseur e-mail configuré, un lien de réinitialisation de mot de passe se génère avec
-`pnpm admin:reset-link <email>` (après vérification de l'identité du demandeur).
+Les e-mails (réinitialisation de mot de passe, notifications des commandes, devis, interventions et retours)
+partent par SMTP dès que `SMTP_HOST`, `SMTP_PORT` et `SMTP_FROM` sont renseignés (fournisseur de départ : Brevo ;
+tout fournisseur SMTP convient). Sans fournisseur, rien n'est envoyé ni simulé, et un lien de réinitialisation
+se génère avec `pnpm admin:reset-link <email>` (après vérification de l'identité du demandeur).
 
 Les commandes non confirmées libèrent leur stock après le délai de réservation (48 h par défaut), les
 retours sans action après 24 heures ouvrables déclenchent une alerte unique aux administrateurs, et les
