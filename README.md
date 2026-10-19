@@ -32,7 +32,8 @@ se génère avec `pnpm admin:reset-link <email>` (après vérification de l'iden
 Les commandes non confirmées libèrent leur stock après le délai de réservation (48 h par défaut), les
 retours sans action après 24 heures ouvrables déclenchent une alerte unique aux administrateurs, et les
 vérifications de retour restées sans réponse sont relancées (12 et 24 heures ouvrables) puis escaladées
-(48 heures ouvrables) : planifier `pnpm orders:expire` (par exemple toutes les 15 minutes). Heures
+(48 heures ouvrables) ; les e-mails en échec sont renvoyés (15 min, 1 h, 4 h) : planifier `pnpm orders:expire`
+(par exemple toutes les 15 minutes). Heures
 ouvrables, jours fériés et délais de relance : **Administration → Paramètres**.
 
 Vérifications : `pnpm lint && pnpm typecheck && pnpm test && pnpm build && pnpm test:e2e`.

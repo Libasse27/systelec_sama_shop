@@ -92,8 +92,9 @@ Valeurs à confirmer dans l'interface de Brevo, ainsi que les limites de l'offre
 
 Comportement :
 - Configuration incomplète (port ou expéditeur absent, identifiant sans clé) : l'application refuse de démarrer, et `preflight.sh` échoue.
-- Fournisseur injoignable : l'envoi abandonne après 10 à 20 secondes. La notification passe en `FAILED` avec la cause, visible dans la fiche du document ; la commande ou l'action elle-même aboutit.
-- Une notification `FAILED` n'est pas renvoyée automatiquement.
+- Fournisseur injoignable : l'envoi abandonne après 10 à 20 secondes. La notification passe en `FAILED` avec la cause ; la commande ou l'action elle-même aboutit.
+- **Renvoi automatique** par la tâche planifiée (section 6) : nouvel essai 15 minutes, 1 heure puis 4 heures après chaque échec, soit 4 envois au plus. Un refus définitif du destinataire (codes SMTP 550, 551, 553 : adresse inexistante ou invalide) n'est jamais renvoyé. Un e-mail resté en attente sans envoi (processus interrompu) est rattrapé entre 10 minutes et 24 heures après sa création ; au-delà, il est jugé périmé. La fiche commande affiche le nombre d'essais et l'heure du prochain, ou l'abandon définitif.
+- Les échecs antérieurs à cette version ne sont pas renvoyés après coup.
 - La demande de réinitialisation répond sans attendre l'envoi (aucune différence de durée selon que le compte existe ou non).
 
 Test après activation : demander une réinitialisation de mot de passe pour votre propre compte depuis `/mot-de-passe-oublie`, puis passer une commande d'essai avec votre adresse.
@@ -151,7 +152,7 @@ votre-domaine.sn {
 
 ## 6. Tâche planifiée
 
-Expiration des réservations, paniers et devis, alertes et relances des retours, toutes les 15 minutes (crontab de l'utilisateur qui exploite Docker). Modèle avec la sauvegarde nocturne : `deploy/crontab.example` (créer d'abord `/var/log/systelec`, accessible en écriture à cet utilisateur).
+Expiration des réservations, paniers et devis, alertes et relances des retours, renvoi des e-mails en échec, toutes les 15 minutes (crontab de l'utilisateur qui exploite Docker). Modèle avec la sauvegarde nocturne : `deploy/crontab.example` (créer d'abord `/var/log/systelec`, accessible en écriture à cet utilisateur).
 
 ```
 */15 * * * * cd /srv/systelec && docker compose -f docker-compose.prod.yml --env-file .env.production run --rm tasks >> /var/log/systelec-taches.log 2>&1
