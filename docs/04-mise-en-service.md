@@ -11,6 +11,33 @@ Dans ce document : `C="docker compose -f docker-compose.prod.yml --env-file .env
 - Un reverse proxy TLS devant l'application (Caddy, Nginx…) : l'application écoute seulement sur `127.0.0.1:3000`.
 - Une destination de sauvegarde **hors du serveur** (autre machine, stockage objet), chiffrée.
 
+### Informations à réunir avant l'installation
+
+| Information | Fournie par | Sert à |
+|---|---|---|
+| Serveur (adresse, accès SSH par clé, utilisateur membre du groupe `docker`) | hébergeur | tout |
+| Nom de domaine et enregistrement DNS `A` (et `www`) vers le serveur | propriétaire | `APP_URL`, certificat TLS |
+| Compte SMTP (hôte, port, utilisateur, mot de passe, expéditeur) | propriétaire ou hébergeur | e-mails (facultatif au départ) |
+| Nom, e-mail et mot de passe du premier administrateur principal | propriétaire | `admin:create` (saisi au clavier) |
+| Identité légale : raison sociale, NINEA, RCCM, adresse, téléphone, logo | propriétaire | paramètres, documents |
+| Horaires d'ouverture et jours fériés de l'année | propriétaire | délais et relances des retours |
+| Zones et tarifs de livraison, points de retrait, livreurs | propriétaire | commandes |
+| Destination de la copie hors serveur des sauvegardes (et son outil) | propriétaire | section 7 |
+
+### Déroulé
+
+Sur le serveur, dans `/srv/systelec` (dépôt cloné à la version à déployer) :
+
+```bash
+git clone https://github.com/Libasse27/systelec_sama_shop.git /srv/systelec && cd /srv/systelec
+git checkout <étiquette ou commit validé>
+# section 2 : construire les images
+scripts/ops/init-env.sh https://votre-domaine "$(git rev-parse --short HEAD)"   # section 3
+scripts/ops/preflight.sh                                                     # contrôles (aucune modification)
+scripts/ops/first-start.sh                                                   # section 4, dans un terminal
+# puis sections 5 à 7 et liste de contrôle (section 13)
+```
+
 ## 2. Construire les images
 
 Depuis le dépôt, sur la version à déployer (étiquette Git ou commit) :
@@ -29,11 +56,15 @@ docker build --target tools -t systelec-sama-shop-tools:$VERSION .
 ## 3. Configuration
 
 ```bash
-cp .env.production.example .env.production
-chmod 600 .env.production
+scripts/ops/init-env.sh https://votre-domaine "$VERSION"
 ```
 
-Remplir :
+- Le script crée `.env.production` (mode 600) à partir de `.env.production.example`.
+- Il génère `AUTH_SECRET`, `POSTGRES_PASSWORD` et `APP_DB_PASSWORD` et ne les affiche jamais.
+- Il refuse d'écraser un fichier existant.
+- Gardez une copie de ce fichier dans un coffre de mots de passe : sans lui, une sauvegarde de la base ne se restaure pas sur un nouveau serveur.
+
+Restent à remplir à la main si besoin : `SMTP_*`, et `APP_PORT` si le port 3000 est déjà pris. Contenu attendu :
 
 | Variable | Valeur |
 |---|---|
@@ -49,6 +80,15 @@ Remplir :
 `.env.production` n'est jamais versionné (`.gitignore`).
 
 ## 4. Premier démarrage
+
+```bash
+scripts/ops/preflight.sh       # contrôles : Docker, ressources, configuration, images, ports, no-new-privileges
+scripts/ops/first-start.sh     # toutes les étapes ci-dessous, dans l'ordre (à lancer dans un terminal)
+```
+
+`preflight.sh` ne modifie rien. Il échoue (code 1) sur un contrôle bloquant : droits du fichier, secret absent ou trop court, `APP_URL` invalide, SMTP incomplet, image absente. Il avertit sans bloquer quand le reverse proxy n'est pas encore là ou que les ressources sont faibles. Il indique aussi si `no-new-privileges` peut être activé (section 12).
+
+`first-start.sh` relance d'abord ces contrôles et s'arrête s'ils échouent. Il exécute ensuite les étapes suivantes. Il est relançable : la création de l'administrateur est sautée s'il en existe déjà un actif. Il vérifie que le rôle restreint n'a aucun droit `TRUNCATE` ni de création de tables, et termine par la sonde de santé. Équivalent manuel :
 
 ```bash
 $C up -d db                                   # PostgreSQL 17 (aucun port publié)
@@ -76,6 +116,8 @@ Les tables créées par les migrations futures lui sont accordées automatiqueme
 
 ## 5. Reverse proxy TLS (exemple Caddy)
 
+Modèle complet : `deploy/Caddyfile.example` (validé par `caddy validate`). Il comprend la compression, une taille d'envoi de 8 Mo (l'application accepte 7 Mo), un journal d'accès avec rotation et la redirection du `www`. L'essentiel :
+
 ```
 votre-domaine.sn {
   encode zstd gzip
@@ -90,7 +132,7 @@ votre-domaine.sn {
 
 ## 6. Tâche planifiée
 
-Expiration des réservations, paniers et devis, alertes et relances des retours, toutes les 15 minutes (crontab de l'utilisateur qui exploite Docker) :
+Expiration des réservations, paniers et devis, alertes et relances des retours, toutes les 15 minutes (crontab de l'utilisateur qui exploite Docker). Modèle avec la sauvegarde nocturne : `deploy/crontab.example` (créer d'abord `/var/log/systelec`, accessible en écriture à cet utilisateur).
 
 ```
 */15 * * * * cd /srv/systelec && docker compose -f docker-compose.prod.yml --env-file .env.production run --rm tasks >> /var/log/systelec-taches.log 2>&1
@@ -175,7 +217,7 @@ Les seuils sont écrits dans `scripts/perf/load-test.js` ; la commande échoue s
 ## 11. Supervision
 
 - Sonde : `GET /api/health`. Elle vérifie l'accès à PostgreSQL et répond `200 {"status":"ok"}` ou `503`. Docker en fait sa sonde de santé (`docker ps` affiche `healthy`).
-- Journaux JSON sur la sortie standard : `$C logs -f app`. Configurer la rotation des journaux Docker (`max-size`, `max-file`).
+- Journaux JSON sur la sortie standard : `$C logs -f app`. Rotation déjà configurée dans `docker-compose.prod.yml` (5 fichiers de 20 Mo par conteneur).
 - À surveiller :
   - la disponibilité, avec une sonde externe sur `https://votre-domaine/api/health` ;
   - l'espace disque des volumes `pgdata` et `storage` et des sauvegardes ;
@@ -190,7 +232,9 @@ Les seuils sont écrits dans `scripts/perf/load-test.js` ; la commande échoue s
 
 ## 13. Liste de contrôle de mise en service
 
-- [ ] Images construites et étiquetées ; `.env.production` rempli (mode 600)
+- [ ] Informations réunies (fin de la section 1)
+- [ ] Images construites et étiquetées ; `.env.production` créé par `init-env.sh` et copié dans un coffre
+- [ ] `preflight.sh` sans échec
 - [ ] `db` démarré, migrations appliquées, rôle restreint créé (contrôle : `droits_truncate = 0`)
 - [ ] `db:seed` lancé ; premier administrateur principal créé ; connexion vérifiée
 - [ ] Reverse proxy TLS en place ; `https://…/api/health` répond `ok` ; en-têtes de sécurité présents

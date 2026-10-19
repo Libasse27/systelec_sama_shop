@@ -33,7 +33,10 @@ RUN NEXT_OUTPUT=standalone APP_ENV=production APP_URL=https://construction.inval
 
 # ─── Outils d'exploitation (migrations, seed, tâche planifiée) ────────────────
 FROM build AS tools
-ENV NODE_ENV=production
+# Avec NODE_ENV=production, pnpm jugerait les dépendances de développement (tsx, prisma) en trop et tenterait
+# de réinstaller avant chaque script, en échec dans ce dossier en lecture seule pour « node » : vérification
+# désactivée, les dépendances sont figées à la construction.
+ENV NODE_ENV=production pnpm_config_verify_deps_before_run=false
 USER node
 CMD ["pnpm", "db:deploy"]
 
