@@ -1,5 +1,6 @@
 import "server-only";
-import { getServerEnv } from "@/lib/env";
+import nodemailer from "nodemailer";
+import { getServerEnv, type ServerEnv } from "@/lib/env";
 import { logger } from "@/server/logger";
 
 export interface EmailMessage {
@@ -10,20 +11,52 @@ export interface EmailMessage {
 
 export type EmailResult = { sent: true } | { sent: false; reason: "NOT_CONFIGURED" };
 
+/** Port SMTP à TLS implicite (SMTPS) ; les autres (587, 25…) passent en TLS par STARTTLS. */
+const IMPLICIT_TLS_PORT = 465;
+/**
+ * Délais bornés : l'envoi a lieu pendant la requête, après la transaction (dispatchNotifications) ;
+ * un fournisseur injoignable ne doit pas bloquer la page plus de quelques secondes.
+ */
+const SMTP_TIMEOUTS = { connectionTimeout: 10_000, greetingTimeout: 10_000, socketTimeout: 20_000 } as const;
+
+type SmtpConfig = Pick<ServerEnv, "APP_ENV" | "SMTP_HOST" | "SMTP_PORT" | "SMTP_USER" | "SMTP_PASSWORD">;
+
+/** Options du transport SMTP (fournisseur quelconque : Brevo, hébergeur…), sans connexion ouverte. */
+export function smtpTransportOptions(config: SmtpConfig) {
+  const port = config.SMTP_PORT!;
+  const implicitTls = port === IMPLICIT_TLS_PORT;
+  return {
+    host: config.SMTP_HOST!,
+    port,
+    secure: implicitTls,
+    // En production, jamais d'envoi en clair : STARTTLS exigé (identifiants et contenu chiffrés).
+    requireTLS: !implicitTls && config.APP_ENV === "production",
+    auth: config.SMTP_USER ? { user: config.SMTP_USER, pass: config.SMTP_PASSWORD ?? "" } : undefined,
+    ...SMTP_TIMEOUTS,
+  };
+}
+
+let transport: ReturnType<typeof nodemailer.createTransport> | undefined;
+
+function getTransport() {
+  transport ??= nodemailer.createTransport(smtpTransportOptions(getServerEnv()));
+  return transport;
+}
+
 export function isEmailConfigured(): boolean {
   return getServerEnv().SMTP_HOST !== undefined;
 }
 
 /**
- * Point d'envoi unique des e-mails. Tant qu'aucun fournisseur SMTP n'est configuré
- * (décision D11), rien n'est envoyé ni simulé : l'échec est explicite et journalisé.
+ * Point d'envoi unique des e-mails (décision D11). Sans fournisseur configuré, rien n'est envoyé ni
+ * simulé : l'absence est journalisée et rendue explicite. Un échec d'envoi LÈVE une erreur, pour que
+ * l'appelant le trace (notification FAILED) au lieu de le croire envoyé.
  */
 export async function sendEmail(message: EmailMessage): Promise<EmailResult> {
   if (!isEmailConfigured()) {
     logger.warn("E-mail non envoyé : aucun fournisseur SMTP configuré", { subject: message.subject });
     return { sent: false, reason: "NOT_CONFIGURED" };
   }
-  // L'adaptateur SMTP sera branché ici dès que le fournisseur sera choisi (D11).
-  logger.error("Fournisseur SMTP configuré mais adaptateur non encore implémenté", { subject: message.subject });
-  return { sent: false, reason: "NOT_CONFIGURED" };
+  await getTransport().sendMail({ from: getServerEnv().SMTP_FROM, to: message.to, subject: message.subject, text: message.text });
+  return { sent: true };
 }

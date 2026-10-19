@@ -22,6 +22,14 @@ const serverEnvSchema = z
     SMTP_FROM: z.string().optional(),
   })
   .superRefine((env, ctx) => {
+    // E-mail activé (SMTP_HOST) : configuration complète exigée au démarrage, pas au premier envoi.
+    if (env.SMTP_HOST !== undefined) {
+      if (env.SMTP_PORT === undefined) ctx.addIssue({ code: "custom", path: ["SMTP_PORT"], message: "SMTP_PORT requis avec SMTP_HOST (587 ou 465)" });
+      if (!env.SMTP_FROM) ctx.addIssue({ code: "custom", path: ["SMTP_FROM"], message: "SMTP_FROM requis avec SMTP_HOST (expéditeur vérifié chez le fournisseur)" });
+      if (Boolean(env.SMTP_USER) !== Boolean(env.SMTP_PASSWORD)) {
+        ctx.addIssue({ code: "custom", path: ["SMTP_PASSWORD"], message: "SMTP_USER et SMTP_PASSWORD vont ensemble" });
+      }
+    }
     if (env.APP_ENV !== "production") return;
     const url = env.APP_URL;
     if (!url || !url.startsWith("https://") || url.endsWith("/")) {

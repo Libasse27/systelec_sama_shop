@@ -26,6 +26,16 @@ describe("configuration serveur", () => {
     expect(parseServerEnv({ ...base, SMTP_HOST: "", SMTP_PORT: "" }).SMTP_HOST).toBeUndefined();
   });
 
+  it("e-mail activé : port et expéditeur exigés, identifiants complets ou absents", () => {
+    const smtp = { ...base, SMTP_HOST: "smtp-relay.brevo.com", SMTP_PORT: "587", SMTP_FROM: "Boutique <contact@systelec.sn>" };
+    expect(parseServerEnv(smtp).SMTP_PORT).toBe(587);
+    expect(parseServerEnv({ ...smtp, SMTP_USER: "compte", SMTP_PASSWORD: "cle" }).SMTP_USER).toBe("compte");
+    expect(() => parseServerEnv({ ...smtp, SMTP_PORT: "" })).toThrow(/SMTP_PORT/);
+    expect(() => parseServerEnv({ ...smtp, SMTP_FROM: "" })).toThrow(/SMTP_FROM/);
+    expect(() => parseServerEnv({ ...smtp, SMTP_USER: "compte" })).toThrow(/SMTP_PASSWORD/);
+    expect(() => parseServerEnv({ ...smtp, SMTP_PASSWORD: "cle" })).toThrow(/SMTP_PASSWORD/);
+  });
+
   it("réserve de connexions PostgreSQL : 10 par défaut, bornée", () => {
     expect(parseServerEnv(base).DATABASE_POOL_MAX).toBe(10);
     expect(parseServerEnv({ ...base, DATABASE_POOL_MAX: "20" }).DATABASE_POOL_MAX).toBe(20);
