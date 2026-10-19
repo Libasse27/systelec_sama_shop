@@ -100,7 +100,7 @@ Non corrigé (risque faible) :
 - Les tentatives refusées (jeton faux, validation) ne comptent pas dans la limite par connexion : seules les opérations réussies sont journalisées. La taille des envois reste bornée à 7 Mo par la configuration.
 - Photos non ré-encodées (métadonnées EXIF conservées). Elles restent privées.
 - Sur la fiche d'un retour déclaré en ligne par un employé, les boutons de décision s'affichent à cet employé, mais le service refuse l'action.
-- **Données de test dans la base de développement** (laissées par les passages E2E antérieurs au correctif, **non supprimées**) :
+- **Données de test dans la base de développement** (laissées par les passages E2E antérieurs au correctif). *Mise à jour du 2026-10-18 : les paramètres de test (`businessHours`, `returnReminders`, `company`) ont été supprimés avec l'accord du propriétaire, après sauvegarde, avec une entrée d'audit `settings.cleanup` ; les comptes, commandes et photos de test restent.* État initial :
   - paramètres `businessHours` (lundi–vendredi, 9 h – 17 h, jours fériés 2026-04-04 et 2026-12-25) et `returnReminders`. D'après l'audit, ils ont été écrits uniquement par le compte de test « Admin P10 » (`e2e-p10-…@example.sn`). Tant qu'ils restent, ils masquent le défaut de la phase 9 sur la base de développement ;
   - comptes et commandes de test ;
   - 4 photos dans `storage/retours/`.
@@ -167,7 +167,7 @@ Contrôles des commits intermédiaires (arbre de travail séparé, client Prisma
 | `pnpm test` | 63 fichiers, 440 tests réussis |
 | `pnpm test:e2e` (base isolée) | 90 tests réussis ; base de développement inchangée |
 
-Non exécuté : reverse proxy TLS avec un vrai domaine ; recopie des fichiers restaurés dans le volume en service et bascule `POSTGRES_DB` (étapes 4 et 5 de la restauration d'incident, documentées) ; copie des sauvegardes hors serveur (outil à choisir) ; charge des écrans d'administration (connexion requise) ; tâche CI `image` (sera exécutée au premier push).
+Non exécuté : reverse proxy TLS avec un vrai domaine ; recopie des fichiers restaurés dans le volume en service et bascule `POSTGRES_DB` (étapes 4 et 5 de la restauration d'incident, documentées) ; copie des sauvegardes hors serveur (outil à choisir) ; charge des écrans d'administration (connexion requise) ; tâche CI `image` (*exécutée depuis : verte sur les PR #1 et #2 et sur `main`*).
 
 ### Risques résiduels
 
@@ -180,7 +180,8 @@ Non exécuté : reverse proxy TLS avec un vrai domaine ; recopie des fichiers re
 ## Reste à décider ou à faire
 
 - **Stabilisation réalisée et vérifiée** sur poste (section ci-dessus). Avant la mise en production réelle : installation sur le serveur cible selon `docs/04-mise-en-service.md` (TLS, sauvegarde copiée hors serveur, exercice de restauration sur le serveur, test `no-new-privileges`), puis recette par le propriétaire.
-- Trancher la divergence d'horaires (phase 9 contre proposition de phase 10).
+- ~~Trancher la divergence d'horaires~~ : tranché, horaires de la phase 9 conservés (`docs/03`, décision 3).
 - Retrait des données de test de la base de développement (voir ci-dessus).
 - Envoi SMS ou WhatsApp des notifications : aucun fournisseur n'est configuré (D11).
+- *Ajout du 2026-10-19* : l'adaptateur e-mail n'existait pas (contrairement à ce qu'indiquait D11). Il est livré par la branche `feat/adaptateur-email` (SMTP générique, Brevo comme fournisseur de départ). Hébergement confirmé : serveur Docker en Europe (`docs/03`, D10).
 - Accès du client aux photos qu'il a envoyées (non proposé aujourd'hui).

@@ -17,7 +17,7 @@ Dans ce document : `C="docker compose -f docker-compose.prod.yml --env-file .env
 |---|---|---|
 | Serveur (adresse, accès SSH par clé, utilisateur membre du groupe `docker`) | hébergeur | tout |
 | Nom de domaine et enregistrement DNS `A` (et `www`) vers le serveur | propriétaire | `APP_URL`, certificat TLS |
-| Compte SMTP (hôte, port, utilisateur, mot de passe, expéditeur) | propriétaire ou hébergeur | e-mails (facultatif au départ) |
+| Compte Brevo (ou autre fournisseur SMTP) : clé SMTP, adresse d'expédition du domaine vérifiée, enregistrements DNS SPF, DKIM et DMARC publiés | propriétaire | e-mails : réinitialisations, notifications, relances (section 3) |
 | Nom, e-mail et mot de passe du premier administrateur principal | propriétaire | `admin:create` (saisi au clavier) |
 | Identité légale : raison sociale, NINEA, RCCM, adresse, téléphone, logo | propriétaire | paramètres, documents |
 | Horaires d'ouverture et jours fériés de l'année | propriétaire | délais et relances des retours |
@@ -74,10 +74,29 @@ Restent à remplir à la main si besoin : `SMTP_*`, et `APP_PORT` si le port 300
 | `POSTGRES_PASSWORD` | `openssl rand -hex 24` (propriétaire : migrations et exploitation) |
 | `APP_DB_PASSWORD` | `openssl rand -hex 24` (rôle restreint de l'application) |
 | `TRUSTED_PROXY_HOPS` | `1` derrière un reverse proxy |
-| `SMTP_*` | facultatif : sans `SMTP_HOST`, aucun e-mail n'est envoyé (tracé, jamais simulé) |
+| `SMTP_*` | voir « E-mails » ci-dessous ; sans `SMTP_HOST`, aucun e-mail n'est envoyé (tracé, jamais simulé) |
 | `DATABASE_POOL_MAX` | `10` (suffisant, voir section 10) |
 
 `.env.production` n'est jamais versionné (`.gitignore`).
+
+**E-mails (Brevo, ou tout fournisseur SMTP).** L'application envoie par SMTP : liens de réinitialisation, notifications des commandes, devis, interventions et retours, relances et alertes de la tâche planifiée.
+
+| Variable | Brevo |
+|---|---|
+| `SMTP_HOST` | `smtp-relay.brevo.com` |
+| `SMTP_PORT` | `587` (STARTTLS, exigé en production) ; `465` en TLS implicite |
+| `SMTP_USER` / `SMTP_PASSWORD` | identifiant et **clé SMTP** du compte (jamais le mot de passe du compte) ; ils vont ensemble |
+| `SMTP_FROM` | `SYSTELEC <boutique@votre-domaine>` : adresse du domaine, déclarée comme expéditeur dans Brevo |
+
+Valeurs à confirmer dans l'interface de Brevo, ainsi que les limites de l'offre choisie. Avant d'activer, publier dans le DNS du domaine les enregistrements SPF, DKIM et DMARC fournis par Brevo : sans eux, les messages finissent dans les indésirables.
+
+Comportement :
+- Configuration incomplète (port ou expéditeur absent, identifiant sans clé) : l'application refuse de démarrer, et `preflight.sh` échoue.
+- Fournisseur injoignable : l'envoi abandonne après 10 à 20 secondes. La notification passe en `FAILED` avec la cause, visible dans la fiche du document ; la commande ou l'action elle-même aboutit.
+- Une notification `FAILED` n'est pas renvoyée automatiquement.
+- La demande de réinitialisation répond sans attendre l'envoi (aucune différence de durée selon que le compte existe ou non).
+
+Test après activation : demander une réinitialisation de mot de passe pour votre propre compte depuis `/mot-de-passe-oublie`, puis passer une commande d'essai avec votre adresse.
 
 ## 4. Premier démarrage
 
