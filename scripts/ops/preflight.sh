@@ -64,10 +64,12 @@ else
   [[ "${TRUSTED_PROXY_HOPS:-1}" =~ ^[0-5]$ ]] && ok "TRUSTED_PROXY_HOPS=${TRUSTED_PROXY_HOPS:-1}" || fail "TRUSTED_PROXY_HOPS invalide (0 à 5)"
   if [[ -z "${SMTP_HOST:-}" ]]; then
     warn "SMTP_HOST vide : aucun e-mail ne sera envoyé (confirmations, relances des retours, réinitialisations)"
-  elif [[ -z "${SMTP_PORT:-}" || -z "${SMTP_FROM:-}" ]]; then
-    fail "SMTP_HOST renseigné sans SMTP_PORT ou SMTP_FROM"
+  elif [[ ! "${SMTP_PORT:-}" =~ ^[0-9]+$ || -z "${SMTP_FROM:-}" ]]; then
+    fail "SMTP_HOST renseigné sans SMTP_PORT numérique ou sans SMTP_FROM"
+  elif [[ -n "${SMTP_USER:-}" && -z "${SMTP_PASSWORD:-}" ]] || [[ -z "${SMTP_USER:-}" && -n "${SMTP_PASSWORD:-}" ]]; then
+    fail "SMTP_USER et SMTP_PASSWORD vont ensemble"
   else
-    ok "SMTP ${SMTP_HOST}:${SMTP_PORT}"
+    ok "SMTP ${SMTP_HOST}:${SMTP_PORT}, expéditeur ${SMTP_FROM} (SPF, DKIM et DMARC à publier dans le DNS)"
   fi
   if $COMPOSE config --quiet 2> /dev/null; then ok "docker-compose.prod.yml valide avec cette configuration"; else fail "docker compose config refuse la configuration"; fi
 fi
