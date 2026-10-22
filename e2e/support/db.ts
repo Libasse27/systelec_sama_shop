@@ -1,8 +1,8 @@
 import { Client } from "pg";
-import { resolveE2eDatabaseUrl } from "./database-guard";
+import { resolveE2eRun } from "./database-guard";
 
-// Même base que le serveur testé : la base E2E dédiée, vérifiée (jamais la base de développement).
-const DATABASE_URL = resolveE2eDatabaseUrl();
+// Même base que le serveur testé : la base jetable de l'exécution, vérifiée (jamais la base de développement).
+const DATABASE_URL = resolveE2eRun().databaseUrl;
 
 /** Attribue un rôle du personnel à un compte de test (équivalent d'une action d'administration). */
 export async function grantRole(email: string, roleCode: string): Promise<void> {

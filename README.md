@@ -54,17 +54,29 @@ ouvrables, jours fériés et délais de relance : **Administration → Paramètr
 - `pnpm test` exécute les projets Vitest configurés, y compris les tests PostgreSQL jetables ; Docker
   est donc requis pour cette commande complète.
 
-Les E2E sont distincts des tests Vitest. `pnpm test:e2e` cible la base persistante `systelec_e2e` et le
-stockage `storage-e2e/`. L'adresse du serveur vient de `E2E_DATABASE_URL` ou de `.env.test` ; le nom de
-base est fixé à `systelec_e2e`. Ce parcours n'est pas isolé par exécution. Ne lancez pas les E2E tant
-que leur isolation par exécution n'a pas été mise en place et vérifiée. N'utilisez jamais la base de
-développement (`.env`) ou une base partagée pour les tests PostgreSQL.
+Les E2E sont distincts des tests Vitest. `pnpm test:e2e` (arguments de Playwright acceptés, par exemple
+`pnpm test:e2e e2e/smoke.spec.ts`) lance `e2e/run.ts`, qui crée pour CHAQUE exécution :
+
+- un conteneur PostgreSQL jetable (`systelec-e2e-<run>`, données en mémoire, port local aléatoire,
+  utilisateur et mot de passe aléatoires) ; la base est marquée avec l'identifiant de l'exécution, et
+  cette marque, l'utilisateur et le nom de base sont revérifiés auprès du serveur avant les migrations,
+  les données de démonstration et les tests ;
+- un dossier de fichiers temporaire `systelec-e2e-<run>-…` dans le dossier temporaire du système ;
+- un port applicatif libre choisi par le système.
+
+Le build des E2E va dans `.next-e2e/` : le build de `.next` (développement, production locale) n'est pas
+écrasé. Le verrou `.next-e2e.lock` refuse une seconde exécution simultanée tant que la première est en
+cours. Les tests qui modifient des paramètres globaux du site (étiquette `@parametres-globaux`) ne
+tournent que sur le projet `desktop`. `pnpm exec playwright test` lancé directement est refusé. Les E2E
+n'utilisent ni `db-test`, ni `systelec_e2e` sur un serveur partagé, ni `storage-e2e/` (ancien dossier,
+qui peut subsister localement). Docker est requis. N'utilisez jamais la base de développement (`.env`)
+ou une base partagée pour les tests PostgreSQL.
 
 Les lanceurs PostgreSQL jetables nettoient leurs conteneurs, volumes secrets et répertoires temporaires
-à la fin normale du run et après les erreurs interceptées. Une interruption brutale peut laisser des
-ressources. Pour les récupérer, ne considérez que les conteneurs arrêtés et volumes portant l'étiquette
-`systelec.migration-test.run`, puis vérifiez que leur nom et leur étiquette correspondent au même
-identifiant de run avant de supprimer chaque ressource. Ne supprimez aucun conteneur actif ou ressource
+à la fin normale du run, après les erreurs interceptées et, pour les E2E, après Ctrl+C. Une interruption
+brutale (processus tué) peut laisser des ressources. Pour les récupérer, ne considérez que les
+conteneurs arrêtés et volumes portant l'étiquette `systelec.migration-test.run`, puis vérifiez que leur
+nom et leur étiquette correspondent au même identifiant de run avant de supprimer chaque ressource. Ne supprimez aucun conteneur actif ou ressource
 sans cette vérification et n'utilisez pas `docker system prune`. Le contenu du secret n'est pas
 nécessaire à ce nettoyage.
 

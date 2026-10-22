@@ -15,6 +15,8 @@ const nextConfig: NextConfig = {
   // Image Docker de production : serveur autonome (voir Dockerfile). Hors image (développement, E2E) :
   // sortie standard servie par « next start ».
   ...(process.env.NEXT_OUTPUT === "standalone" && { output: "standalone" as const }),
+  // Tests E2E (e2e/run.ts) : build séparé, pour ne pas écraser celui du développement ou de la production locale.
+  ...(process.env.NEXT_DIST_DIR === ".next-e2e" && { distDir: ".next-e2e" }),
   experimental: {
     // Téléversements : images de l'administration (5 Mo), imports CSV (2 Mo), photos d'un retour
     // envoyées par le client (3 × 2 Mo, plus les champs du formulaire).

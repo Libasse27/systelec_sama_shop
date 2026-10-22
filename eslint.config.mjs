@@ -5,7 +5,7 @@ const config = [
   ...nextVitals,
   ...nextTs,
   {
-    ignores: [".next/**", "node_modules/**", "src/generated/**", "graphify-out/**", "playwright-report/**", "test-results/**", "next-env.d.ts"],
+    ignores: [".next/**", ".next-e2e/**", "node_modules/**", "src/generated/**", "graphify-out/**", "playwright-report/**", "test-results/**", "next-env.d.ts"],
   },
 ];
 
