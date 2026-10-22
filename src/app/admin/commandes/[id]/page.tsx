@@ -4,7 +4,7 @@ import { PageHeader, Section } from "@/components/admin/admin-ui";
 import { ActionForm, SubmitButton, TextAreaField } from "@/components/forms/form-controls";
 import { OrderDetails } from "@/components/orders/order-details";
 import { formatDateTime } from "@/lib/dates";
-import { DELIVERY_STATUS_LABELS, ORDER_STATUS_LABELS, PAYMENT_STATUS_LABELS } from "@/lib/labels";
+import { DELIVERY_STATUS_LABELS, notificationStatusLabel, ORDER_STATUS_LABELS, PAYMENT_STATUS_LABELS } from "@/lib/labels";
 import { requirePermission } from "@/server/auth/session";
 import { db } from "@/server/db/client";
 import { getAdminOrder } from "@/server/modules/orders/queries";
@@ -22,8 +22,6 @@ function historyLabel(field: string, status: string): string {
   if (field === "DELIVERY") return `Livraison : ${DELIVERY_STATUS_LABELS[status as keyof typeof DELIVERY_STATUS_LABELS] ?? status}`;
   return ORDER_STATUS_LABELS[status as keyof typeof ORDER_STATUS_LABELS] ?? status;
 }
-
-const NOTIFICATION_STATUS = { PENDING: "en attente", SENT: "envoyée", FAILED: "échec", SKIPPED_NO_PROVIDER: "non envoyée (aucun fournisseur)" } as const;
 
 export default async function AdminOrderPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -143,11 +141,7 @@ export default async function AdminOrderPage({ params }: { params: Promise<{ id:
             {order.notifications.map((notification) => (
               <li key={`${notification.channel}-${notification.template}-${notification.createdAt.toISOString()}-${notification.recipient}`}>
                 {formatDateTime(notification.createdAt)} — {notification.channel} à {notification.recipient} ({notification.template}) :{" "}
-                {NOTIFICATION_STATUS[notification.status as keyof typeof NOTIFICATION_STATUS] ?? notification.status}
-                {notification.status === "FAILED" &&
-                  (notification.nextAttemptAt
-                    ? ` après ${notification.attempts} essai(s), nouvel essai prévu le ${formatDateTime(notification.nextAttemptAt)}`
-                    : ` définitif après ${notification.attempts} essai(s)`)}
+                {notificationStatusLabel(notification)}
               </li>
             ))}
           </ul>

@@ -25,7 +25,8 @@ DB_NAME="${POSTGRES_DB:-systelec}"
 STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 TARGET="$PARENT/$STAMP"
 umask 077
-mkdir -p "$TARGET"
+mkdir -p "$PARENT"
+mkdir "$TARGET" || { echo "Dossier de sauvegarde déjà présent : $TARGET (aucun écrasement)" >&2; exit 1; }
 
 echo "Sauvegarde de la base $DB_NAME…"
 $COMPOSE exec -T db pg_dump -U "$DB_USER" -d "$DB_NAME" -Fc --no-password > "$TARGET/base.dump"

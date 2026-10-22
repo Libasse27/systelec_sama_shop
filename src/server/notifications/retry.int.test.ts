@@ -1,13 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { notificationStatusLabel } from "@/lib/labels";
 import { syncRolesAndPermissions } from "@/server/authz/sync";
 import { db } from "@/server/db/client";
 import { resetDatabase } from "../../../tests/setup/db";
 import { actorWith } from "../../../tests/support/actors";
 import { confirmedOrder, seedOrderCatalog } from "../../../tests/support/orders";
-import { sendEmail } from "./mailer";
+import { getAdminOrder } from "@/server/modules/orders/queries";
+import { EmailSendError, sendEmail } from "./mailer";
 import { dispatchNotifications, MAX_EMAIL_ATTEMPTS, retryNotifications } from "./queue";
 
-vi.mock("./mailer", () => ({ sendEmail: vi.fn() }));
+vi.mock("./mailer", async (importOriginal) => ({ ...(await importOriginal<typeof import("./mailer")>()), sendEmail: vi.fn() }));
 const send = vi.mocked(sendEmail);
 
 const MINUTE = 60_000;
@@ -15,7 +17,8 @@ const NOW = new Date("2026-10-20T10:00:00Z");
 const payload = { number: "CMD-2026-000001", customerName: "Awa", total: 50_000, fulfillment: "PICKUP" };
 let orderId: string;
 
-const smtpError = (message: string, responseCode?: number) => Object.assign(new Error(message), { responseCode });
+const smtpError = (_message: string, responseCode?: number) =>
+  new EmailSendError(responseCode === 550 ? "RECIPIENT_REJECTED" : "TEMPORARY", responseCode);
 
 /** Notification e-mail de la commande de test, dans l'état donné. */
 async function notification(data: { status: "FAILED" | "PENDING" | "SENT" | "SKIPPED_NO_PROVIDER"; attempts?: number; nextAttemptAt?: Date | null; createdAt?: Date; sentAt?: Date | null; channel?: "EMAIL" | "SMS" }) {
@@ -73,7 +76,7 @@ describe("renvoi automatique des e-mails en échec (PostgreSQL)", () => {
       expect(await retryNotifications(db, clock)).toEqual({ sent: 0, failed: 1, skipped: 0 });
       const current = await row(failed.id);
       expect(current.status).toBe("FAILED");
-      expect(current.error).toContain("421");
+      expect(current.error).toBe("SMTP_TEMPORARY_FAILURE");
       expect(current.nextAttemptAt!.getTime() - Date.now()).toBeGreaterThan((delay - 1) * MINUTE);
       expect(current.nextAttemptAt!.getTime() - Date.now()).toBeLessThanOrEqual(delay * MINUTE);
       clock = current.nextAttemptAt!;
@@ -82,6 +85,28 @@ describe("renvoi automatique des e-mails en échec (PostgreSQL)", () => {
     expect(await row(failed.id)).toMatchObject({ status: "FAILED", attempts: MAX_EMAIL_ATTEMPTS, nextAttemptAt: null });
     expect(await retryNotifications(db, new Date(clock.getTime() + 24 * 60 * MINUTE))).toEqual({ sent: 0, failed: 0, skipped: 0 });
     expect(send).toHaveBeenCalledTimes(MAX_EMAIL_ATTEMPTS - 1);
+  });
+
+  it("fiche commande : la requête fournit essais, prochain essai et catégorie sûre conforme à l'état en base", async () => {
+    send.mockRejectedValueOnce(smtpError("421 Service temporairement indisponible", 421)).mockRejectedValueOnce(smtpError("550 5.1.1 Mailbox unavailable", 550));
+    // Un seul passage, dans l'ordre de création : 421 (temporaire) puis 550 (définitif).
+    const scheduled = await notification({ status: "FAILED", attempts: 1, nextAttemptAt: NOW, createdAt: new Date(NOW.getTime() - 2 * MINUTE) });
+    const definitive = await notification({ status: "FAILED", attempts: 1, nextAttemptAt: NOW, createdAt: new Date(NOW.getTime() - MINUTE) });
+    expect(await retryNotifications(db, NOW)).toEqual({ sent: 0, failed: 2, skipped: 0 });
+
+    const view = await getAdminOrder(db, await actorWith("ORDER_MANAGER"), orderId);
+    const byId = new Map((await db.notification.findMany({ where: { orderId } })).map((row) => [row.id, row]));
+    const shown = view!.notifications.map((entry) => ({ ...entry, label: notificationStatusLabel(entry) }));
+    const scheduledRow = byId.get(scheduled.id)!;
+    expect(shown).toContainEqual(expect.objectContaining({ status: "FAILED", attempts: 2, nextAttemptAt: scheduledRow.nextAttemptAt, error: "SMTP_TEMPORARY_FAILURE" }));
+    expect(shown.map((entry) => entry.label)).toEqual(
+      expect.arrayContaining([
+        expect.stringMatching(/^échec après 2 essai\(s\), nouvel essai prévu le .+ — incident temporaire du fournisseur$/),
+        "échec définitif après 2 essai(s) — adresse destinataire refusée",
+        "non envoyée (aucun fournisseur)",
+      ]),
+    );
+    expect(byId.get(definitive.id)).toMatchObject({ status: "FAILED", nextAttemptAt: null });
   });
 
   it("refus définitif du destinataire (550) : jamais renvoyé", async () => {
@@ -130,7 +155,14 @@ describe("renvoi automatique des e-mails en échec (PostgreSQL)", () => {
     const exhausted = await notification({ status: "PENDING", attempts: MAX_EMAIL_ATTEMPTS, sentAt: new Date(NOW.getTime() - 11 * MINUTE), createdAt: new Date(NOW.getTime() - 5 * 60 * MINUTE) });
     expect(await retryNotifications(db, NOW)).toEqual({ sent: 0, failed: 1, skipped: 0 });
     expect(send).not.toHaveBeenCalled();
-    expect(await row(exhausted.id)).toMatchObject({ status: "FAILED", attempts: MAX_EMAIL_ATTEMPTS, nextAttemptAt: null, sentAt: null, error: expect.stringContaining("Abandon") });
+    expect(await row(exhausted.id)).toMatchObject({ status: "FAILED", attempts: MAX_EMAIL_ATTEMPTS, nextAttemptAt: null, sentAt: null, error: "ABANDONED" });
+  });
+
+  it("stocke INTERNAL pour une exception de rendu ou de traitement, jamais un code SMTP", async () => {
+    send.mockRejectedValue(new Error("internal host or credential detail"));
+    const pending = await notification({ status: "FAILED", attempts: 1, nextAttemptAt: NOW });
+    await retryNotifications(db, NOW);
+    expect(await row(pending.id)).toMatchObject({ status: "FAILED", error: "INTERNAL" });
   });
 
   it("deux travailleurs sur la même notification en attente (envoi initial) : une seule réservation, un seul envoi", async () => {

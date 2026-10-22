@@ -2,7 +2,7 @@ import "server-only";
 import type { Prisma } from "@/generated/prisma/client";
 import type { Db } from "@/server/db/client";
 import { logger } from "@/server/logger";
-import { sendEmail } from "./mailer";
+import { classifyNotificationFailure, sendEmail } from "./mailer";
 import { renderReturnMessage, RETURN_TEMPLATES, type ReturnMessageData, type ReturnTemplate } from "./return-templates";
 import { renderServiceMessage, SERVICE_TEMPLATES, type ServiceMessageData, type ServiceTemplate } from "./service-templates";
 import { renderOrderMessage, type OrderMessageData, type OrderTemplate } from "./templates";
@@ -60,6 +60,28 @@ const ORPHAN_MAX_AGE_MINUTES = 24 * 60;
 const PERMANENT_SMTP_CODES = new Set([550, 551, 553]);
 const MINUTE_MS = 60_000;
 
+/** Diagnostics internes limités aux noms de type et frames de code, sans message d'exception. */
+function internalDiagnostic(error: unknown): Record<string, unknown> {
+  if (!(error instanceof Error)) return { errorName: "NonErrorThrown" };
+
+  const knownErrorNames = new Set(["Error", "TypeError", "RangeError", "ReferenceError", "SyntaxError", "URIError", "EvalError", "AggregateError"]);
+  const errorName = knownErrorNames.has(error.name) ? error.name : "ApplicationError";
+  const stackFrames = (error.stack ?? "")
+    .split("\n")
+    .slice(1)
+    .flatMap((line) => {
+      const match = /^\s*at (?:(.*?) \()?(.+?):(\d+):(\d+)\)?$/.exec(line);
+      if (!match) return [];
+      const functionName = (match[1] ?? "anonymous").replace(/[^A-Za-z0-9_.$<>]/g, "").slice(0, 80) || "anonymous";
+      const fileName = match[2]!.split(/[\\/]/).at(-1)!.replace(/[^A-Za-z0-9_.-]/g, "").slice(0, 100);
+      if (!fileName) return [];
+      return [`${functionName} (${fileName}:${match[3]}:${match[4]})`];
+    })
+    .slice(0, 8);
+
+  return { errorName, ...(stackFrames.length > 0 ? { stackFrames } : {}) };
+}
+
 interface SendableNotification {
   id: string;
   template: string;
@@ -74,7 +96,12 @@ export async function dispatchNotifications(client: Db, link: NotificationLink):
     const pending = await client.notification.findMany({ where: { ...link, status: "PENDING", channel: "EMAIL", sentAt: null } });
     for (const notification of pending) await sendOne(client, notification);
   } catch (error) {
-    logger.error("Notifications non envoyées", { ...link, error: error instanceof Error ? error.message : "inconnue" });
+    const failure = classifyNotificationFailure(error);
+    logger.error("Notifications non envoyées", {
+      ...link,
+      failureCode: failure.failureCode,
+      ...(failure.category === "INTERNAL" ? internalDiagnostic(error) : {}),
+    });
   }
 }
 
@@ -107,11 +134,17 @@ async function sendOne(client: Db, notification: SendableNotification): Promise<
     });
     return result.sent ? "SENT" : "SKIPPED";
   } catch (error) {
-    const reason = error instanceof Error ? error.message : "inconnue";
-    const nextAttemptAt = nextAttemptAfter(attempts, error, new Date());
-    logger.error("Notification non envoyée", { notificationId: notification.id, attempts, retry: nextAttemptAt?.toISOString() ?? "aucun", error: reason });
+    const safeFailure = classifyNotificationFailure(error);
+    const nextAttemptAt = nextAttemptAfter(attempts, safeFailure, new Date());
+    logger.error("Notification non envoyée", {
+      notificationId: notification.id,
+      attempts,
+      retry: nextAttemptAt?.toISOString() ?? "aucun",
+      failureCode: safeFailure.failureCode,
+      ...(safeFailure.category === "INTERNAL" ? internalDiagnostic(error) : {}),
+    });
     await client.notification
-      .update({ where: { id: notification.id }, data: { status: "FAILED", error: reason.slice(0, 500), sentAt: null, nextAttemptAt } })
+      .update({ where: { id: notification.id }, data: { status: "FAILED", error: safeFailure.failureCode, sentAt: null, nextAttemptAt } })
       .catch(() => undefined);
     return "FAILED";
   }
@@ -152,7 +185,7 @@ async function release(client: Db, notification: DueNotification, now: Date): Pr
 async function abandon(client: Db, notification: DueNotification): Promise<boolean> {
   const closed = await client.notification.updateMany({
     where: { id: notification.id, status: notification.status as "PENDING" | "FAILED", sentAt: notification.sentAt },
-    data: { status: "FAILED", sentAt: null, nextAttemptAt: null, error: `Abandon : ${MAX_EMAIL_ATTEMPTS} envois tentés.` },
+    data: { status: "FAILED", sentAt: null, nextAttemptAt: null, error: "ABANDONED" },
   });
   return closed.count === 1;
 }

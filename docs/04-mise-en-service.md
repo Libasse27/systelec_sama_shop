@@ -92,7 +92,7 @@ Valeurs à confirmer dans l'interface de Brevo, ainsi que les limites de l'offre
 
 Comportement :
 - Configuration incomplète (port ou expéditeur absent, identifiant sans clé) : l'application refuse de démarrer, et `preflight.sh` échoue.
-- Fournisseur injoignable : l'envoi abandonne après 10 à 20 secondes. La notification passe en `FAILED` avec la cause, la clé SMTP étant masquée si le serveur la renvoyait. La commande ou l'action elle-même aboutit.
+- Échec du fournisseur : l'envoi abandonne après 10 à 20 secondes. La notification passe en `FAILED` avec une catégorie contrôlée (connexion, authentification, destinataire refusé, incident temporaire ou autre échec). Le texte libre renvoyé par le serveur SMTP n'est ni stocké ni affiché. La commande ou l'action elle-même aboutit.
 - **Renvoi automatique** par la tâche planifiée (section 6) : nouvel essai 15 minutes, 1 heure puis 4 heures après chaque échec, soit **4 envois au plus**, jamais davantage. Un refus définitif du destinataire (codes SMTP 550, 551, 553 : adresse inexistante ou invalide) n'est jamais renvoyé. Les notifications envoyées (`SENT`) ou sans fournisseur (`SKIPPED_NO_PROVIDER`) ne sont jamais renvoyées.
 - **Rattrapage** : un e-mail resté en attente, jamais envoyé ou interrompu pendant l'envoi (processus arrêté), est repris entre 10 minutes et 24 heures après sa création ; au-delà, il est jugé périmé et n'est pas envoyé. Un envoi interrompu a pu partir juste avant l'arrêt : le client peut alors recevoir le message deux fois (« au moins un envoi »). Une ligne qui a déjà épuisé ses 4 envois passe en échec définitif sans nouvel envoi.
 - Deux passages simultanés de la tâche, ou un envoi immédiat et la tâche, n'envoient jamais deux fois la même notification (mises à jour conditionnelles en base).
@@ -116,13 +116,22 @@ scripts/ops/first-start.sh     # toutes les étapes ci-dessous, dans l'ordre (à
 ```bash
 $C up -d db                                   # PostgreSQL 17 (aucun port publié)
 $C run --rm migrate                           # migrations (rôle propriétaire)
-set -a; . ./.env.production; set +a
-$C exec -T db psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" \
-  -v app_role="$APP_DB_USER" -v app_password="$APP_DB_PASSWORD" < scripts/ops/app-role.sql
+(
+  set -a
+  . ./.env.production
+  set +a
+  $C exec -T db psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" \
+    -v app_role="$APP_DB_USER" -v app_password="$APP_DB_PASSWORD" < scripts/ops/app-role.sql
+)
 $C run --rm tasks pnpm db:seed                # rôles, permissions, catalogue de base (idempotent)
 $C run --rm tasks pnpm admin:create           # premier administrateur principal (mot de passe saisi)
 $C up -d app
-curl -s http://127.0.0.1:3000/api/health      # {"status":"ok"}
+(
+  set -a
+  . ./.env.production
+  set +a
+  curl -fsS "http://127.0.0.1:${APP_PORT:-3000}/api/health" # {"status":"ok"}
+)
 ```
 
 **Rôle restreint de l'application** (`scripts/ops/app-role.sql`, idempotent).
@@ -158,7 +167,7 @@ votre-domaine.sn {
 Expiration des réservations, paniers et devis, alertes et relances des retours, renvoi des e-mails en échec, toutes les 15 minutes (crontab de l'utilisateur qui exploite Docker). Modèle avec la sauvegarde nocturne : `deploy/crontab.example` (créer d'abord `/var/log/systelec`, accessible en écriture à cet utilisateur).
 
 ```
-*/15 * * * * cd /srv/systelec && docker compose -f docker-compose.prod.yml --env-file .env.production run --rm tasks >> /var/log/systelec-taches.log 2>&1
+*/15 * * * * cd /srv/systelec && docker compose -f docker-compose.prod.yml --env-file .env.production run --rm tasks >> /var/log/systelec/taches.log 2>&1
 ```
 
 ## 7. Sauvegardes
@@ -167,6 +176,7 @@ Expiration des réservations, paniers et devis, alertes et relances des retours,
 scripts/ops/backup.sh /srv/sauvegardes        # base (pg_dump -Fc) + fichiers téléversés + SHA256SUMS
 ```
 
+- Prérequis : services `db` et `app` démarrés, `.env.production` lisible, dossier parent accessible en écriture. Le script crée un sous-dossier UTC à la seconde et refuse un nom déjà présent ; en cas d'échec partiel, il laisse ce dossier en place et ne l'écrase pas.
 - Le service continue de tourner pendant la sauvegarde, et le dump est un instantané cohérent.
 - Le script vérifie que le dump est lisible (`pg_restore --list`) et que l'archive des fichiers aussi.
 - Les droits sont `700` sur le dossier et `600` sur les fichiers.
@@ -184,9 +194,9 @@ scripts/ops/restore.sh /srv/sauvegardes/<date> systelec_exercice /srv/exercice/s
 scripts/ops/verify-restore.sh systelec systelec_exercice   # contenu identique table par table (lignes + MD5)
 ```
 
-`restore.sh` vérifie les empreintes et restaure dans une **base neuve** et un **dossier neuf**. Il refuse d'écraser une base existante, la base en service ou un dossier non vide. Il contrôle aussi le nombre de migrations restaurées.
+`restore.sh` exige le service `db` démarré, une sauvegarde complète (`SHA256SUMS`, dump, archive et manifeste), et un accès en écriture à la base et au parent du dossier cible. Il vérifie les empreintes et restaure dans une **base neuve** et un **dossier absent ou vide**. Il refuse d'écraser une base existante, la base en service ou un dossier non vide. Il contrôle aussi le nombre de migrations restaurées.
 
-`verify-restore.sh` compare les deux bases et échoue à la première différence. Ne lancer la comparaison que juste après la restauration : la base en service continue d'évoluer.
+`verify-restore.sh` exige le service `db` démarré et les deux bases accessibles au rôle propriétaire ; il compare les bases et échoue à la première différence. Ne lancer la comparaison que juste après la restauration : la base en service continue d'évoluer.
 
 **Incident (bascule sur une sauvegarde)** :
 1. `$C stop app` (et suspendre la tâche planifiée).
@@ -203,11 +213,41 @@ Non exécuté pendant la stabilisation : les étapes 4 et 5. L'application a ét
 
 ## 9. Mise à jour
 
-1. Construire les images de la nouvelle version (section 2).
-2. `scripts/ops/backup.sh /srv/sauvegardes` (sauvegarde de sécurité).
-3. Mettre `APP_VERSION=<nouvelle>` dans `.env.production`.
-4. `$C run --rm migrate`, puis `$C up -d app`, puis vérifier `curl …/api/health` et les écrans principaux.
-5. **Retour arrière** : remettre l'ancienne `APP_VERSION` et `$C up -d app`. Les migrations ne vont que vers l'avant : si une migration de la nouvelle version a modifié le schéma de façon incompatible, restaurer la sauvegarde de l'étape 2 (section 8).
+La migration `20261019090000_notification_retries` a été testée avec `pnpm test:migration` sur un PostgreSQL jetable : le test provoque un échec, vérifie l'annulation transactionnelle, puis la reprise avec Prisma. La procédure opérationnelle complète ci-dessous (sauvegarde, mise à jour de la pile, contrôles et retour arrière) est documentée, mais n'a pas été vérifiée de bout en bout sur une pile jetable pour cette version. `ANCIENNE` et `NOUVELLE` désignent les étiquettes d'images (section 2).
+
+1. **Construire** les images `NOUVELLE` (section 2). Le service continue de tourner.
+2. **Sauvegarder et vérifier la copie** :
+   ```bash
+   scripts/ops/backup.sh /srv/sauvegardes        # doit finir par « Sauvegarde terminée : <dossier> (… tables, … migrations) »
+   (cd /srv/sauvegardes/<date> && sha256sum --check SHA256SUMS)
+   ```
+   Copier ce dossier hors du serveur (section 7) et relancer `sha256sum --check` sur la copie. Ne pas continuer sans copie vérifiée.
+3. **Suspendre la tâche planifiée** : `crontab -e`, commenter la ligne `*/15 … run --rm tasks` (section 6), puis vérifier par `crontab -l` et attendre qu'aucun conteneur `tasks` ne tourne (`docker ps --filter name=tasks`). Sans cela, une tâche lancée avec la nouvelle image avant la migration lirait des colonnes absentes.
+4. **Passer à la nouvelle version** : `APP_VERSION=NOUVELLE` dans `.env.production`. L'application en service n'est pas redémarrée par ce changement. Les exemples de la section 4 chargent maintenant les variables dans un sous-shell. Si `.env.production` avait déjà été chargé dans votre shell avant cette correction, ouvrez un terminal neuf pour éviter que ces variables aient priorité sur `--env-file`. Contrôle facultatif : `echo "${APP_VERSION:-non défini}"` doit afficher `non défini`.
+5. **État des migrations, avant** : `$C run --rm migrate pnpm exec prisma migrate status`. Attendu : la ou les nouvelles migrations listées comme non appliquées (« Following migration have not yet been applied »), aucune en échec.
+6. **Appliquer les migrations** : `$C run --rm migrate`, puis `$C run --rm migrate pnpm exec prisma migrate status` doit afficher « Database schema is up to date! ».
+7. **En cas d'échec de la migration** (le service ancien continue de tourner : le schéma n'a pas changé ou la migration est atomique) :
+   - **Diagnostic** : `$C logs --since 30m db | grep ERROR` donne la cause exacte (Prisma n'affiche parfois que « current transaction is aborted »). `migrate status` liste la migration en échec ; une relance est refusée (`P3009`) tant que l'échec n'est pas résolu (`P3018` désigne l'échec lui-même).
+   - **Vérifier ce qui a été appliqué** : `$C exec -T db psql -U systelec_owner -d systelec -c '\d notifications'` (valeurs de `POSTGRES_USER` et `POSTGRES_DB`, à saisir sans charger le fichier dans le shell) (adapter la table à la migration). La migration `20261019090000_notification_retries` est transactionnelle : après un échec, **rien** n'est appliqué (pas de colonne `attempts`).
+   - **Reprise, seulement si rien n'a été appliqué** : corriger la cause, puis
+     ```bash
+     $C run --rm migrate pnpm exec prisma migrate resolve --rolled-back <nom_de_la_migration>
+     $C run --rm migrate                                   # relance
+     ```
+   - **Si une partie a été appliquée** (migration non transactionnelle) ou en cas de doute : ne rien supprimer à la main ; restaurer la sauvegarde de l'étape 2 dans une base neuve et basculer (section 8, « Incident »). Ne jamais utiliser `migrate resolve --applied` sur une migration incomplète.
+8. **Redémarrer et contrôler** :
+   ```bash
+   $C up -d --wait app                                   # attend l'état « healthy »
+   ( set -a; . ./.env.production; set +a; curl -fsS "http://127.0.0.1:${APP_PORT:-3000}/api/health" ) # {"status":"ok"}
+   ```
+   Puis les écrans principaux (connexion, boutique, une fiche commande).
+9. **Vérifier l'envoi et la tâche de renvoi** :
+   - e-mail : demander une réinitialisation de mot de passe pour votre propre compte (`/mot-de-passe-oublie`) et vérifier la réception (section 3) ;
+   - tâche : la lancer une fois à la main, `$C run --rm tasks`, et vérifier qu'elle se termine par « E-mails renvoyés : … envoyé(s), … en échec, … sans fournisseur. ».
+10. **Réactiver la tâche planifiée** : décommenter la ligne dans `crontab -e`, vérifier `crontab -l`, puis, au quart d'heure suivant, la nouvelle entrée de `/var/log/systelec/taches.log`.
+11. **Retour arrière de l'application** (si un contrôle des étapes 8 ou 9 échoue) : `APP_VERSION=ANCIENNE` dans `.env.production`, puis `$C up -d --wait app` et `curl …/api/health` ; la tâche planifiée reprend aussi l'ancienne image.
+    - Les migrations ne vont que vers l'avant et restent en place. Celle du renvoi (`20261019090000_notification_retries`) n'ajoute que des colonnes avec valeur par défaut, une contrainte et un index : l'ancienne version fonctionne avec, **aucune restauration n'est nécessaire**. Les e-mails en échec gardent leur prochain essai, repris au retour de la nouvelle version.
+    - Pour une future migration qui modifierait le schéma de façon incompatible, restaurer la sauvegarde de l'étape 2 (section 8). Toute nouvelle migration doit indiquer dans son en-tête si l'ancienne version reste compatible.
 
 ## 10. Performance
 

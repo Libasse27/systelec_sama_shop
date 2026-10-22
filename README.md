@@ -36,12 +36,37 @@ vérifications de retour restées sans réponse sont relancées (12 et 24 heures
 (par exemple toutes les 15 minutes). Heures
 ouvrables, jours fériés et délais de relance : **Administration → Paramètres**.
 
-Vérifications : `pnpm lint && pnpm typecheck && pnpm test && pnpm build && pnpm test:e2e`.
+### Tests et validations
 
-Les tests d'intégration et E2E utilisent le PostgreSQL de test (`docker compose up -d db-test`, port 5434) :
-`systelec_test` pour l'intégration, `systelec_e2e` (créée au besoin) pour les E2E. Les E2E vérifient
-l'identité de leur base avant toute écriture et s'arrêtent en cas de doute ; ils ne touchent jamais la base
-de développement (`.env`) et téléversent dans `storage-e2e/`.
+- Tests unitaires, sans PostgreSQL : `pnpm exec vitest run --project unit`.
+- Tests d'intégration PostgreSQL : `pnpm test:integration:disposable`. Ce lanceur démarre un conteneur
+  et une base jetables pour chaque exécution ; Docker doit être installé et accessible à l'utilisateur.
+- `db-test` dans `docker-compose.yml` expose PostgreSQL sur le port 5434. Une commande n'utilise ce
+  service que si son URL de base le vise explicitement. `pnpm test:integration:disposable` démarre son
+  propre conteneur sur un port aléatoire et n'utilise pas `db-test`.
+- `pnpm db:test:prepare` exécute `dotenv -e .env.test -- prisma migrate reset --force` : la commande
+  réinitialise et efface les données de la base indiquée par `DATABASE_URL` dans `.env.test`. Elle ne
+  garantit pas que cette URL vise `db-test` sur le port 5434. Avant de la lancer, vérifiez que l'URL
+  désigne une base jetable dont le contenu peut être supprimé.
+- Test de migration : `pnpm test:migration`. Il utilise également un conteneur PostgreSQL jetable et
+  nécessite Docker.
+- Contrôles statiques et build : `pnpm lint`, `pnpm typecheck`, puis `pnpm build`.
+- `pnpm test` exécute les projets Vitest configurés, y compris les tests PostgreSQL jetables ; Docker
+  est donc requis pour cette commande complète.
+
+Les E2E sont distincts des tests Vitest. `pnpm test:e2e` cible la base persistante `systelec_e2e` et le
+stockage `storage-e2e/`. L'adresse du serveur vient de `E2E_DATABASE_URL` ou de `.env.test` ; le nom de
+base est fixé à `systelec_e2e`. Ce parcours n'est pas isolé par exécution. Ne lancez pas les E2E tant
+que leur isolation par exécution n'a pas été mise en place et vérifiée. N'utilisez jamais la base de
+développement (`.env`) ou une base partagée pour les tests PostgreSQL.
+
+Les lanceurs PostgreSQL jetables nettoient leurs conteneurs, volumes secrets et répertoires temporaires
+à la fin normale du run et après les erreurs interceptées. Une interruption brutale peut laisser des
+ressources. Pour les récupérer, ne considérez que les conteneurs arrêtés et volumes portant l'étiquette
+`systelec.migration-test.run`, puis vérifiez que leur nom et leur étiquette correspondent au même
+identifiant de run avant de supprimer chaque ressource. Ne supprimez aucun conteneur actif ou ressource
+sans cette vérification et n'utilisez pas `docker system prune`. Le contenu du secret n'est pas
+nécessaire à ce nettoyage.
 
 > Après une migration ou un `pnpm db:generate`, **redémarrez `pnpm dev`** : en développement, le client
 > Prisma est conservé entre les rechargements à chaud et ne connaît pas encore les nouvelles tables

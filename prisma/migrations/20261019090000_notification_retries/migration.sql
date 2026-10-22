@@ -1,5 +1,11 @@
 -- Renvoi automatique des e-mails en échec (tâche planifiée, pnpm orders:expire).
 -- attempts : envois tentés ; nextAttemptAt : prochain essai d'une notification FAILED (NULL = abandon définitif).
+-- Transaction explicite : Prisma n'en ouvre pas ; sans elle, un échec en cours de route (index, coupure)
+-- laisserait colonnes et contraintes appliquées et la migration marquée en échec (P3018). Avec elle,
+-- tout est annulé : corriger la cause, `prisma migrate resolve --rolled-back`, puis relancer.
+-- Vérifié par src/server/db/notification-retries.migration.test.ts (test:migration, PostgreSQL jetable).
+BEGIN;
+
 ALTER TABLE "notifications"
   ADD COLUMN "attempts" INTEGER NOT NULL DEFAULT 0,
   ADD COLUMN "nextAttemptAt" TIMESTAMPTZ(3),
@@ -13,3 +19,5 @@ UPDATE "notifications" SET "attempts" = 1 WHERE "status" = 'FAILED';
 UPDATE "notifications" SET "attempts" = 1 WHERE "status" = 'SENT';
 
 CREATE INDEX "notifications_status_nextAttemptAt_idx" ON "notifications"("status", "nextAttemptAt");
+
+COMMIT;

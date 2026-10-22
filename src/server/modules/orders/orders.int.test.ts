@@ -9,7 +9,7 @@ import { updateSetting } from "@/server/modules/settings/service";
 import { resetDatabase } from "../../../../tests/setup/db";
 import { actorWith } from "../../../../tests/support/actors";
 import { placeOrder } from "./checkout";
-import { getCustomerOrder, getGuestOrder, listCustomerOrders } from "./queries";
+import { getAdminOrder, getCustomerOrder, getGuestOrder, listCustomerOrders } from "./queries";
 import { cancelOwnOrder, changeOrderStatus, expireStaleOrders } from "./status";
 
 const contact = { name: "Awa Diop", phone: "77 123 45 67", email: "awa@example.sn" };
@@ -262,6 +262,16 @@ describe("panier et commandes (§20 n° 7 à 14, 17 et 25, PostgreSQL)", () => {
       await expect(changeOrderStatus(db, manager, id, { status: "CANCELLED" })).rejects.toMatchObject({ code: "VALIDATION" });
       const stock = await actorWith("STOCK_MANAGER");
       await expect(changeOrderStatus(db, stock, id, { status: "CONFIRMED" })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    });
+
+    it("réserve la fiche commande de l'administration aux rôles ayant orders.read (refus journalisé)", async () => {
+      const { id } = await pickupOrder();
+      const stock = await actorWith("STOCK_MANAGER");
+      expect(stock.permissions.has("admin.access")).toBe(true);
+      expect(stock.permissions.has("orders.read")).toBe(false);
+      await expect(getAdminOrder(db, stock, id)).rejects.toMatchObject({ code: "FORBIDDEN" });
+      expect(await db.auditLog.count({ where: { action: "authz.denied", actorId: stock.id, entityId: "orders.read", result: "DENIED" } })).toBe(1);
+      expect((await getAdminOrder(db, manager, id))?.id).toBe(id);
     });
 
     it("libère le stock à l'annulation, une seule fois", async () => {
