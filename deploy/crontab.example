@@ -4,7 +4,8 @@
 SHELL=/bin/bash
 PATH=/usr/local/bin:/usr/bin:/bin
 
-# Expiration des réservations, paniers et devis ; alertes et relances des retours : toutes les 15 minutes.
+# Expiration des réservations, paniers et devis ; alertes et relances des retours ; renvoi des e-mails en
+# échec : toutes les 15 minutes.
 */15 * * * * cd /srv/systelec && docker compose -f docker-compose.prod.yml --env-file .env.production run --rm tasks >> /var/log/systelec/taches.log 2>&1
 
 # Sauvegarde nocturne (base + fichiers téléversés) à 2 h. La copie HORS serveur chiffrée doit suivre

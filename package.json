@@ -14,6 +14,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:migration": "vitest run --project migration",
+    "test:integration:disposable": "vitest run --project integration",
     "test:e2e": "playwright test",
     "db:up": "docker compose up -d db",
     "db:migrate": "prisma migrate dev",

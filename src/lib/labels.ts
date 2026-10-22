@@ -1,3 +1,4 @@
+import { formatDateTime } from "./dates";
 import { formatFcfa } from "./money";
 
 type Condition = "NEW" | "REFURBISHED" | "USED";
@@ -168,3 +169,52 @@ export const COURIER_KIND_LABELS = {
   INTERNAL: "Livreur interne (compte)",
   EXTERNAL: "Transporteur externe",
 } as const;
+
+/** État d'une notification tel que l'enregistre la file d'envoi (src/server/notifications/queue.ts). */
+export interface NotificationState {
+  status: string;
+  attempts: number;
+  nextAttemptAt: Date | null;
+  error: string | null;
+}
+
+/** Seules les catégories contrôlées sont visibles ; les anciennes erreurs libres restent masquées. */
+const FAILURE_LABELS: Record<string, string> = {
+  SMTP_AUTHENTICATION_FAILED: "incident d'authentification fournisseur",
+  SMTP_RECIPIENT_REJECTED: "adresse destinataire refusée",
+  SMTP_TEMPORARY_FAILURE: "incident temporaire du fournisseur",
+  SMTP_CONNECTION_FAILURE: "incident de connexion au fournisseur",
+  SMTP_DELIVERY_FAILURE: "incident d'envoi du fournisseur",
+  INTERNAL: "incident interne, diagnostic réservé aux techniciens",
+  UNKNOWN: "incident de notification",
+  ABANDONED: "envoi abandonné après épuisement des tentatives",
+};
+
+function failureLabel(error: string | null): string {
+  const label = error && Object.hasOwn(FAILURE_LABELS, error) ? FAILURE_LABELS[error] : undefined;
+  return label ? ` — ${label}` : "";
+}
+
+/** Réduit les erreurs stockées, y compris les anciennes chaînes libres, à la liste sûre connue. */
+export function safeNotificationErrorCode(error: string | null): string | null {
+  return error && Object.hasOwn(FAILURE_LABELS, error) ? error : null;
+}
+
+/** Libellé d'une notification sur la fiche commande : statut, essais, prochain essai (heure de Dakar), cause d'un échec. */
+export function notificationStatusLabel(notification: NotificationState): string {
+  const { status, attempts, nextAttemptAt, error } = notification;
+  switch (status) {
+    case "SENT":
+      return attempts > 1 ? `envoyée au ${attempts}e essai` : "envoyée";
+    case "PENDING":
+      return attempts > 0 ? `en attente de renvoi (${attempts} essai(s) déjà tenté(s))` : "en attente";
+    case "SKIPPED_NO_PROVIDER":
+      return "non envoyée (aucun fournisseur)";
+    case "FAILED":
+      return nextAttemptAt
+        ? `échec après ${attempts} essai(s), nouvel essai prévu le ${formatDateTime(nextAttemptAt)}${failureLabel(error)}`
+        : `échec définitif après ${attempts} essai(s)${failureLabel(error)}`;
+    default:
+      return status;
+  }
+}
