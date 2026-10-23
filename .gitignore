@@ -4,6 +4,10 @@ node_modules/
 
 # build
 .next/
+# build des E2E (e2e/run.ts) et son verrou
+/.next-e2e/
+/.next-e2e.lock
+/.next-e2e.lock.*
 out/
 build/
 *.tsbuildinfo
@@ -25,6 +29,7 @@ test-results/
 
 # fichiers téléversés en local (à la racine seulement : src/server/storage/ est du code versionné)
 /storage/
+# ancien dossier des E2E (avant l'isolation par exécution) : peut subsister localement
 /storage-e2e/
 
 # sauvegardes (bases et fichiers : données personnelles, jamais versionnées)

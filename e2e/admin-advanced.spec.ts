@@ -216,7 +216,7 @@ test.describe("administration avancée (phase 9)", () => {
     await admin.close();
   });
 
-  test("paramètres (D7) et contenu : mentions légales, page publiée, audit", async ({ page }) => {
+  test("paramètres (D7) et contenu : mentions légales, page publiée, audit", { tag: "@parametres-globaux" }, async ({ page }) => {
     await staffPage(page, ["ADMIN"], "Paramètres E2E");
     const ninea = `E2E${unique()}`.slice(0, 20);
     await page.goto("/admin/parametres");
