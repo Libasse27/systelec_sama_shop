@@ -70,8 +70,10 @@ Les E2E sont distincts des tests Vitest. `pnpm test:e2e` (arguments de Playwrigh
 
 Le build des E2E va dans `.next-e2e/` : le build de `.next` (développement, production locale) n'est pas
 écrasé. Le verrou `.next-e2e.lock` refuse une seconde exécution simultanée tant que la première est en
-cours ; le verrou d'une exécution terminée est repris, sous un verrou de reprise
-(`.next-e2e.lock.reprise`), seulement s'il n'a pas changé entre-temps. Une seule exécution par dossier de
+cours (lanceur ou processus Playwright encore actif, même si le lanceur a été tué seul) ; le verrou
+d'une exécution terminée est repris, sous un verrou de reprise (`.next-e2e.lock.reprise`), seulement
+s'il n'a pas changé entre-temps. Un verrou de reprise orphelin bloque les lancements suivants avec un
+message explicite : supprimez-le après avoir vérifié qu'aucune exécution E2E ne tourne. Une seule exécution par dossier de
 travail : les exécutions parallèles sont volontairement refusées (build commun). `next build` réécrit
 `next-env.d.ts` pour `.next-e2e` : le lanceur le rétablit à la fin, sauf si un autre outil l'a modifié
 entre-temps (laissé tel quel, avec un avertissement). Les tests qui modifient des paramètres globaux du
