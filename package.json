@@ -17,6 +17,7 @@
     "test:migration": "vitest run --project migration",
     "test:integration:disposable": "vitest run --project integration",
     "test:e2e": "tsx e2e/run.ts",
+    "test:e2e-guard": "vitest run --project e2e-guard",
     "db:up": "docker compose up -d db",
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",
