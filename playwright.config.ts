@@ -6,10 +6,17 @@ import { E2E_DIST_DIR, resolveE2eRun } from "./e2e/support/database-guard";
  * e2e/run.ts : lancer « pnpm test:e2e ». Sans elles, la configuration refuse de démarrer.
  */
 const RUN = resolveE2eRun();
-const BASE_URL = `http://localhost:${RUN.port}`;
+/** Serveur testé joignable seulement depuis cette machine (comptes et données de démonstration). */
+const HOST = "127.0.0.1";
+const BASE_URL = `http://${HOST}:${RUN.port}`;
 
-/** Tests qui modifient des paramètres globaux du site : une seule fois par exécution (projet desktop). */
+/**
+ * Tests qui modifient des paramètres globaux du site (même ligne en base) : exécutés à part, un seul à la
+ * fois (un worker), d'abord sur ordinateur puis sur mobile, jamais en même temps l'un que l'autre.
+ */
 const GLOBAL_SETTINGS_TAG = /@parametres-globaux/;
+const DESKTOP = devices["Desktop Chrome"];
+const MOBILE = devices["Pixel 7"];
 
 /**
  * Tests de bout en bout. Le serveur de production est construit puis démarré
@@ -31,13 +38,15 @@ export default defineConfig({
     timezoneId: "Africa/Dakar",
   },
   projects: [
-    { name: "desktop", use: { ...devices["Desktop Chrome"] } },
-    { name: "mobile", use: { ...devices["Pixel 7"] }, grepInvert: GLOBAL_SETTINGS_TAG },
+    { name: "desktop", use: { ...DESKTOP }, grepInvert: GLOBAL_SETTINGS_TAG },
+    { name: "mobile", use: { ...MOBILE }, grepInvert: GLOBAL_SETTINGS_TAG },
+    { name: "desktop-parametres", use: { ...DESKTOP }, grep: GLOBAL_SETTINGS_TAG, workers: 1 },
+    { name: "mobile-parametres", use: { ...MOBILE }, grep: GLOBAL_SETTINGS_TAG, workers: 1, dependencies: ["desktop-parametres"] },
   ],
   webServer: {
     // Base préparée par e2e/run.ts (vérifiée, migrée, données de démonstration) AVANT la construction, qui la lit.
     // Build dans .next-e2e : le build de développement ou de production locale (.next) n'est pas écrasé.
-    command: `pnpm build && pnpm start --port ${RUN.port}`,
+    command: `pnpm build && pnpm start --hostname ${HOST} --port ${RUN.port}`,
     url: `${BASE_URL}/api/health`,
     // Jamais de réutilisation : un serveur déjà lancé pourrait viser la base de développement.
     reuseExistingServer: false,
