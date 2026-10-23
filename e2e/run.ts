@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { createServer } from "node:net";
 import os from "node:os";
 import path from "node:path";
-import { acquireBuildLock, releaseBuildLock } from "./support/build-lock";
+import { acquireBuildLock, recordLockChild, releaseBuildLock } from "./support/build-lock";
 import { failureLines, runWithCleanup } from "./support/cleanup";
 import { assertE2eRun, E2E_DIST_DIR, e2eStoragePrefix } from "./support/database-guard";
 import { restoreNextEnv, snapshotNextEnv } from "./support/next-env";
@@ -44,11 +44,19 @@ function onSignal(signal: NodeJS.Signals): void {
   if (signal === "SIGTERM") child?.kill("SIGTERM");
 }
 
-function runPlaywright(args: string[], env: NodeJS.ProcessEnv): Promise<number> {
+function runPlaywright(args: string[], env: NodeJS.ProcessEnv, runId: string): Promise<number> {
   return new Promise((resolve, reject) => {
     child = spawn("pnpm", ["exec", "playwright", "test", ...args], { stdio: "inherit", env });
     child.once("error", reject);
     child.once("exit", (code, signal) => resolve(code ?? (signal ? 1 : 0)));
+    // Si ce lanceur est tué seul, Playwright (et son build) continue : le verrou reste détenu par lui.
+    if (child.pid) {
+      try {
+        recordLockChild(BUILD_LOCK, runId, child.pid);
+      } catch (error) {
+        console.warn(`E2E : processus Playwright non enregistré dans le verrou (${(error as Error).message}).`);
+      }
+    }
   });
 }
 
@@ -97,7 +105,7 @@ async function main(): Promise<number> {
     await markRunDatabase(run);
     await prepareE2eDatabase(run);
     checkInterrupted();
-    return runPlaywright(process.argv.slice(2), env);
+    return runPlaywright(process.argv.slice(2), env, runId);
   });
 }
 
