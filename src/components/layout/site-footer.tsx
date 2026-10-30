@@ -56,9 +56,6 @@ export async function SiteFooter() {
           <Link href="/services" className={linkClass}>
             Services techniques
           </Link>
-          <Link href="/panier" className={linkClass}>
-            Panier
-          </Link>
           <Link href="/compte" className={linkClass}>
             Mon compte
           </Link>
