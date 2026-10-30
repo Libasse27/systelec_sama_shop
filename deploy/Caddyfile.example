@@ -1,4 +1,4 @@
-# Reverse proxy TLS de SYSTELEC SAMA-SHOP (Caddy 2). Voir docs/04-mise-en-service.md, section 5.
+# Reverse proxy TLS de FUTANI SHOP (Caddy 2). Voir docs/04-mise-en-service.md, section 5.
 # Copier en /etc/caddy/Caddyfile, remplacer le domaine, puis : sudo systemctl reload caddy
 # Caddy obtient et renouvelle le certificat (ports 80 et 443 ouverts). L'application pose déjà ses
 # en-têtes de sécurité (CSP, HSTS…) : ne pas les dupliquer ici. Un seul proxy : TRUSTED_PROXY_HOPS=1.

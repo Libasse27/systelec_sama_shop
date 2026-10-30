@@ -1,4 +1,4 @@
-# Tâches planifiées de SYSTELEC SAMA-SHOP (docs/04-mise-en-service.md, sections 6 et 7).
+# Tâches planifiées de FUTANI SHOP (docs/04-mise-en-service.md, sections 6 et 7).
 # Installer pour l'utilisateur qui exploite Docker : crontab -e (adapter /srv/systelec, dossier du dépôt).
 # Horloge du serveur en UTC (Dakar = UTC+0).
 SHELL=/bin/bash

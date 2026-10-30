@@ -1,6 +1,8 @@
-# SYSTELEC SAMA-SHOP
+# FUTANI SHOP
 
-Plateforme e-commerce et de services techniques de **SYSTELEC** (Sénégal) : vente d'équipements informatiques, réseau, électroniques, électriques et de sécurité ; maintenance, réseaux, vidéosurveillance et électricité. Paiement **exclusivement hors ligne** (espèces), livraison à domicile et retrait en boutique.
+Plateforme e-commerce de **FUTANI SHOP**, la boutique officielle de **FUTANI GROUP**, et des services techniques de **FUTANI TECH** (Sénégal) : vente d'équipements informatiques, réseau, électroniques, électriques et de sécurité ; maintenance, réseaux, vidéosurveillance et électricité. Paiement **exclusivement hors ligne** (espèces), livraison à domicile et retrait en boutique.
+
+> Nom technique historique : le dépôt, les images Docker, les bases et les rôles PostgreSQL gardent le préfixe `systelec` (identifiants techniques, inchangés).
 
 > Statut : Phase 9 terminée (administration avancée, voir [rapport](docs/rapports/phase-9.md)). Prochaine étape : Phase 10, stabilisation et mise en service.
 
