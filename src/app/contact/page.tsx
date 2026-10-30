@@ -2,6 +2,7 @@ import { Clock, Mail, MapPin, MessageCircle, Phone, type LucideIcon } from "luci
 import type { Metadata } from "next";
 import { Breadcrumbs } from "@/components/layout/breadcrumbs";
 import { BRAND } from "@/lib/brand";
+import { telHref, whatsappHref } from "@/lib/contact-links";
 import { db } from "@/server/db/client";
 import { getServiceDetail } from "@/server/modules/services/queries";
 import { getCompanySettings } from "@/server/storefront";
@@ -24,16 +25,14 @@ interface Channel {
 }
 
 const SUBJECTS: Record<string, string> = { devis: "une demande de devis", intervention: "une réservation d'intervention" };
-const digitsOnly = (value: string) => value.replace(/\D/g, "");
 
 export default async function ContactPage({ searchParams }: Props) {
   const [{ service: serviceSlug, objet }, company] = await Promise.all([searchParams, getCompanySettings()]);
   const service = serviceSlug ? await getServiceDetail(db, serviceSlug) : null;
+  const whatsapp = company.whatsapp ? whatsappHref(company.whatsapp) : null;
   const candidates: (Channel | null)[] = [
-    company.phone ? { icon: Phone, label: "Téléphone", value: company.phone, href: `tel:${company.phone.replace(/\s/g, "")}` } : null,
-    company.whatsapp && digitsOnly(company.whatsapp)
-      ? { icon: MessageCircle, label: "WhatsApp", value: company.whatsapp, href: `https://wa.me/${digitsOnly(company.whatsapp)}` }
-      : null,
+    company.phone ? { icon: Phone, label: "Téléphone", value: company.phone, href: telHref(company.phone) } : null,
+    company.whatsapp && whatsapp ? { icon: MessageCircle, label: "WhatsApp", value: company.whatsapp, href: whatsapp } : null,
     company.email ? { icon: Mail, label: "E-mail", value: company.email, href: `mailto:${company.email}` } : null,
     company.address ? { icon: MapPin, label: "Adresse", value: company.address } : null,
     company.openingHours ? { icon: Clock, label: "Horaires", value: company.openingHours } : null,
