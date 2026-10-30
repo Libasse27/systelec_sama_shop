@@ -13,6 +13,7 @@ import {
 import Link from "next/link";
 import { ProductGrid } from "@/components/catalog/product-card";
 import { JsonLd } from "@/components/seo/json-ld";
+import { BRAND, SHOP_PILLARS_LINE } from "@/lib/brand";
 import { servicePriceLabel } from "@/lib/labels";
 import { db } from "@/server/db/client";
 import { featuredProducts } from "@/server/modules/catalog/queries";
@@ -46,6 +47,8 @@ export default async function HomePage() {
     <main className="mx-auto flex max-w-6xl flex-col gap-10 px-4 py-8">
       <section className="rounded-2xl bg-brand-navy px-6 py-10 text-white sm:px-10">
         <h1 className="text-3xl font-bold sm:text-4xl">{company.shopName}</h1>
+        <p className="mt-2 text-lg font-medium">{BRAND.shop.tagline}</p>
+        <p className="mt-1 text-sm font-semibold uppercase tracking-wide text-brand-accent">{SHOP_PILLARS_LINE}</p>
         <p className="mt-3 max-w-2xl text-white/80">
           Équipements informatiques, réseaux, électronique, électricité et sécurité, ainsi que des services de
           maintenance, d&apos;installation réseau, de vidéosurveillance et d&apos;électricité.
@@ -159,6 +162,8 @@ export default async function HomePage() {
           "@context": "https://schema.org",
           "@type": "Store",
           name: company.shopName,
+          slogan: BRAND.shop.tagline,
+          parentOrganization: { "@type": "Organization", name: BRAND.group.name, slogan: BRAND.group.signature },
           url: absoluteUrl("/"),
           paymentAccepted: "Cash",
           currenciesAccepted: "XOF",

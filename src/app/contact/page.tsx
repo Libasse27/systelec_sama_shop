@@ -1,13 +1,14 @@
 import { Clock, Mail, MapPin, MessageCircle, Phone, type LucideIcon } from "lucide-react";
 import type { Metadata } from "next";
 import { Breadcrumbs } from "@/components/layout/breadcrumbs";
+import { BRAND } from "@/lib/brand";
 import { db } from "@/server/db/client";
 import { getServiceDetail } from "@/server/modules/services/queries";
 import { getCompanySettings } from "@/server/storefront";
 
 export const metadata: Metadata = {
   title: "Contact",
-  description: "Contactez SYSTELEC : conseils, devis, interventions techniques et commandes.",
+  description: `Contactez ${BRAND.shop.name} et ${BRAND.tech.name} : conseils, devis, interventions techniques et commandes.`,
   alternates: { canonical: "/contact" },
 };
 
@@ -42,7 +43,7 @@ export default async function ContactPage({ searchParams }: Props) {
   return (
     <main className="mx-auto flex max-w-3xl flex-col gap-6 px-4 py-6">
       <Breadcrumbs items={[{ label: "Contact", href: "/contact" }]} />
-      <h1 className="text-2xl font-bold">Contacter {company.companyName}</h1>
+      <h1 className="text-2xl font-bold">Contacter {company.shopName}</h1>
       {service && (
         <p role="status" className="rounded-xl border border-line bg-surface p-4">
           Votre demande concerne {objet && Object.hasOwn(SUBJECTS, objet) ? SUBJECTS[objet] : "la prestation"} : <strong>{service.name}</strong>. Précisez

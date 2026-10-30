@@ -1,8 +1,10 @@
 /**
  * Structure de base du catalogue (§6) et des services (§7). Ce sont des données métier
  * réelles (et non de démonstration) : elles sont créées si absentes, puis administrables.
- * Les services sont « sur devis » tant que SYSTELEC n'a pas fixé ses tarifs.
+ * Les services sont « sur devis » tant que FUTANI TECH n'a pas fixé ses tarifs.
  */
+import { BRAND } from "@/lib/brand";
+
 export interface CategorySeed {
   name: string;
   children: readonly string[];
@@ -194,5 +196,5 @@ export const INFORMATION_PAGES: readonly { slug: string; title: string }[] = [
   { slug: "livraison-et-retrait", title: "Livraison et retrait" },
   { slug: "garantie", title: "Garantie" },
   { slug: "confidentialite", title: "Politique de confidentialité" },
-  { slug: "a-propos", title: "À propos de SYSTELEC" },
+  { slug: "a-propos", title: `À propos de ${BRAND.group.name}` },
 ];

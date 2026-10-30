@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { BRAND } from "@/lib/brand";
 
 /**
  * Moyens de règlement PHYSIQUES uniquement. Aucun moyen électronique n'existe dans
@@ -157,8 +158,10 @@ export type SettingValue<K extends SettingKey> = z.infer<(typeof settingsSchemas
  */
 export const settingsDefaults: { [K in SettingKey]: SettingValue<K> } = {
   company: {
+    // Raison sociale imprimée sur les factures et reçus : inchangée tant que l'entité juridique
+    // n'est pas confirmée (FUTANI GROUP est une marque, pas une raison sociale validée).
     companyName: "SYSTELEC",
-    shopName: "SYSTELEC SAMA-SHOP",
+    shopName: BRAND.shop.name,
     logoUrl: null,
     phone: null,
     whatsapp: null,

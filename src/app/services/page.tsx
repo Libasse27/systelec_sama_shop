@@ -1,14 +1,14 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Breadcrumbs } from "@/components/layout/breadcrumbs";
+import { BRAND } from "@/lib/brand";
 import { servicePriceLabel } from "@/lib/labels";
 import { db } from "@/server/db/client";
 import { listServiceGroups } from "@/server/modules/services/queries";
 
 export const metadata: Metadata = {
   title: "Services techniques",
-  description:
-    "Maintenance informatique, réseaux, vidéosurveillance et électricité : demandez un devis à l'équipe technique SYSTELEC.",
+  description: `Maintenance informatique, réseaux, vidéosurveillance et électricité : demandez un devis à ${BRAND.tech.name}, ${BRAND.tech.description}.`,
   alternates: { canonical: "/services" },
 };
 

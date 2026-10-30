@@ -2,6 +2,7 @@ import { Banknote, Mail, MapPin, MessageSquare, Phone } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { Logo } from "@/components/brand/logo";
+import { BRAND, SHOP_PILLARS_LINE } from "@/lib/brand";
 import { getCompanySettings } from "@/server/storefront";
 import { db } from "@/server/db/client";
 import { listPublishedPages } from "@/server/modules/content/queries";
@@ -43,7 +44,11 @@ export async function SiteFooter() {
           <Link href="/" aria-label={`${company.shopName}, accueil`} className="self-start">
             <Logo shopName={company.shopName} logoUrl={company.logoUrl} />
           </Link>
-          <p className="text-sm text-white/80">Équipements électroniques et services techniques.</p>
+          <p className="text-sm text-white/80">
+            {BRAND.shop.tagline}
+            <br />
+            {SHOP_PILLARS_LINE}
+          </p>
           <p className="flex items-center gap-2 text-sm">
             <Banknote aria-hidden className="size-4 shrink-0 text-brand-accent" />
             Paiement en espèces uniquement.
@@ -101,9 +106,14 @@ export async function SiteFooter() {
         </FooterSection>
       </div>
       <div className="border-t border-white/10">
-        <p className="mx-auto max-w-6xl px-4 py-4 text-center text-xs text-white/60 sm:text-left">
-          © {new Date().getFullYear()} {company.companyName}. Tous droits réservés.
-        </p>
+        <div className="mx-auto flex max-w-6xl flex-col gap-1 px-4 py-4 text-center text-xs text-white/60 sm:flex-row sm:justify-between sm:text-left">
+          <p>
+            © {new Date().getFullYear()} {company.companyName}. Tous droits réservés.
+          </p>
+          <p className="italic">
+            {BRAND.group.name} — {BRAND.group.signature}
+          </p>
+        </div>
       </div>
     </footer>
   );

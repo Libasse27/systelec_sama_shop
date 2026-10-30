@@ -13,7 +13,7 @@ export function Logo({ shopName, logoUrl }: LogoProps) {
   return (
     <span className="inline-flex items-center gap-2 font-bold tracking-tight" aria-label={shopName}>
       <span aria-hidden className="grid size-8 place-items-center rounded-md bg-brand-blue text-sm text-white">
-        S
+        {shopName.charAt(0).toUpperCase()}
       </span>
       <span className="text-lg text-white">
         {brand}
