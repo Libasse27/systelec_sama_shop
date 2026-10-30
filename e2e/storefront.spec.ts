@@ -31,6 +31,7 @@ test.describe("boutique publique", () => {
 
   test("recherche depuis l'en-tête, sans tenir compte des accents", async ({ page }) => {
     await page.goto("/");
+    await page.getByRole("button", { name: "Rechercher", exact: true }).click();
     await page.getByRole("searchbox", { name: "Rechercher un produit" }).fill("camera");
     await page.getByRole("button", { name: "Lancer la recherche" }).click();
     await expect(page).toHaveURL(/\/recherche\?q=camera/);
