@@ -11,6 +11,7 @@ const NAVIGATION: { href: string; label: string; permission: Permission | readon
   { href: "/admin/retours", label: "Retours", permission: "orders.read" },
   { href: "/admin/encaissements", label: "Encaissements", permission: "payments.read" },
   { href: "/admin/rapports", label: "Rapports", permission: "reports.read" },
+  { href: "/admin/messages", label: "Messages", permission: "messages.manage" },
   { href: "/admin/demandes", label: "Demandes de devis", permission: "quotes.read" },
   { href: "/admin/interventions", label: "Interventions", permission: ["interventions.read", "interventions.manage", "interventions.update_own"] },
   { href: "/admin/planning", label: "Planning", permission: ["interventions.read", "interventions.manage", "interventions.update_own"] },
