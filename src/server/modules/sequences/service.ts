@@ -1,7 +1,7 @@
 import "server-only";
 import type { Db } from "@/server/db/client";
 
-export type SequenceKey = "order" | "quote" | "quote_request" | "intervention" | "receipt" | "invoice" | "return";
+export type SequenceKey = "order" | "quote" | "quote_request" | "intervention" | "receipt" | "invoice" | "return" | "contact_message";
 
 export const SEQUENCE_PREFIXES: Record<SequenceKey, string> = {
   order: "CMD",
@@ -11,6 +11,7 @@ export const SEQUENCE_PREFIXES: Record<SequenceKey, string> = {
   receipt: "REC",
   invoice: "FAC",
   return: "RET",
+  contact_message: "MSG",
 };
 
 /**

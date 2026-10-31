@@ -22,7 +22,7 @@ const EXPECTED: Record<string, readonly Permission[] | "ALL" | "ALL_BUT_SELF_REF
   DELIVERY_MANAGER: ["admin.access", "customers.read", "deliveries.manage", "orders.read", "payments.record"],
   TECH_MANAGER: ["admin.access", "customers.read", "interventions.manage", "interventions.read", "inventory.read", "payments.record", "products.read", "quotes.manage", "quotes.read"],
   TECHNICIAN: ["admin.access", "interventions.update_own"],
-  CUSTOMER_SERVICE: ["admin.access", "customers.read", "interventions.read", "orders.read", "payments.read", "products.read", "quotes.read"],
+  CUSTOMER_SERVICE: ["admin.access", "customers.read", "interventions.read", "messages.manage", "orders.read", "payments.read", "products.read", "quotes.read"],
   // Décision 5 (phase 10) : ses livraisons seulement (encaissement compris), rien d'autre.
   COURIER: ["admin.access", "deliveries.update_own"],
 };

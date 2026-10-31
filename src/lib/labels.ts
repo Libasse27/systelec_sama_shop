@@ -100,6 +100,17 @@ export const QUOTE_ITEM_KIND_LABELS = { MATERIAL: "Matériel", LABOR: "Main-d'œ
 
 export const URGENCY_LABELS = { NORMAL: "Normale", URGENT: "Urgente" } as const;
 
+export const CONTACT_SUBJECT_LABELS = {
+  GENERAL: "Renseignement",
+  ORDER: "Commande ou livraison",
+  QUOTE: "Devis ou intervention",
+  AFTER_SALES: "Service après-vente ou retour",
+  PARTNERSHIP: "Partenariat",
+  OTHER: "Autre",
+} as const;
+
+export const CONTACT_MESSAGE_STATUS_LABELS = { NEW: "Nouveau", IN_PROGRESS: "En cours", CLOSED: "Traité" } as const;
+
 export const INTERVENTION_STATUS_LABELS = {
   TO_SCHEDULE: "À planifier",
   SCHEDULED: "Planifiée",

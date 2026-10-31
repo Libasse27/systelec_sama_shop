@@ -2,15 +2,16 @@ import "server-only";
 import type { Prisma } from "@/generated/prisma/client";
 import type { Db } from "@/server/db/client";
 import { logger } from "@/server/logger";
+import { CONTACT_TEMPLATES, renderContactMessage, type ContactMessageData, type ContactTemplate } from "./contact-templates";
 import { classifyNotificationFailure, sendEmail } from "./mailer";
 import { renderReturnMessage, RETURN_TEMPLATES, type ReturnMessageData, type ReturnTemplate } from "./return-templates";
 import { renderServiceMessage, SERVICE_TEMPLATES, type ServiceMessageData, type ServiceTemplate } from "./service-templates";
 import { renderOrderMessage, type OrderMessageData, type OrderTemplate } from "./templates";
 
 /** Document auquel une notification est rattachée (suivi dans sa fiche). */
-export type NotificationLink = { orderId: string } | { quoteRequestId: string } | { quoteId: string } | { interventionId: string } | { returnId: string };
+export type NotificationLink = { orderId: string } | { quoteRequestId: string } | { quoteId: string } | { interventionId: string } | { returnId: string } | { contactMessageId: string };
 
-export type NotificationTemplate = OrderTemplate | ServiceTemplate | ReturnTemplate;
+export type NotificationTemplate = OrderTemplate | ServiceTemplate | ReturnTemplate | ContactTemplate;
 
 export interface NotificationRecipients {
   email: string | null;
@@ -25,7 +26,7 @@ export async function queueNotifications(
   tx: Db,
   link: NotificationLink,
   template: NotificationTemplate,
-  data: OrderMessageData | ServiceMessageData | ReturnMessageData,
+  data: OrderMessageData | ServiceMessageData | ReturnMessageData | ContactMessageData,
   recipients: NotificationRecipients,
 ): Promise<void> {
   const payload = data as unknown as Prisma.InputJsonValue;
@@ -38,6 +39,9 @@ export async function queueNotifications(
 }
 
 function renderMessage(template: string, payload: unknown): { subject: string; text: string } {
+  if ((CONTACT_TEMPLATES as readonly string[]).includes(template)) {
+    return renderContactMessage(template as ContactTemplate, payload as ContactMessageData);
+  }
   if ((RETURN_TEMPLATES as readonly string[]).includes(template)) {
     return renderReturnMessage(template as ReturnTemplate, payload as ReturnMessageData);
   }
