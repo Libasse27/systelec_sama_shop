@@ -30,8 +30,8 @@
     "postinstall": "prisma generate"
   },
   "dependencies": {
-    "@prisma/adapter-pg": "7.10.0",
-    "@prisma/client": "7.10.0",
+    "@prisma/adapter-pg": "7.10.1",
+    "@prisma/client": "7.10.1",
     "@react-pdf/renderer": "4.9.0",
     "better-auth": "1.7.7",
     "clsx": "2.1.1",
@@ -58,7 +58,7 @@
     "eslint": "9.39.5",
     "eslint-config-next": "16.4.2",
     "fflate": "0.8.3",
-    "prisma": "7.10.0",
+    "prisma": "7.10.1",
     "tailwindcss": "4.3.3",
     "tsx": "^4.20.0",
     "typescript": "5.9.3",
