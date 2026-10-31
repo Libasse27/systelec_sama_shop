@@ -31,6 +31,8 @@ export const PERMISSIONS = [
   "interventions.manage",
   "interventions.update_own",
   "content.manage",
+  // Messages du formulaire de contact : lire, prendre en charge, annoter, clore.
+  "messages.manage",
   "users.manage",
   "roles.manage",
   "settings.manage",

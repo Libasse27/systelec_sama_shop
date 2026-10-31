@@ -73,13 +73,13 @@ Restent à remplir à la main si besoin : `SMTP_*`, et `APP_PORT` si le port 300
 | `AUTH_SECRET` | `openssl rand -base64 32` (le changer déconnecte tout le monde) |
 | `POSTGRES_PASSWORD` | `openssl rand -hex 24` (propriétaire : migrations et exploitation) |
 | `APP_DB_PASSWORD` | `openssl rand -hex 24` (rôle restreint de l'application) |
-| `TRUSTED_PROXY_HOPS` | `1` derrière un reverse proxy |
+| `TRUSTED_PROXY_HOPS` | `1` derrière un seul reverse proxy (Caddy). `0`, ou une valeur supérieure au nombre réel de proxys, désactive **sans avertissement** les limites par adresse IP (connexion, commande, devis, retours, contact) : `preflight.sh` affiche la valeur sans la juger. Contrôle réel : section 14 |
 | `SMTP_*` | voir « E-mails » ci-dessous ; sans `SMTP_HOST`, aucun e-mail n'est envoyé (tracé, jamais simulé) |
 | `DATABASE_POOL_MAX` | `10` (suffisant, voir section 10) |
 
 `.env.production` n'est jamais versionné (`.gitignore`).
 
-**E-mails (Brevo, ou tout fournisseur SMTP).** L'application envoie par SMTP : liens de réinitialisation, notifications des commandes, devis, interventions et retours, relances et alertes de la tâche planifiée.
+**E-mails (Brevo, ou tout fournisseur SMTP).** L'application envoie par SMTP : liens de réinitialisation, notifications des commandes, devis, interventions et retours, accusés et alertes du formulaire de contact (section 14), relances et alertes de la tâche planifiée.
 
 | Variable | Brevo |
 |---|---|
@@ -225,7 +225,7 @@ La migration `20261019090000_notification_retries` a été testée avec `pnpm te
 3. **Suspendre la tâche planifiée** : `crontab -e`, commenter la ligne `*/15 … run --rm tasks` (section 6), puis vérifier par `crontab -l` et attendre qu'aucun conteneur `tasks` ne tourne (`docker ps --filter name=tasks`). Sans cela, une tâche lancée avec la nouvelle image avant la migration lirait des colonnes absentes.
 4. **Passer à la nouvelle version** : `APP_VERSION=NOUVELLE` dans `.env.production`. L'application en service n'est pas redémarrée par ce changement. Les exemples de la section 4 chargent maintenant les variables dans un sous-shell. Si `.env.production` avait déjà été chargé dans votre shell avant cette correction, ouvrez un terminal neuf pour éviter que ces variables aient priorité sur `--env-file`. Contrôle facultatif : `echo "${APP_VERSION:-non défini}"` doit afficher `non défini`.
 5. **État des migrations, avant** : `$C run --rm migrate pnpm exec prisma migrate status`. Attendu : la ou les nouvelles migrations listées comme non appliquées (« Following migration have not yet been applied »), aucune en échec.
-6. **Appliquer les migrations** : `$C run --rm migrate`, puis `$C run --rm migrate pnpm exec prisma migrate status` doit afficher « Database schema is up to date! ».
+6. **Appliquer les migrations** : `$C run --rm migrate`, puis `$C run --rm migrate pnpm exec prisma migrate status` doit afficher « Database schema is up to date! ». Si la version ajoute des permissions (c'est le cas du module Contact, section 14), lancer ensuite `$C run --rm tasks pnpm db:seed` : sans cela, personne n'a accès aux nouveaux écrans.
 7. **En cas d'échec de la migration** (le service ancien continue de tourner : le schéma n'a pas changé ou la migration est atomique) :
    - **Diagnostic** : `$C logs --since 30m db | grep ERROR` donne la cause exacte (Prisma n'affiche parfois que « current transaction is aborted »). `migrate status` liste la migration en échec ; une relance est refusée (`P3009`) tant que l'échec n'est pas résolu (`P3018` désigne l'échec lui-même).
    - **Vérifier ce qui a été appliqué** : `$C exec -T db psql -U systelec_owner -d systelec -c '\d notifications'` (valeurs de `POSTGRES_USER` et `POSTGRES_DB`, à saisir sans charger le fichier dans le shell) (adapter la table à la migration). La migration `20261019090000_notification_retries` est transactionnelle : après un échec, **rien** n'est appliqué (pas de colonne `attempts`).
@@ -307,3 +307,72 @@ Les seuils sont écrits dans `scripts/perf/load-test.js` ; la commande échoue s
 - [ ] Sauvegarde nocturne planifiée **et copiée hors serveur** ; premier exercice de restauration réussi
 - [ ] Sonde externe et alerte d'espace disque en place
 - [ ] Test `no-new-privileges` fait sur le serveur ; option activée si possible
+- [ ] Module Contact (section 14) : migration `20261031090000_contact_messages` appliquée puis `db:seed` relancé ; e-mail de l'entreprise renseigné ; message d'essai reçu dans « Messages » avec une adresse IP réelle dans le journal d'audit
+
+## 14. Module Contact (formulaire et rubrique « Messages »)
+
+Formulaire public sur `/contact` ; les messages sont traités dans l'administration, rubrique **Messages** (`/admin/messages`). Les procédures ci-dessous n'ont pas été exécutées sur un serveur réel. La migration a été rejouée sur un PostgreSQL vierge par les tests d'intégration, et ses contraintes et index y sont vérifiés (`src/server/modules/contact/schema.int.test.ts`).
+
+### Prérequis
+
+- Version déployée contenant la migration `20261031090000_contact_messages` (liste : `ls prisma/migrations`).
+- Sauvegarde vérifiée et copiée hors serveur juste avant (section 9, étape 2).
+- Tâche planifiée suspendue pendant la mise à jour (section 9, étape 3).
+
+### Migration
+
+Elle suit la procédure de la section 9 (étapes 5 à 7). Ce qu'elle fait :
+- crée les types `ContactSubject` et `ContactMessageStatus`, la table `contact_messages` (contraintes `contact_messages_reply_check` : e-mail ou téléphone obligatoire ; `contact_messages_closed_check` : date de clôture si, et seulement si, le message est traité) et ses index ;
+- ajoute à `notifications` une colonne facultative `contactMessageId` et son index. **Aucune donnée existante n'est modifiée.**
+
+Précautions :
+- **Transactionnelle** : en cas d'échec, rien n'est appliqué ; reprise par `migrate resolve --rolled-back 20261031090000_contact_messages` puis relance (section 9, étape 7).
+- **`lock_timeout` de 5 secondes** : la création de l'index suspend brièvement les écritures sur `notifications`. Si la table est occupée par une longue transaction, la migration échoue proprement (« canceling statement due to lock timeout » dans `$C logs --since 30m db`) au lieu de bloquer le site : relancer à un moment plus calme.
+- **Compatibilité** : l'ancienne version de l'application fonctionne avec ce schéma (table inutilisée, colonne facultative). Un retour arrière de l'application (section 9, étape 11) ne demande aucune restauration.
+
+Juste après la migration, **relancer les données de base** :
+
+```bash
+$C run --rm tasks pnpm db:seed
+```
+
+Il crée la permission `messages.manage` et réaligne les rôles système sur le code ; le catalogue n'est complété que de ce qui manque. Au premier passage après cette version, la première ligne attendue est « Rôles et permissions : 1 permission(s) créée(s), 0 rôle(s) créé(s), 3 rôle(s) mis à jour. » (administrateur principal, administrateur, service client). Un second passage ne change plus rien.
+
+### Accès à la rubrique « Messages »
+
+- Permission `messages.manage` : rôles **Administrateur principal**, **Administrateur** et **Service client**. Aucun autre rôle n'y a accès (un technicien ou un client est redirigé vers `/acces-refuse`).
+- Attribution d'un rôle : administration, **Utilisateurs** (permission `users.manage`). Les droits sont relus à chaque requête : pas besoin de se reconnecter.
+- Le menu « Messages » n'apparaît qu'aux comptes qui ont la permission.
+
+### E-mail de l'entreprise
+
+Les alertes au personnel partent vers l'**E-mail** saisi dans **Paramètres → Identité et mentions légales**. C'est aussi l'adresse affichée sur la page Contact et dans le pied de page : utiliser une boîte lue par le service client. Champ vide : aucune alerte n'est préparée ; les messages restent enregistrés et visibles dans « Messages ».
+
+### Adresse IP derrière le reverse proxy
+
+La limite de 5 messages par heure et par connexion repose sur l'adresse IP transmise par Caddy (`X-Forwarded-For`), lue au rang fixé par `TRUSTED_PROXY_HOPS` (section 3).
+
+1. Valeur configurée : `grep '^TRUSTED_PROXY_HOPS=' .env.production` doit afficher `TRUSTED_PROXY_HOPS=1` (un seul proxy). Une ligne absente vaut aussi `1` (valeur par défaut de `docker-compose.prod.yml`).
+2. Preuve de fonctionnement, après l'envoi d'un message d'essai depuis un poste extérieur :
+   ```bash
+   $C exec -T db psql -U systelec_owner -d systelec -c "SELECT ip, \"createdAt\" FROM audit_logs WHERE action = 'contact_message.create' ORDER BY \"createdAt\" DESC LIMIT 1"
+   ```
+   (valeurs de `POSTGRES_USER` et `POSTGRES_DB`). Attendu : l'adresse publique du poste d'essai. Une valeur vide signifie qu'aucune limite par IP ne s'applique (valeur `0`, ou supérieure au nombre de proxys) ; une adresse locale (`127.0.0.1`, `172.…`) signale un proxy mal configuré.
+
+Ne pas placer de CDN devant Caddy sans revoir ce réglage : tous les visiteurs partageraient alors les adresses du CDN, et donc la même limite.
+
+### Notifications et e-mails
+
+- **Accusé de réception** au visiteur s'il a donné une adresse e-mail, **3 au plus par adresse et par jour** (au-delà, le message est enregistré sans accusé). **Alerte au personnel** vers l'e-mail de l'entreprise.
+- Ces e-mails, en texte brut, ne contiennent **aucune donnée saisie par le visiteur** : seulement le numéro du message (`MSG-AAAA-NNNNNN`) et le libellé du sujet. Le nom, les coordonnées et le message se lisent dans « Messages ».
+- Sans SMTP (`SMTP_HOST` vide), rien n'est envoyé : les notifications sont tracées, les messages enregistrés. Avec SMTP, mêmes échecs, renvois et rattrapages que les autres notifications (section 3).
+- Refus du formulaire (champ piège, validation, limite par IP, clé d'envoi réutilisée) : une ligne `contact_message.rejected` dans le journal de l'application, avec le motif, les **noms** des champs en cause et le réseau d'origine (`/24` ou `/48`), jamais le nom, les coordonnées, le contenu ni l'adresse IP complète. Aucune ligne en base. Consultation : `$C logs --since 1h app | grep contact_message.rejected`.
+
+### Contrôles après déploiement
+
+1. `migrate status` : « Database schema is up to date! » ; sortie de `db:seed` conforme (ci-dessus).
+2. Depuis un poste extérieur, en navigation privée : envoyer un message sur `/contact` avec votre adresse e-mail. La page affiche « Message envoyé, merci ! » et un numéro `MSG-…`.
+3. Avec SMTP : accusé reçu sur votre adresse, alerte reçue sur l'e-mail de l'entreprise.
+4. Connecté avec un compte Service client ou Administrateur : le message figure dans « Messages » ; « Prendre en charge », une note interne puis « Marquer comme traité » fonctionnent.
+5. Adresse IP réelle dans le journal d'audit (requête ci-dessus).
+6. Avec un compte sans la permission : `/admin/messages` redirige vers `/acces-refuse`.

@@ -105,6 +105,7 @@ export const ROLE_DEFINITIONS: readonly RoleDefinition[] = [
       "customers.read",
       "quotes.read",
       "interventions.read",
+      "messages.manage",
     ],
   },
 ];

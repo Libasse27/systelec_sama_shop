@@ -20,22 +20,23 @@ enum UserKind {
 
 /// Utilisateur. Le mot de passe (haché) est dans Account ; il n'est jamais lisible.
 model User {
-  id            String      @id
-  name          String
-  email         String      @unique
-  emailVerified Boolean     @default(false)
-  image         String?
-  phone         String?
-  kind          UserKind    @default(CUSTOMER)
-  isActive      Boolean     @default(true)
-  createdAt     DateTime    @default(now()) @db.Timestamptz(3)
-  updatedAt     DateTime    @updatedAt @db.Timestamptz(3)
-  sessions      Session[]
-  accounts      Account[]
-  roles         UserRole[]
-  payments      Payment[]
-  technician    Technician?
-  courier       Courier?
+  id              String           @id
+  name            String
+  email           String           @unique
+  emailVerified   Boolean          @default(false)
+  image           String?
+  phone           String?
+  kind            UserKind         @default(CUSTOMER)
+  isActive        Boolean          @default(true)
+  createdAt       DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime         @updatedAt @db.Timestamptz(3)
+  sessions        Session[]
+  accounts        Account[]
+  roles           UserRole[]
+  payments        Payment[]
+  contactMessages ContactMessage[]
+  technician      Technician?
+  courier         Courier?
 
   @@map("users")
 }
@@ -719,25 +720,27 @@ enum NotificationStatus {
 
 /// Notifications persistées : rien n'est simulé, l'absence de fournisseur est tracée (D11).
 model Notification {
-  id             String              @id @default(cuid())
-  channel        NotificationChannel
-  template       String
-  recipient      String
-  payload        Json
-  status         NotificationStatus  @default(PENDING)
-  error          String?
-  orderId        String?
-  quoteRequestId String?
-  quoteId        String?
-  interventionId String?
+  id               String              @id @default(cuid())
+  channel          NotificationChannel
+  template         String
+  recipient        String
+  payload          Json
+  status           NotificationStatus  @default(PENDING)
+  error            String?
+  orderId          String?
+  quoteRequestId   String?
+  quoteId          String?
+  interventionId   String?
   /// Alerte interne sur un retour (délai de traitement dépassé).
-  returnId       String?
-  sentAt         DateTime?           @db.Timestamptz(3)
+  returnId         String?
+  /// Message reçu par le formulaire de contact (alerte au personnel, accusé de réception).
+  contactMessageId String?
+  sentAt           DateTime?           @db.Timestamptz(3)
   /// Envois tentés (renvoi automatique des échecs par la tâche planifiée, 4 au plus).
-  attempts       Int                 @default(0)
+  attempts         Int                 @default(0)
   /// Prochain essai d'une notification FAILED ; NULL = aucun renvoi prévu (abandon définitif).
-  nextAttemptAt  DateTime?           @db.Timestamptz(3)
-  createdAt      DateTime            @default(now()) @db.Timestamptz(3)
+  nextAttemptAt    DateTime?           @db.Timestamptz(3)
+  createdAt        DateTime            @default(now()) @db.Timestamptz(3)
 
   @@index([status, createdAt])
   @@index([status, nextAttemptAt])
@@ -746,6 +749,7 @@ model Notification {
   @@index([quoteId])
   @@index([interventionId])
   @@index([returnId])
+  @@index([contactMessageId])
   @@map("notifications")
 }
 
@@ -1219,4 +1223,50 @@ model Partner {
 
   @@index([isActive, position])
   @@map("partners")
+}
+
+// ─── Contact ──────────────────────────────────────────────────────────────────
+
+enum ContactSubject {
+  GENERAL
+  ORDER
+  QUOTE
+  AFTER_SALES
+  PARTNERSHIP
+  OTHER
+}
+
+enum ContactMessageStatus {
+  NEW
+  IN_PROGRESS
+  CLOSED
+}
+
+/// Message déposé par le formulaire de contact (compte ou invité). Coordonnées figées au dépôt.
+model ContactMessage {
+  id             String               @id @default(cuid())
+  number         String               @unique
+  /// Clé envoyée par le formulaire : une double soumission ne crée qu'un message.
+  idempotencyKey String               @unique
+  /// Compte connecté à l'envoi (null pour un invité).
+  userId         String?
+  user           User?                @relation(fields: [userId], references: [id], onDelete: SetNull)
+  name           String
+  email          String?
+  phone          String?
+  subject        ContactSubject
+  /// Numéro de commande ou de demande cité par l'expéditeur (non vérifié).
+  reference      String?
+  message        String
+  status         ContactMessageStatus @default(NEW)
+  /// Notes internes du personnel (jamais montrées à l'expéditeur).
+  internalNotes  String?
+  closedAt       DateTime?            @db.Timestamptz(3)
+  createdAt      DateTime             @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime             @updatedAt @db.Timestamptz(3)
+
+  @@index([status, createdAt])
+  /// Plafond quotidien des accusés de réception par adresse.
+  @@index([email, createdAt])
+  @@map("contact_messages")
 }
