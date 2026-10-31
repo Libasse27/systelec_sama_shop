@@ -1,5 +1,6 @@
 import "server-only";
 import type { PrismaClient } from "@/generated/prisma/client";
+import { aboutPageBody, BRAND } from "@/lib/brand";
 import { slugify } from "@/lib/slug";
 import { INFORMATION_PAGES, PRODUCT_CATEGORIES, SERVICE_CATEGORIES } from "./taxonomy";
 
@@ -9,9 +10,11 @@ export interface CatalogSeedResult {
   pagesCreated: number;
 }
 
-const DRAFT_PAGE_BODY = "Contenu en cours de rédaction par SYSTELEC.";
-const SERVICE_DESCRIPTION =
-  "Prestation réalisée par l'équipe technique SYSTELEC. Le tarif est établi sur devis après étude de votre besoin.";
+const DRAFT_PAGE_BODY = `Contenu en cours de rédaction par ${BRAND.group.name}.`;
+const SERVICE_DESCRIPTION = `Prestation réalisée par ${BRAND.tech.name}, ${BRAND.tech.description}. Le tarif est établi sur devis après étude de votre besoin.`;
+
+/** Seule la page « À propos » reçoit un texte validé ; les pages légales restent à rédiger (aucun texte inventé). */
+const PAGE_BODIES: Readonly<Record<string, string>> = { "a-propos": aboutPageBody() };
 
 async function seedProductCategories(client: PrismaClient): Promise<number> {
   let created = 0;
@@ -49,7 +52,7 @@ async function seedServices(client: PrismaClient): Promise<number> {
         categoryId: category.id,
         name,
         slug: slugify(name),
-        shortDescription: `${name} par SYSTELEC.`,
+        shortDescription: `${name} par ${BRAND.tech.name}.`,
         description: SERVICE_DESCRIPTION,
         pricingMode: "QUOTE_ONLY" as const,
         position,
@@ -69,7 +72,7 @@ export async function seedBaseCatalog(client: PrismaClient): Promise<CatalogSeed
   const categoriesCreated = await seedProductCategories(client);
   const servicesCreated = await seedServices(client);
   const pages = await client.page.createMany({
-    data: INFORMATION_PAGES.map((page) => ({ ...page, body: DRAFT_PAGE_BODY, isPublished: false })),
+    data: INFORMATION_PAGES.map((page) => ({ ...page, body: PAGE_BODIES[page.slug] ?? DRAFT_PAGE_BODY, isPublished: false })),
     skipDuplicates: true,
   });
   return { categoriesCreated, servicesCreated, pagesCreated: pages.count };

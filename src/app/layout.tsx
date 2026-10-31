@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteHeader } from "@/components/layout/site-header";
+import { BRAND } from "@/lib/brand";
 import { getServerEnv } from "@/lib/env";
 import "./globals.css";
 
@@ -9,12 +10,12 @@ export function generateMetadata(): Metadata {
     // Base des URL canoniques et Open Graph relatives.
     metadataBase: new URL(getServerEnv().APP_URL),
     title: {
-      default: "SYSTELEC SAMA-SHOP",
-      template: "%s | SYSTELEC SAMA-SHOP",
+      default: `${BRAND.shop.name}, la boutique de ${BRAND.group.name}`,
+      template: `%s | ${BRAND.shop.name}`,
     },
-    description:
-      "Équipements informatiques, réseaux, électronique, électricité et sécurité, et services techniques au Sénégal. Paiement en espèces uniquement.",
-    openGraph: { siteName: "SYSTELEC SAMA-SHOP", locale: "fr_SN", type: "website" },
+    description: `${BRAND.shop.tagline} Équipements informatiques, réseaux, électronique, électricité et sécurité, et services techniques au Sénégal. Paiement en espèces uniquement.`,
+    applicationName: BRAND.shop.name,
+    openGraph: { siteName: BRAND.shop.name, locale: "fr_SN", type: "website" },
   };
 }
 

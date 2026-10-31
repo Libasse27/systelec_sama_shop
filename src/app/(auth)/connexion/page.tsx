@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { SignInForm } from "@/components/auth/auth-forms";
+import { BRAND } from "@/lib/brand";
 import { safeRedirectPath } from "@/lib/redirect";
 import { getCurrentUser } from "@/server/auth/session";
 
@@ -20,6 +21,7 @@ export default async function SignInPage({ searchParams }: Props) {
   return (
     <>
       <h1 className="text-2xl font-bold">Connexion</h1>
+      <p className="mt-2 text-sm text-ink-muted">Accédez à votre compte {BRAND.shop.name}.</p>
       {reinitialise && (
         <p role="status" className="mt-4 rounded-lg bg-surface p-3 text-sm">
           Mot de passe modifié. Connectez-vous avec votre nouveau mot de passe.
@@ -28,7 +30,7 @@ export default async function SignInPage({ searchParams }: Props) {
       <div className="mt-6">
         <SignInForm next={next || undefined} />
       </div>
-      <p className="mt-6 text-sm">
+      <p className="mt-6 border-t border-line pt-6 text-sm">
         Pas encore de compte ?{" "}
         <Link href="/inscription" className="font-medium text-brand-blue underline">
           Créer un compte

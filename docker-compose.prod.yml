@@ -1,4 +1,4 @@
-# Déploiement de production de SYSTELEC SAMA-SHOP (voir docs/04-mise-en-service.md).
+# Déploiement de production de FUTANI SHOP (voir docs/04-mise-en-service.md).
 #
 #   docker compose -f docker-compose.prod.yml --env-file .env.production up -d db app
 #   docker compose -f docker-compose.prod.yml --env-file .env.production run --rm migrate      # migrations

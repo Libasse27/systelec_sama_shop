@@ -5,6 +5,7 @@ import { notFound } from "next/navigation";
 import { cache } from "react";
 import { Breadcrumbs } from "@/components/layout/breadcrumbs";
 import { JsonLd } from "@/components/seo/json-ld";
+import { BRAND } from "@/lib/brand";
 import { servicePriceLabel } from "@/lib/labels";
 import { db } from "@/server/db/client";
 import { toParagraphs } from "@/server/modules/content/queries";
@@ -89,7 +90,11 @@ export default async function ServicePage({ params }: Props) {
           name: service.name,
           description: service.shortDescription,
           serviceType: service.category.name,
-          provider: { "@type": "Organization", name: "SYSTELEC" },
+          provider: {
+            "@type": "Organization",
+            name: BRAND.tech.name,
+            parentOrganization: { "@type": "Organization", name: BRAND.group.name },
+          },
           url: absoluteUrl(`/services/${service.slug}`),
           ...(service.price !== null && {
             offers: { "@type": "Offer", priceCurrency: "XOF", price: service.price },

@@ -1,6 +1,6 @@
 # Mise en service et exploitation
 
-Procédures de production de SYSTELEC SAMA-SHOP. Chaque commande ci-dessous a été exécutée lors de la stabilisation de la phase 10 sur une pile de test isolée (voir `docs/rapports/phase-10.md`, « Stabilisation »), sauf mention contraire.
+Procédures de production de FUTANI SHOP. Chaque commande ci-dessous a été exécutée lors de la stabilisation de la phase 10 sur une pile de test isolée (voir `docs/rapports/phase-10.md`, « Stabilisation »), sauf mention contraire.
 
 Dans ce document : `C="docker compose -f docker-compose.prod.yml --env-file .env.production"`.
 
@@ -86,7 +86,7 @@ Restent à remplir à la main si besoin : `SMTP_*`, et `APP_PORT` si le port 300
 | `SMTP_HOST` | `smtp-relay.brevo.com` |
 | `SMTP_PORT` | `587` (STARTTLS, exigé en production) ; `465` en TLS implicite |
 | `SMTP_USER` / `SMTP_PASSWORD` | identifiant et **clé SMTP** du compte (jamais le mot de passe du compte) ; ils vont ensemble |
-| `SMTP_FROM` | `SYSTELEC <boutique@votre-domaine>` : adresse du domaine, déclarée comme expéditeur dans Brevo |
+| `SMTP_FROM` | `FUTANI SHOP <boutique@votre-domaine>` : adresse du domaine, déclarée comme expéditeur dans Brevo |
 
 Valeurs à confirmer dans l'interface de Brevo, ainsi que les limites de l'offre choisie. Avant d'activer, publier dans le DNS du domaine les enregistrements SPF, DKIM et DMARC fournis par Brevo : sans eux, les messages finissent dans les indésirables.
 

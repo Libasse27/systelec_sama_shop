@@ -2,6 +2,7 @@ import "server-only";
 import { betterAuth, type BetterAuthPlugin } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import { nextCookies } from "better-auth/next-js";
+import { BRAND } from "@/lib/brand";
 import { getServerEnv } from "@/lib/env";
 import { recordAudit } from "@/server/audit/audit";
 import { db } from "@/server/db/client";
@@ -42,7 +43,7 @@ export function createAuth({ withNextCookies = false, deliverResetLink = emailRe
   const plugins: BetterAuthPlugin[] = withNextCookies ? [nextCookies()] : [];
 
   return betterAuth({
-    appName: "SYSTELEC SAMA-SHOP",
+    appName: BRAND.shop.name,
     baseURL: env.APP_URL,
     secret: env.AUTH_SECRET,
     database: prismaAdapter(db, { provider: "postgresql" }),
