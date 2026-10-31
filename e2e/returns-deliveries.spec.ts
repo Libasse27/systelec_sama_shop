@@ -170,7 +170,7 @@ test.describe("retours et livraisons (phase 10)", () => {
     await courierPage.close();
   });
 
-  test("paramètres : jours fériés et délais de relance enregistrés ; dossier des photos jamais public", async ({ page }) => {
+  test("paramètres : jours fériés et délais de relance enregistrés ; dossier des photos jamais public", { tag: "@parametres-globaux" }, async ({ page }) => {
     await staffPage(page, ["ADMIN"], "Admin P10");
     await page.goto("/admin/parametres");
     const hours = page.getByRole("region", { name: "Heures ouvrables et jours fériés (retours)" });

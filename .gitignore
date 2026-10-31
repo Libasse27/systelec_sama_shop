@@ -29,6 +29,7 @@ test-results/
 
 # fichiers téléversés en local (à la racine seulement : src/server/storage/ est du code versionné)
 /storage/
+# ancien dossier des E2E (avant l'isolation par exécution) : peut subsister localement
 /storage-e2e/
 
 # sauvegardes (bases et fichiers : données personnelles, jamais versionnées)

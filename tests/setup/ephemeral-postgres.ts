@@ -47,12 +47,12 @@ declare module "vitest" {
   }
 }
 
-const docker = (args: string[], input?: string): string => execFileSync("docker", args, {
+export const docker = (args: string[], input?: string): string => execFileSync("docker", args, {
   encoding: "utf8",
   ...(input === undefined ? { stdio: ["ignore", "pipe", "pipe"] as const } : { input, stdio: ["pipe", "pipe", "pipe"] as const }),
 }).trim();
 
-async function publishedPort(containerId: string, runId: string, expectedName: string): Promise<number> {
+export async function publishedPort(containerId: string, runId: string, expectedName: string): Promise<number> {
   const deadline = Date.now() + 10_000;
   for (;;) {
     const info = JSON.parse(docker(["inspect", "--format", "{{json .}}", containerId])) as {
@@ -76,7 +76,7 @@ async function publishedPort(containerId: string, runId: string, expectedName: s
 }
 
 /** Attend que le serveur accepte les connexions TCP (après son initialisation, qui redémarre une fois). */
-async function waitUntilReady(url: string, containerId: string): Promise<void> {
+export async function waitUntilReady(url: string, containerId: string): Promise<void> {
   const deadline = Date.now() + READY_TIMEOUT_MS;
   for (;;) {
     const client = new Client({ connectionString: url });
@@ -97,14 +97,14 @@ async function waitUntilReady(url: string, containerId: string): Promise<void> {
 }
 
 /** Supprime le conteneur seulement s'il porte l'étiquette de CETTE exécution. */
-function removeOwnContainer(containerId: string, runId: string): void {
+export function removeOwnContainer(containerId: string, runId: string): void {
   const label = docker(["inspect", "--format", `{{ index .Config.Labels "${RUN_LABEL}" }}`, containerId]);
   if (label !== runId) throw new Error(`Refus de supprimer le conteneur ${containerId} : il n'a pas été créé par cette exécution.`);
   docker(["rm", "--force", "--volumes", containerId]);
 }
 
 /** Stocke le secret dans un volume privé, sans valeur ni chemin hôte dans la ligne de commande. */
-function createPasswordVolume(volume: string, runId: string, password: string): void {
+export function createPasswordVolume(volume: string, runId: string, password: string): void {
   docker(["volume", "create", "--label", `${RUN_LABEL}=${runId}`, volume]);
   try {
     docker([
@@ -120,10 +120,27 @@ function createPasswordVolume(volume: string, runId: string, password: string): 
   }
 }
 
-function removePasswordVolume(volume: string, runId: string): void {
+export function removePasswordVolume(volume: string, runId: string): void {
   const label = docker(["volume", "inspect", "--format", `{{ index .Labels "${RUN_LABEL}" }}`, volume]);
   if (label !== runId) throw new Error("Refus de supprimer le volume secret : il n'appartient pas à cette exécution.");
   docker(["volume", "rm", volume]);
+}
+
+/** Démarre le conteneur de CETTE exécution (étiqueté, données en mémoire, port local aléatoire) ; rend son identifiant. */
+export function runPostgresContainer(options: { name: string; runId: string; user: string; database: string; secretVolume: string }): string {
+  return docker([
+    "run", "--detach",
+    "--name", options.name,
+    "--label", `${RUN_LABEL}=${options.runId}`,
+    "--env", `POSTGRES_USER=${options.user}`,
+    "--env", `POSTGRES_DB=${options.database}`,
+    "--mount", `type=volume,source=${options.secretVolume},target=/run/secrets,readonly`,
+    "--tmpfs", "/var/lib/postgresql/data",
+    "--publish", "127.0.0.1::5432",
+    "--entrypoint", "/bin/sh",
+    POSTGRES_IMAGE,
+    "-c", "export POSTGRES_PASSWORD=\"$(cat /run/secrets/password)\"; exec docker-entrypoint.sh postgres",
+  ]);
 }
 
 export default async function setup(project: TestProject): Promise<() => void> {
@@ -135,19 +152,7 @@ export default async function setup(project: TestProject): Promise<() => void> {
   createPasswordVolume(secretVolume, runId, password);
   let containerId: string | undefined;
   try {
-    containerId = docker([
-      "run", "--detach",
-      "--name", `systelec-migtest-${runId}`,
-      "--label", `${RUN_LABEL}=${runId}`,
-      "--env", `POSTGRES_USER=${user}`,
-      "--env", `POSTGRES_DB=${database}`,
-      "--mount", `type=volume,source=${secretVolume},target=/run/secrets,readonly`,
-      "--tmpfs", "/var/lib/postgresql/data",
-      "--publish", "127.0.0.1::5432",
-      "--entrypoint", "/bin/sh",
-      POSTGRES_IMAGE,
-      "-c", "export POSTGRES_PASSWORD=\"$(cat /run/secrets/password)\"; exec docker-entrypoint.sh postgres",
-    ]);
+    containerId = runPostgresContainer({ name: `systelec-migtest-${runId}`, runId, user, database, secretVolume });
     const port = await publishedPort(containerId, runId, `systelec-migtest-${runId}`);
     const url = `postgresql://${user}:${password}@127.0.0.1:${port}/${database}`;
     await waitUntilReady(url, containerId);
@@ -182,19 +187,7 @@ export async function startIntegrationDatabase(project: TestProject): Promise<()
   let storageDirectory: string | undefined;
   let containerId: string | undefined;
   try {
-    containerId = docker([
-      "run", "--detach",
-      "--name", `systelec-it-${runId}`,
-      "--label", `${RUN_LABEL}=${runId}`,
-      "--env", `POSTGRES_USER=${user}`,
-      "--env", `POSTGRES_DB=${database}`,
-      "--mount", `type=volume,source=${secretVolume},target=/run/secrets,readonly`,
-      "--tmpfs", "/var/lib/postgresql/data",
-      "--publish", "127.0.0.1::5432",
-      "--entrypoint", "/bin/sh",
-      POSTGRES_IMAGE,
-      "-c", "export POSTGRES_PASSWORD=\"$(cat /run/secrets/password)\"; exec docker-entrypoint.sh postgres",
-    ]);
+    containerId = runPostgresContainer({ name: `systelec-it-${runId}`, runId, user, database, secretVolume });
     const port = await publishedPort(containerId, runId, `systelec-it-${runId}`);
     const url = `postgresql://${user}:${password}@127.0.0.1:${port}/${database}`;
     await waitUntilReady(url, containerId);

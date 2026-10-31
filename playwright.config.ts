@@ -1,11 +1,22 @@
 import { defineConfig, devices } from "@playwright/test";
-import { E2E_STORAGE_DIR, resolveE2eDatabaseUrl } from "./e2e/support/database-guard";
+import { E2E_DIST_DIR, resolveE2eRun } from "./e2e/support/database-guard";
 
-const PORT = 3100;
-const BASE_URL = `http://localhost:${PORT}`;
+/**
+ * Ressources de CETTE exécution (base jetable, dossier de fichiers, port libre), créées et vérifiées par
+ * e2e/run.ts : lancer « pnpm test:e2e ». Sans elles, la configuration refuse de démarrer.
+ */
+const RUN = resolveE2eRun();
+/** Serveur testé joignable seulement depuis cette machine (comptes et données de démonstration). */
+const HOST = "127.0.0.1";
+const BASE_URL = `http://${HOST}:${RUN.port}`;
 
-/** Base E2E dédiée, vérifiée avant tout (jamais la base de développement) : voir e2e/support/database-guard.ts. */
-const E2E_DATABASE_URL = resolveE2eDatabaseUrl();
+/**
+ * Tests qui modifient des paramètres globaux du site (même ligne en base) : exécutés à part, un seul à la
+ * fois (un worker), d'abord sur ordinateur puis sur mobile, jamais en même temps l'un que l'autre.
+ */
+const GLOBAL_SETTINGS_TAG = /@parametres-globaux/;
+const DESKTOP = devices["Desktop Chrome"];
+const MOBILE = devices["Pixel 7"];
 
 /**
  * Tests de bout en bout. Le serveur de production est construit puis démarré
@@ -27,20 +38,23 @@ export default defineConfig({
     timezoneId: "Africa/Dakar",
   },
   projects: [
-    { name: "desktop", use: { ...devices["Desktop Chrome"] } },
-    { name: "mobile", use: { ...devices["Pixel 7"] } },
+    { name: "desktop", use: { ...DESKTOP }, grepInvert: GLOBAL_SETTINGS_TAG },
+    { name: "mobile", use: { ...MOBILE }, grepInvert: GLOBAL_SETTINGS_TAG },
+    { name: "desktop-parametres", use: { ...DESKTOP }, grep: GLOBAL_SETTINGS_TAG, workers: 1 },
+    { name: "mobile-parametres", use: { ...MOBILE }, grep: GLOBAL_SETTINGS_TAG, workers: 1, dependencies: ["desktop-parametres"] },
   ],
   webServer: {
-    // Base E2E préparée (vérifiée, migrée, données de démonstration) AVANT la construction, qui la lit.
-    command: `pnpm exec tsx e2e/prepare-database.ts && pnpm build && pnpm start --port ${PORT}`,
+    // Base préparée par e2e/run.ts (vérifiée, migrée, données de démonstration) AVANT la construction, qui la lit.
+    // Build dans .next-e2e : le build de développement ou de production locale (.next) n'est pas écrasé.
+    command: `pnpm build && pnpm start --hostname ${HOST} --port ${RUN.port}`,
     url: `${BASE_URL}/api/health`,
     // Jamais de réutilisation : un serveur déjà lancé pourrait viser la base de développement.
     reuseExistingServer: false,
     // Serveur exposé directement (aucun reverse proxy) : X-Forwarded-For n'est pas fiable.
-    // Même base et même dossier de fichiers que la préparation globale (les variables du processus
+    // Même base et même dossier de fichiers que la préparation (les variables du processus
     // l'emportent sur .env pour Next.js, Prisma et les scripts).
-    env: { TRUSTED_PROXY_HOPS: "0", DATABASE_URL: E2E_DATABASE_URL, STORAGE_LOCAL_DIR: E2E_STORAGE_DIR },
-    // Préparation de la base E2E, construction puis démarrage.
+    env: { TRUSTED_PROXY_HOPS: "0", DATABASE_URL: RUN.databaseUrl, STORAGE_LOCAL_DIR: RUN.storageDir, NEXT_DIST_DIR: E2E_DIST_DIR },
+    // Construction puis démarrage.
     timeout: 300_000,
   },
 });

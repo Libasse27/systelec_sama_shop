@@ -46,6 +46,17 @@ export default defineConfig({
           hookTimeout: 180_000,
         },
       },
+      {
+        extends: true,
+        test: {
+          // Protections de la base E2E contre de vrais PostgreSQL JETABLES (conteneurs créés par le test). Docker requis.
+          name: "e2e-guard",
+          include: ["tests/e2e-guard/**/*.test.ts"],
+          fileParallelism: false,
+          testTimeout: 60_000,
+          hookTimeout: 180_000,
+        },
+      },
     ],
   },
 });
