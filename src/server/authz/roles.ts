@@ -9,14 +9,20 @@ export interface RoleDefinition {
 }
 
 /**
+ * Permissions réservées à l'administrateur principal : l'exception de remboursement par le décideur
+ * (décision 1, phase 10) et la gestion du bandeau d'annonces et de promotions.
+ */
+export const SUPER_ADMIN_ONLY: readonly Permission[] = ["returns.refund_own_decision", "announcements.manage"];
+
+/**
  * Les rôles système (§14, livreur ajouté en phase 10) et leur matrice de permissions.
- * L'administrateur principal a toutes les permissions ; l'administrateur aussi, sauf l'exception de
- * remboursement par le décideur (décision 1, phase 10). Seul un administrateur principal peut
- * attribuer ou retirer le rôle d'administrateur principal.
+ * L'administrateur principal a toutes les permissions ; l'administrateur aussi, sauf celles de
+ * SUPER_ADMIN_ONLY. Seul un administrateur principal peut attribuer ou retirer le rôle
+ * d'administrateur principal.
  */
 export const ROLE_DEFINITIONS: readonly RoleDefinition[] = [
   { code: SUPER_ADMIN, label: "Administrateur principal", permissions: PERMISSIONS },
-  { code: "ADMIN", label: "Administrateur", permissions: PERMISSIONS.filter((permission) => permission !== "returns.refund_own_decision") },
+  { code: "ADMIN", label: "Administrateur", permissions: PERMISSIONS.filter((permission) => !SUPER_ADMIN_ONLY.includes(permission)) },
   {
     code: "CATALOG_MANAGER",
     label: "Gestionnaire de catalogue",

@@ -139,6 +139,54 @@ export const returnRemindersSchema = z
   .refine((value) => value.firstReminderHours < value.secondReminderHours, { message: "La seconde relance doit suivre la première", path: ["secondReminderHours"] })
   .refine((value) => value.secondReminderHours < value.escalationHours, { message: "L'escalade doit suivre la seconde relance", path: ["escalationHours"] });
 
+export const ANNOUNCEMENT_KINDS = ["ANNOUNCEMENT", "PROMOTION"] as const;
+export type AnnouncementKind = (typeof ANNOUNCEMENT_KINDS)[number];
+
+/** Chemin interne du site : commence par « / » mais jamais « // » ni « /\\ » (lien protocole-relatif ou détourné). */
+const INTERNAL_PATH = /^\/(?![\/\\])[^\s\\]*$/;
+// Interne ou https uniquement : ces liens sont rendus en <a href> (pas de javascript:, data:, http:…).
+// Lien externe : « https:// » écrit en entier (z.url seul laisse passer « https:evil ») et sans
+// identifiants dans l'adresse (« https://user:pw@hote » sert à l'hameçonnage).
+const externalHttpsUrl = z
+  .url({ protocol: /^https$/ })
+  .max(500)
+  .refine((value) => value.startsWith("https://"), "Lien externe : adresse complète commençant par https://")
+  .refine((value) => {
+    // Zod enchaîne les contrôles même après un échec : une adresse illisible est simplement refusée.
+    const url = URL.parse(value);
+    return url !== null && url.username === "" && url.password === "";
+  }, "Lien externe : identifiants interdits dans l'adresse");
+const announcementHref = z.union([z.string().max(300).regex(INTERNAL_PATH), externalHttpsUrl]).nullable();
+const isoInstant = z.iso.datetime().nullable();
+
+export const announcementItemSchema = z
+  .object({
+    id: z.uuid(),
+    text: z.string().trim().min(1).max(160),
+    href: announcementHref,
+    kind: z.enum(ANNOUNCEMENT_KINDS),
+    isActive: z.boolean(),
+    startsAt: isoInstant,
+    endsAt: isoInstant,
+  })
+  .strict()
+  // Comparaison en instants (les formats ISO peuvent différer : « Z », millisecondes…).
+  .refine((value) => !value.startsAt || !value.endsAt || new Date(value.endsAt).getTime() > new Date(value.startsAt).getTime(), { message: "La fin doit suivre le début", path: ["endsAt"] });
+
+/** Annonces enregistrables au plus (le bandeau reste lisible). */
+export const MAX_ANNOUNCEMENTS = 10;
+
+/** Bandeau d'annonces et de promotions (géré par l'administrateur principal uniquement, voir announcements/admin.ts). */
+export const announcementsSchema = z
+  .object({
+    items: z
+      .array(announcementItemSchema)
+      .max(MAX_ANNOUNCEMENTS, `${MAX_ANNOUNCEMENTS} annonces au plus`)
+      .refine((items) => new Set(items.map((item) => item.id)).size === items.length, "Identifiant en double"),
+    rotationSeconds: z.number().int().min(4).max(20),
+  })
+  .strict();
+
 export const settingsSchemas = {
   company: companySettingsSchema,
   commerce: commerceSettingsSchema,
@@ -147,6 +195,7 @@ export const settingsSchemas = {
   features: featureSettingsSchema,
   businessHours: businessHoursSchema,
   returnReminders: returnRemindersSchema,
+  announcements: announcementsSchema,
 } as const;
 
 export type SettingKey = keyof typeof settingsSchemas;
@@ -190,4 +239,6 @@ export const settingsDefaults: { [K in SettingKey]: SettingValue<K> } = {
   // Aucun jour férié n'est inventé : le calendrier se saisit dans l'administration.
   businessHours: { days: [1, 2, 3, 4, 5, 6], ranges: [{ start: "08:00", end: "18:00" }], holidays: [] },
   returnReminders: { firstReminderHours: 12, secondReminderHours: 24, escalationHours: 48 },
+  // Aucune annonce inventée : le bandeau reste masqué tant que l'administrateur principal n'en publie pas.
+  announcements: { items: [], rotationSeconds: 6 },
 };

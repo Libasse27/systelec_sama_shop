@@ -8,7 +8,13 @@ import { parseInput } from "@/server/validation";
 import { settingsSchemas, type SettingKey, type SettingValue } from "./schemas";
 import { getSetting, updateSetting } from "./service";
 
-const SETTING_LABELS: Record<SettingKey, string> = {
+/**
+ * Paramètres modifiables par l'écran « Paramètres » (settings.manage). Le bandeau d'annonces en est
+ * exclu : il relève de announcements.manage, réservée à l'administrateur principal.
+ */
+export type EditableSettingKey = Exclude<SettingKey, "announcements">;
+
+const SETTING_LABELS: Record<EditableSettingKey, string> = {
   company: "Identité et mentions légales",
   commerce: "Commande et paiement",
   payments: "Moyens de règlement",
@@ -19,17 +25,17 @@ const SETTING_LABELS: Record<SettingKey, string> = {
 };
 
 /** Paramètres modifiables par écran : tous, sauf la devise et le fuseau (imposés par le schéma). */
-export const EDITABLE_SETTING_KEYS = Object.keys(SETTING_LABELS) as SettingKey[];
+export const EDITABLE_SETTING_KEYS = Object.keys(SETTING_LABELS) as EditableSettingKey[];
 
-export function isSettingKey(value: unknown): value is SettingKey {
+export function isSettingKey(value: unknown): value is EditableSettingKey {
   return typeof value === "string" && (EDITABLE_SETTING_KEYS as string[]).includes(value);
 }
 
 /** Tous les paramètres pour l'écran d'administration (settings.manage). */
-export async function getAllSettings(client: PrismaClient, actor: Actor): Promise<{ [K in SettingKey]: SettingValue<K> }> {
+export async function getAllSettings(client: PrismaClient, actor: Actor): Promise<{ [K in EditableSettingKey]: SettingValue<K> }> {
   await assertPermission(client, actor, "settings.manage");
   const values = await Promise.all(EDITABLE_SETTING_KEYS.map(async (key) => [key, await getSetting(key, client)] as const));
-  return Object.fromEntries(values) as { [K in SettingKey]: SettingValue<K> };
+  return Object.fromEntries(values) as { [K in EditableSettingKey]: SettingValue<K> };
 }
 
 /**
@@ -37,7 +43,9 @@ export async function getAllSettings(client: PrismaClient, actor: Actor): Promis
  * rattachées à chaque champ), audité avant/après dans la même transaction. Le logo ne se change
  * pas par l'identité (décision 4 : téléversement uniquement) : la valeur enregistrée est conservée.
  */
-export async function saveSettings<K extends SettingKey>(client: PrismaClient, actor: Actor, key: K, input: unknown): Promise<SettingValue<K>> {
+export async function saveSettings<K extends EditableSettingKey>(client: PrismaClient, actor: Actor, key: K, input: unknown): Promise<SettingValue<K>> {
+  // Garde d'exécution (le typage ne suffit pas) : jamais d'écriture du bandeau d'annonces par ce circuit.
+  if (!isSettingKey(key)) throw new AppError("FORBIDDEN", "Ce paramètre ne se modifie pas depuis cet écran.");
   await assertPermission(client, actor, "settings.manage");
   const submitted = key === "company" && typeof input === "object" && input !== null ? { ...input, logoUrl: (await getSetting("company", client)).logoUrl } : input;
   const value = parseInput(settingsSchemas[key], submitted, SETTING_LABELS[key]);

@@ -8,7 +8,7 @@ import { db } from "@/server/db/client";
 import { createLocalStorage, keyFromMediaUrl, type FileStorage } from "@/server/storage/storage";
 import { resetDatabase } from "../../../../tests/setup/db";
 import { actorWith } from "../../../../tests/support/actors";
-import { getAllSettings, removeLogo, saveSettings, uploadLogo } from "./admin";
+import { getAllSettings, isSettingKey, removeLogo, saveSettings, uploadLogo } from "./admin";
 import { settingsDefaults } from "./schemas";
 import { getSetting } from "./service";
 
@@ -86,6 +86,11 @@ describe("administration des paramètres (PostgreSQL)", () => {
     await expect(
       db.siteSetting.create({ data: { key: "company", value: { ...settingsDefaults.company, logoUrl: "https://cdn.example.sn/logo.png" } } }),
     ).rejects.toThrow(/site_settings_logo_check/);
+  });
+
+  it("isSettingKey refuse « announcements » (relève de announcements.manage)", () => {
+    expect(isSettingKey("announcements")).toBe(false);
+    expect(isSettingKey("tax")).toBe(true);
   });
 
   it("heures ouvrables (décision 2) : validées et auditées", async () => {

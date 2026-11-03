@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { AnnouncementBar } from "@/components/layout/announcement-bar";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteHeader } from "@/components/layout/site-header";
 import { BRAND } from "@/lib/brand";
@@ -32,6 +33,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         <a href="#contenu" className="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-50 focus:rounded focus:bg-white focus:px-3 focus:py-2">
           Aller au contenu
         </a>
+        <AnnouncementBar />
         <SiteHeader />
         <div id="contenu" className="flex-1">
           {children}

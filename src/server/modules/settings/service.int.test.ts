@@ -3,7 +3,7 @@ import { db } from "@/server/db/client";
 import { ValidationError } from "@/server/errors";
 import { resetDatabase } from "../../../../tests/setup/db";
 import { settingsDefaults } from "./schemas";
-import { getSetting, updateSetting } from "./service";
+import { getSetting, modifySetting, updateSetting } from "./service";
 
 describe("paramètres : service (PostgreSQL)", () => {
   beforeEach(resetDatabase);
@@ -33,6 +33,12 @@ describe("paramètres : service (PostgreSQL)", () => {
     expect(await getSetting("payments")).toEqual(fixed);
     const log = await db.auditLog.findFirstOrThrow({ where: { action: "settings.update" } });
     expect(log.before).toEqual({ enabledMethods: ["WAVE"] }); // valeur brute conservée pour l'enquête
+  });
+
+  it("modifySetting refuse de partir d'une valeur stockée invalide (rien n'est remis aux valeurs par défaut en silence)", async () => {
+    await db.siteSetting.create({ data: { key: "tax", value: { vatRate: "x" } } });
+    await expect(modifySetting("tax", (current) => ({ ...current, vatRate: 10 }), null, db)).rejects.toMatchObject({ code: "INTERNAL" });
+    expect((await db.siteSetting.findUnique({ where: { key: "tax" } }))!.value).toEqual({ vatRate: "x" });
   });
 
   it("refuse une valeur invalide sans rien écrire", async () => {
