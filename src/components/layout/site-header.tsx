@@ -1,6 +1,7 @@
-import { ChevronDown, ShoppingCart, UserRound } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 import Link from "next/link";
 import { signOutAction } from "@/app/(auth)/actions";
+import { BrandIcon } from "@/components/brand/brand-icon";
 import { Logo } from "@/components/brand/logo";
 import { HeaderSearch } from "@/components/layout/header-search";
 import { getCurrentUser } from "@/server/auth/session";
@@ -50,11 +51,11 @@ export async function SiteHeader() {
           « relative » : la recherche déployée se place par-dessus la ligne de la loupe. */}
       <div className="relative mx-auto flex max-w-6xl flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3">
         <Link href="/" aria-label={`${company.shopName}, accueil`} className="order-1 shrink-0">
-          <Logo shopName={company.shopName} logoUrl={company.logoUrl} />
+          <Logo shopName={company.shopName} logoUrl={company.logoUrl} priority />
         </Link>
         <nav aria-label="Compte" className="order-2 ml-auto flex items-center gap-1 lg:order-4 lg:ml-0">
           <Link href="/panier" className={`${linkClass} flex items-center gap-1`}>
-            <ShoppingCart aria-hidden className="size-4" />
+            <BrandIcon name="panier" className="size-5" />
             <span className="sr-only sm:not-sr-only">Panier</span>
             {cartCount > 0 && (
               <span className="rounded-full bg-brand-accent px-1.5 text-xs font-bold text-brand-navy">{cartCount}</span>
@@ -78,7 +79,7 @@ export async function SiteHeader() {
             </>
           ) : (
             <Link href="/connexion" title="Se connecter" className={iconLinkClass}>
-              <UserRound aria-hidden className="size-5" />
+              <BrandIcon name="mon-compte" className="size-6" />
               <span className="sr-only">Se connecter</span>
             </Link>
           )}

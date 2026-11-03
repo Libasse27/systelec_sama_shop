@@ -1,8 +1,8 @@
-import { Banknote } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { cache } from "react";
+import { BrandIcon } from "@/components/brand/brand-icon";
 import { Breadcrumbs } from "@/components/layout/breadcrumbs";
 import { JsonLd } from "@/components/seo/json-ld";
 import { BRAND } from "@/lib/brand";
@@ -80,7 +80,7 @@ export default async function ServicePage({ params }: Props) {
       </section>
 
       <p className="flex items-center gap-2 text-sm text-ink-muted">
-        <Banknote aria-hidden className="size-4 text-brand-accent" />
+        <BrandIcon name="especes" className="size-5" />
         Règlement en espèces, après la prestation.
       </p>
       <JsonLd

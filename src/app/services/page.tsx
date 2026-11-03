@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { BrandLogo } from "@/components/brand/logo";
 import { Breadcrumbs } from "@/components/layout/breadcrumbs";
 import { BRAND } from "@/lib/brand";
 import { servicePriceLabel } from "@/lib/labels";
@@ -17,12 +18,15 @@ export default async function ServicesPage() {
   return (
     <main className="mx-auto flex max-w-6xl flex-col gap-8 px-4 py-6">
       <Breadcrumbs items={[{ label: "Services", href: "/services" }]} />
-      <header>
-        <h1 className="text-2xl font-bold">Services techniques</h1>
-        <p className="mt-2 max-w-2xl text-ink-muted">
-          Des interventions réalisées par du personnel qualifié. Chaque prestation fait l&apos;objet d&apos;un devis
-          adapté à votre besoin ; le règlement se fait en espèces après la prestation.
-        </p>
+      <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:gap-6">
+        <BrandLogo variant="tech" className="h-20" priority />
+        <div>
+          <h1 className="text-2xl font-bold">Services techniques</h1>
+          <p className="mt-2 max-w-2xl text-ink-muted">
+            Des interventions réalisées par du personnel qualifié. Chaque prestation fait l&apos;objet d&apos;un devis
+            adapté à votre besoin ; le règlement se fait en espèces après la prestation.
+          </p>
+        </div>
       </header>
       {groups.map((group) => (
         <section key={group.slug} aria-labelledby={`famille-${group.slug}`} className="flex flex-col gap-3">

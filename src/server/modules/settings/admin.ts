@@ -61,7 +61,7 @@ export async function uploadLogo(client: PrismaClient, storage: FileStorage, act
   }
 }
 
-/** Revient au logo typographique provisoire. */
+/** Revient au logo officiel FUTANI SHOP. */
 export async function removeLogo(client: PrismaClient, actor: Actor): Promise<void> {
   await assertPermission(client, actor, "settings.manage");
   const company = await getSetting("company", client);

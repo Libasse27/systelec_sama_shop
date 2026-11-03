@@ -95,7 +95,7 @@ export async function removeLogoAction(): Promise<ActionState> {
   return adminAction(PATH, async (actor) => {
     await removeLogo(db, actor);
     refreshSite();
-    return "Logo retiré : le logo typographique provisoire est affiché.";
+    return "Logo retiré : le logo officiel FUTANI SHOP est affiché.";
   });
 }
 

@@ -1,7 +1,8 @@
-import { Banknote, Clock, Mail, MapPin, MessageCircle, Phone } from "lucide-react";
+import { Clock } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { Logo } from "@/components/brand/logo";
+import { BrandIcon } from "@/components/brand/brand-icon";
+import { BrandLogo, Logo } from "@/components/brand/logo";
 import { BRAND, SHOP_PILLARS_LINE } from "@/lib/brand";
 import { telHref, whatsappHref } from "@/lib/contact-links";
 import { getCompanySettings } from "@/server/storefront";
@@ -12,6 +13,7 @@ const linkClass = "text-sm text-white/80 hover:text-white hover:underline";
 const contactLinkClass = "flex items-start gap-2 text-sm text-white/80 hover:text-white";
 const contactTextClass = "flex items-start gap-2 text-sm text-white/80";
 const contactIconClass = "mt-0.5 size-4 shrink-0 text-brand-accent";
+const contactPictoClass = "mt-0.5 size-5";
 
 interface FooterSectionProps {
   title: string;
@@ -53,7 +55,7 @@ export async function SiteFooter() {
             {SHOP_PILLARS_LINE}
           </p>
           <p className="flex items-center gap-2 text-sm">
-            <Banknote aria-hidden className="size-4 shrink-0 text-brand-accent" />
+            <BrandIcon name="especes" className="size-5" />
             Paiement en espèces uniquement.
           </p>
         </div>
@@ -84,25 +86,25 @@ export async function SiteFooter() {
         <FooterSection title="Contact" navigation={false}>
           {company.phone && (
             <a href={telHref(company.phone)} className={contactLinkClass}>
-              <Phone aria-hidden className={contactIconClass} />
+              <BrandIcon name="telephone" className={contactPictoClass} />
               {company.phone}
             </a>
           )}
           {company.whatsapp && whatsapp && (
             <a href={whatsapp} className={contactLinkClass} target="_blank" rel="noopener noreferrer">
-              <MessageCircle aria-hidden className={contactIconClass} />
+              <BrandIcon name="whatsapp" className={contactPictoClass} />
               WhatsApp : {company.whatsapp}
             </a>
           )}
           {company.email && (
             <a href={`mailto:${company.email}`} className={`${contactLinkClass} break-all`}>
-              <Mail aria-hidden className={contactIconClass} />
+              <BrandIcon name="email" className={contactPictoClass} />
               {company.email}
             </a>
           )}
           {company.address && (
             <p className={contactTextClass}>
-              <MapPin aria-hidden className={contactIconClass} />
+              <BrandIcon name="localisation" className={contactPictoClass} />
               <span className="whitespace-pre-line">{company.address}</span>
             </p>
           )}
@@ -120,8 +122,9 @@ export async function SiteFooter() {
           <p>
             © {new Date().getFullYear()} {company.companyName}. Tous droits réservés.
           </p>
-          <p className="italic">
-            {BRAND.group.name} — {BRAND.group.signature}
+          <p className="flex items-center justify-center gap-3 italic sm:justify-start">
+            <BrandLogo variant="group" className="h-8" />
+            {BRAND.group.signature}
           </p>
         </div>
       </div>

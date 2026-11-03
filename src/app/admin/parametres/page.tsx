@@ -80,7 +80,7 @@ export default async function SettingsPage() {
       <Section title="Logo (D13)">
         <div className="flex flex-col gap-4">
           <p className="text-sm text-ink-muted">
-            {company.logoUrl ? "Logo actuel :" : "Aucun logo : le logo typographique provisoire est affiché."} Le logo se téléverse uniquement : aucune adresse
+            {company.logoUrl ? "Logo actuel :" : "Aucun logo : le logo officiel FUTANI SHOP est affiché."} Le logo se téléverse uniquement : aucune adresse
             externe n&apos;est acceptée.
           </p>
           {company.logoUrl && (
