@@ -27,7 +27,7 @@ describe("configuration serveur", () => {
   });
 
   it("e-mail activé : port et expéditeur exigés, identifiants complets ou absents", () => {
-    const smtp = { ...base, SMTP_HOST: "smtp-relay.brevo.com", SMTP_PORT: "587", SMTP_FROM: "Boutique <contact@systelec.sn>" };
+    const smtp = { ...base, SMTP_HOST: "smtp-relay.brevo.com", SMTP_PORT: "587", SMTP_FROM: "Boutique <contact@futani.sn>" };
     expect(parseServerEnv(smtp).SMTP_PORT).toBe(587);
     expect(parseServerEnv({ ...smtp, SMTP_USER: "compte", SMTP_PASSWORD: "cle" }).SMTP_USER).toBe("compte");
     expect(() => parseServerEnv({ ...smtp, SMTP_PORT: "" })).toThrow(/SMTP_PORT/);
@@ -46,8 +46,8 @@ describe("configuration serveur", () => {
   it("exige en production une APP_URL explicite, en https, sans slash final", () => {
     const prod = { ...base, APP_ENV: "production" };
     expect(() => parseServerEnv(prod)).toThrow(/APP_URL/);
-    expect(() => parseServerEnv({ ...prod, APP_URL: "http://systelec.sn" })).toThrow(/APP_URL/);
-    expect(() => parseServerEnv({ ...prod, APP_URL: "https://systelec.sn/" })).toThrow(/APP_URL/);
-    expect(parseServerEnv({ ...prod, APP_URL: "https://systelec.sn" }).APP_URL).toBe("https://systelec.sn");
+    expect(() => parseServerEnv({ ...prod, APP_URL: "http://futani.sn" })).toThrow(/APP_URL/);
+    expect(() => parseServerEnv({ ...prod, APP_URL: "https://futani.sn/" })).toThrow(/APP_URL/);
+    expect(parseServerEnv({ ...prod, APP_URL: "https://futani.sn" }).APP_URL).toBe("https://futani.sn");
   });
 });

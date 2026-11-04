@@ -1,4 +1,4 @@
-// SYSTELEC SAMA-SHOP — schéma de données.
+// FUTANI SAMA-SHOP — schéma de données.
 // Les modèles sont ajoutés phase par phase (voir docs/02-modele-donnees.md).
 // Montants : Int en FCFA. Dates : timestamptz (UTC).
 
@@ -11,7 +11,7 @@ datasource db {
   provider = "postgresql"
 }
 
-// ─── Identité (tables Better Auth + champs SYSTELEC) ──────────────────────────
+// ─── Identité (tables Better Auth + champs FUTANI) ──────────────────────────
 
 enum UserKind {
   STAFF
@@ -486,7 +486,7 @@ model CartItem {
   @@map("cart_items")
 }
 
-/// Zone de livraison. Aucune zone réelle n'est inventée (D5) : saisie par SYSTELEC.
+/// Zone de livraison. Aucune zone réelle n'est inventée (D5) : saisie par FUTANI.
 model DeliveryZone {
   id           String   @id @default(cuid())
   name         String   @unique

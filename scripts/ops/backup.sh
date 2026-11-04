@@ -19,8 +19,8 @@ set -a
 # shellcheck disable=SC1090
 . "$ENV_FILE"
 set +a
-DB_USER="${POSTGRES_USER:-systelec_owner}"
-DB_NAME="${POSTGRES_DB:-systelec}"
+DB_USER="${POSTGRES_USER:-futani_owner}"
+DB_NAME="${POSTGRES_DB:-futani}"
 
 STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 TARGET="$PARENT/$STAMP"

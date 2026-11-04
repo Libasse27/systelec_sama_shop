@@ -4,10 +4,10 @@ import { existsSync, readFileSync } from "node:fs";
 /**
  * Isolation des tests E2E : ils écrivent (comptes, commandes, paramètres) dans leur base. Ils ne
  * doivent JAMAIS viser la base de développement, celle des tests d'intégration (vidée entre deux
- * tests) ni une base de production. Base dédiée : systelec_e2e, sur le serveur PostgreSQL de test
+ * tests) ni une base de production. Base dédiée : futani_e2e, sur le serveur PostgreSQL de test
  * (docker compose, service db-test). Toute incertitude interrompt les tests.
  */
-export const E2E_DATABASE_NAME = "systelec_e2e";
+export const E2E_DATABASE_NAME = "futani_e2e";
 
 /** Hôtes acceptés : la base E2E est locale (conteneur de test), jamais distante. */
 const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "::1", "[::1]"]);
@@ -29,7 +29,7 @@ const sameDatabase = (a: string, b: string): boolean => serverOf(a) === serverOf
 
 /**
  * Vérifie l'URL de la base E2E AVANT toute connexion ; lève une erreur explicite sinon :
- * nom exact systelec_e2e, hôte local, différente des bases de développement et d'intégration,
+ * nom exact futani_e2e, hôte local, différente des bases de développement et d'intégration,
  * environnement qui n'est pas la production.
  */
 export function assertE2eDatabaseUrl(url: string | undefined, context: GuardContext): string {
@@ -55,7 +55,7 @@ function readEnvFile(path: string): Record<string, string> {
 
 /**
  * URL de la base E2E : E2E_DATABASE_URL si fournie, sinon le serveur de .env.test avec la base
- * systelec_e2e. Toujours passée par assertE2eDatabaseUrl.
+ * futani_e2e. Toujours passée par assertE2eDatabaseUrl.
  */
 export function resolveE2eDatabaseUrl(): string {
   const dev = readEnvFile(".env");

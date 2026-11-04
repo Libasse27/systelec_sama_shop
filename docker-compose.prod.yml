@@ -7,14 +7,14 @@
 # Aucun secret ici : tout vient de .env.production (non versionné, modèle : .env.production.example).
 # Le site est servi derrière un reverse proxy TLS (Caddy, Nginx…) qui transmet vers 127.0.0.1:${APP_PORT}.
 
-name: systelec-sama-shop
+name: futani-sama-shop
 
 x-app-env: &app-env
   APP_ENV: production
   APP_URL: ${APP_URL:?APP_URL requis (https, sans slash final)}
   AUTH_SECRET: ${AUTH_SECRET:?AUTH_SECRET requis (openssl rand -base64 32)}
   # Rôle RESTREINT (scripts/ops/app-role.sql) : jamais le propriétaire de la base.
-  DATABASE_URL: postgresql://${APP_DB_USER:-systelec_app}:${APP_DB_PASSWORD:?APP_DB_PASSWORD requis}@db:5432/${POSTGRES_DB:-systelec}
+  DATABASE_URL: postgresql://${APP_DB_USER:-futani_app}:${APP_DB_PASSWORD:?APP_DB_PASSWORD requis}@db:5432/${POSTGRES_DB:-futani}
   DATABASE_POOL_MAX: ${DATABASE_POOL_MAX:-10}
   STORAGE_DRIVER: local
   STORAGE_LOCAL_DIR: /app/storage
@@ -48,9 +48,9 @@ services:
     <<: *logging
     environment:
       # Propriétaire de la base : utilisé seulement par les migrations et l'exploitation.
-      POSTGRES_USER: ${POSTGRES_USER:-systelec_owner}
+      POSTGRES_USER: ${POSTGRES_USER:-futani_owner}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD requis}
-      POSTGRES_DB: ${POSTGRES_DB:-systelec}
+      POSTGRES_DB: ${POSTGRES_DB:-futani}
       TZ: UTC
     volumes:
       - pgdata:/var/lib/postgresql/data
@@ -62,7 +62,7 @@ services:
     # Aucun port publié : la base n'est joignable que par les services de ce projet.
 
   app:
-    image: ${APP_IMAGE:-systelec-sama-shop}:${APP_VERSION:?APP_VERSION requis}
+    image: ${APP_IMAGE:-futani-sama-shop}:${APP_VERSION:?APP_VERSION requis}
     restart: unless-stopped
     <<: [*hardening, *logging]
     read_only: true
@@ -82,12 +82,12 @@ services:
 
   # Migrations : rôle propriétaire (crée et modifie le schéma). Lancé à chaque mise à jour.
   migrate:
-    image: ${TOOLS_IMAGE:-systelec-sama-shop-tools}:${APP_VERSION:?APP_VERSION requis}
+    image: ${TOOLS_IMAGE:-futani-sama-shop-tools}:${APP_VERSION:?APP_VERSION requis}
     profiles: ["tools"]
     <<: *hardening
     environment:
       <<: *app-env
-      DATABASE_URL: postgresql://${POSTGRES_USER:-systelec_owner}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD requis}@db:5432/${POSTGRES_DB:-systelec}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-futani_owner}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD requis}@db:5432/${POSTGRES_DB:-futani}
     command: ["pnpm", "db:deploy"]
     depends_on:
       db:
@@ -95,7 +95,7 @@ services:
 
   # Tâches d'exploitation avec le rôle restreint : pnpm orders:expire (planifiée), db:seed, admin:create…
   tasks:
-    image: ${TOOLS_IMAGE:-systelec-sama-shop-tools}:${APP_VERSION:?APP_VERSION requis}
+    image: ${TOOLS_IMAGE:-futani-sama-shop-tools}:${APP_VERSION:?APP_VERSION requis}
     profiles: ["tools"]
     <<: [*hardening, *logging]
     environment:

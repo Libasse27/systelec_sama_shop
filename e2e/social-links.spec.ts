@@ -56,13 +56,15 @@ test("liens sociaux : lien raccourci refusé avec un message clair, lien officie
   await expect(link).toHaveAttribute("href", profile);
   await expect(link).toHaveAttribute("rel", "noopener noreferrer");
 
-  // Emplacement : sous les colonnes Boutique, Aide et Contact.
+  // Emplacement : dans la colonne de la marque, sous le logo et le slogan, à gauche de la colonne Boutique, sans titre.
   const footer = page.getByRole("contentinfo");
   const socialBox = (await footer.getByRole("navigation", { name: "Réseaux sociaux" }).boundingBox())!;
-  for (const column of [footer.getByRole("navigation", { name: "Boutique" }), footer.getByRole("navigation", { name: "Aide" }), footer.getByRole("heading", { name: "Contact" })]) {
-    const box = (await column.boundingBox())!;
-    expect(socialBox.y).toBeGreaterThanOrEqual(box.y + box.height);
-  }
+  const logoBox = (await footer.getByRole("link", { name: /, accueil$/ }).boundingBox())!;
+  const shopBox = (await footer.getByRole("navigation", { name: "Boutique" }).boundingBox())!;
+  expect(socialBox.y).toBeGreaterThanOrEqual(logoBox.y + logoBox.height);
+  expect(Math.abs(socialBox.x - logoBox.x)).toBeLessThanOrEqual(1);
+  expect(socialBox.x + socialBox.width).toBeLessThanOrEqual(shopBox.x);
+  await expect(footer.getByText("Suivez-nous")).toHaveCount(0);
   await page.screenshot({ path: testInfo.outputPath("pied-de-page-reseaux.png"), fullPage: true });
 });
 
@@ -91,7 +93,7 @@ test("anciens liens non conformes en base : masqués un par un, n'empêchent pas
 
   // Donnée historique écrite directement (antérieure aux règles actuelles), comme en production.
   await writeCompanySetting({
-    companyName: "SYSTELEC",
+    companyName: "FUTANI GROUP",
     shopName: "FUTANI SHOP",
     logoUrl: null,
     phone: null,

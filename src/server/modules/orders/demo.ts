@@ -3,7 +3,7 @@ import { DEMO_PREFIX } from "@/server/modules/catalog/demo";
 
 /**
  * Zones et point de retrait de DÉMONSTRATION (D5) : frais et adresses fictifs, marqués « [DÉMO] ».
- * SYSTELEC saisit les vraies valeurs dans l'administration (Livraison et retrait).
+ * FUTANI saisit les vraies valeurs dans l'administration (Livraison et retrait).
  */
 export async function seedDemoDelivery(client: PrismaClient): Promise<void> {
   const zones = [

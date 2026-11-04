@@ -24,7 +24,7 @@ export function assertDisposableTestDatabase(database: DisposableTestDatabase): 
     !["postgres:", "postgresql:"].includes(url.protocol) || url.hostname !== "127.0.0.1" ||
     url.port !== String(database.port) || !Number.isInteger(database.port) || database.port < 1 || database.port > 65535 ||
     url.pathname !== `/${database.database}` || decodeURIComponent(url.username) !== database.user || !url.password ||
-    url.search !== "" || url.hash !== "" || database.database !== "systelec_test" ||
+    url.search !== "" || url.hash !== "" || database.database !== "futani_test" ||
     database.user !== `it_${database.runId.slice(0, 12)}`
   ) {
     throw new Error("Refus : l'URL ne correspond pas au PostgreSQL jetable créé pour cette exécution.");

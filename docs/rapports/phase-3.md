@@ -6,7 +6,7 @@
 
 | Élément | Fichiers |
 |---|---|
-| Tables d'identité Better Auth + champs SYSTELEC (`kind`, `isActive`, `phone`), RBAC (rôles, permissions, liaisons) | `prisma/schema.prisma`, migration `*_auth_rbac` |
+| Tables d'identité Better Auth + champs FUTANI (`kind`, `isActive`, `phone`), RBAC (rôles, permissions, liaisons) | `prisma/schema.prisma`, migration `*_auth_rbac` |
 | 27 permissions et 10 rôles (§14), synchronisés depuis le code, synchronisation idempotente et auditée | `src/server/authz/{permissions,roles,sync}.ts`, `pnpm db:seed` |
 | Garde serveur : permissions vérifiées dans les services, refus journalisés (`DENIED`) | `src/server/authz/service.ts`, `src/server/auth/session.ts` |
 | Attribution et retrait de rôles audités ; seul un administrateur principal gère ce rôle ; le dernier administrateur principal actif ne peut pas être retiré | `src/server/authz/service.ts` |

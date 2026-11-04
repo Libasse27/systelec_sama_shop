@@ -15,17 +15,17 @@ jobs:
       postgres:
         image: postgres:17-alpine
         env:
-          POSTGRES_USER: systelec
-          POSTGRES_PASSWORD: systelec_test
-          POSTGRES_DB: systelec_test
+          POSTGRES_USER: futani
+          POSTGRES_PASSWORD: futani_test
+          POSTGRES_DB: futani_test
         ports:
           - 5434:5432
         options: >-
-          --health-cmd "pg_isready -U systelec -d systelec_test"
+          --health-cmd "pg_isready -U futani -d futani_test"
           --health-interval 5s --health-timeout 3s --health-retries 10
     env:
       APP_ENV: test
-      DATABASE_URL: postgresql://systelec:systelec_test@localhost:5434/systelec_test
+      DATABASE_URL: postgresql://futani:futani_test@localhost:5434/futani_test
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -62,8 +62,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: docker build --target app -t systelec-sama-shop:ci .
-      - run: docker build --target tools -t systelec-sama-shop-tools:ci .
+      - run: docker build --target app -t futani-sama-shop:ci .
+      - run: docker build --target tools -t futani-sama-shop-tools:ci .
       - run: >-
           docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:0.67.2
-          image --quiet --scanners vuln,secret --severity HIGH,CRITICAL --exit-code 1 systelec-sama-shop:ci
+          image --quiet --scanners vuln,secret --severity HIGH,CRITICAL --exit-code 1 futani-sama-shop:ci

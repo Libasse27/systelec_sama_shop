@@ -44,18 +44,18 @@ Les deux migrations sont appliquées sur les bases de développement et de test,
 
 ## Isolation des tests E2E (correctif d'audit)
 
-Avant ce correctif, les E2E utilisaient `.env`, donc la **base de développement** (`systelec_dev`). Les deux jours fériés et les délais de relance qu'on y trouve viennent de là (voir plus bas). Désormais :
+Avant ce correctif, les E2E utilisaient `.env`, donc la **base de développement** (`futani_dev`). Les deux jours fériés et les délais de relance qu'on y trouve viennent de là (voir plus bas). Désormais :
 
-- la base dédiée est `systelec_e2e`, sur le serveur PostgreSQL de test (`db-test`, port 5434). Elle est créée si elle est absente, jamais supprimée ;
+- la base dédiée est `futani_e2e`, sur le serveur PostgreSQL de test (`db-test`, port 5434). Elle est créée si elle est absente, jamais supprimée ;
 - l'URL est vérifiée **avant toute connexion** (`e2e/support/database-guard.ts`) : nom exact, hôte local, différente des bases de développement (`.env`) et d'intégration (`.env.test`), pas en production. La configuration Playwright elle-même refuse de se charger sinon ;
 - l'identité est confirmée par le serveur (`SELECT current_database()`) avant les migrations, les données de démonstration et les tests ;
 - la préparation (`e2e/prepare-database.ts`) s'exécute dans la commande du serveur web, **avant** la construction, avec la même base et le même dossier de fichiers (`storage-e2e/`) que le serveur testé et les utilitaires des tests. Aucun serveur déjà lancé n'est réutilisé.
 
 Démonstration exécutée :
 
-- `E2E_DATABASE_URL=<base de dev> playwright test --list` est refusé (« la base doit s'appeler systelec_e2e (reçu : systelec_dev) ») ;
+- `E2E_DATABASE_URL=<base de dev> playwright test --list` est refusé (« la base doit s'appeler futani_e2e (reçu : futani_dev) ») ;
 - relevé de la base de développement avant et après la suite E2E complète : 769 utilisateurs, 177 commandes, 2 726 lignes d'audit, dernier paramètre modifié à 17:43:56. Le relevé est identique, et aucun fichier n'a été ajouté dans `storage/` ;
-- la base `systelec_e2e` contient les commandes des tests.
+- la base `futani_e2e` contient les commandes des tests.
 
 ## Tests réellement exécutés
 
@@ -64,7 +64,7 @@ Démonstration exécutée :
 | `pnpm lint` / `pnpm typecheck` | OK |
 | `pnpm exec prisma validate` / `git diff --check` | OK |
 | `pnpm test` (unitaires et intégration PostgreSQL ; 19 migrations rejouées sur une base de test vide lors d'un passage précédent) | 63 fichiers, 439 tests réussis |
-| `pnpm test:e2e` sur la base isolée `systelec_e2e` (construction comprise) | 90 tests réussis (ordinateur et mobile) |
+| `pnpm test:e2e` sur la base isolée `futani_e2e` (construction comprise) | 90 tests réussis (ordinateur et mobile) |
 | `prisma migrate diff` / `migrate status` (base de dev ↔ schéma) | aucun écart |
 | Contre-épreuve du quota : verrou et recomptage retirés temporairement | les 3 tests de concurrence échouent ; ils passent une fois le code restauré |
 
@@ -136,7 +136,7 @@ Contrôles des commits intermédiaires (arbre de travail séparé, client Prisma
 
 ## Stabilisation
 
-**Branche :** `feat/phase-10-stabilisation` (depuis `feat/phase-10-retours-livraisons`, `dbf8564`). Guide d'exploitation : `docs/04-mise-en-service.md`. Toutes les vérifications ci-dessous ont été exécutées sur ce poste (8 cœurs, 7 Go), dans des projets Docker et des bases **jetables** : pile de production `sama-prodtest`, bases `systelec_smoke`, `systelec_e2e`. La base de développement n'a pas été touchée.
+**Branche :** `feat/phase-10-stabilisation` (depuis `feat/phase-10-retours-livraisons`, `dbf8564`). Guide d'exploitation : `docs/04-mise-en-service.md`. Toutes les vérifications ci-dessous ont été exécutées sur ce poste (8 cœurs, 7 Go), dans des projets Docker et des bases **jetables** : pile de production `sama-prodtest`, bases `futani_smoke`, `futani_e2e`. La base de développement n'a pas été touchée.
 
 ### Livré
 
@@ -155,7 +155,7 @@ Contrôles des commits intermédiaires (arbre de travail séparé, client Prisma
 | Vérification | Résultat |
 |---|---|
 | Construction des cibles `app` et `tools` sans base de données | OK (toutes les pages rendues à la demande, aucune donnée figée) |
-| Image `app` en production (`systelec_smoke`) | santé `ok`, `healthy` ; en-têtes CSP avec nonce, HSTS, `X-Frame-Options`, `nosniff`, `Referrer-Policy`, `Permissions-Policy` ; uid 1001 ; code en lecture seule ; photos privées en 404 |
+| Image `app` en production (`futani_smoke`) | santé `ok`, `healthy` ; en-têtes CSP avec nonce, HSTS, `X-Frame-Options`, `nosniff`, `Referrer-Policy`, `Permissions-Policy` ; uid 1001 ; code en lecture seule ; photos privées en 404 |
 | Pile `docker-compose.prod.yml` complète (projet jetable) | migrations (propriétaire), rôle restreint, données de base, application `healthy` (racine en lecture seule, `cap_drop: ALL`), tâche planifiée OK, base sans port publié |
 | Rôle restreint | application, tâche planifiée et données de base OK ; migrations refusées (voulu) ; vidage du journal d'audit refusé ; suppression dans le journal bloquée par son trigger ; création, modification et suppression de tables refusées ; historique des migrations inaccessible ; table créée ensuite accordée automatiquement, sans vidage possible |
 | Exercice sauvegarde et restauration | sauvegarde (51 tables, 19 migrations, empreintes) ; restauration dans une base neuve ; **contenu identique (51 tables, 312 lignes, MD5 par table)** ; fichier témoin restauré ; écrasement refusé (base existante, base en service) ; application démarrée sur la base restaurée (santé `ok`) ; triggers actifs dans la copie ; contre-épreuve : une ligne ajoutée est détectée (code de sortie 1) |

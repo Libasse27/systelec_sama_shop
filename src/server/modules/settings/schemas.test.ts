@@ -85,9 +85,9 @@ describe("paramètres : schémas", () => {
     expect(settingsSchemas.tax.safeParse({ vatDetailEnabled: true, vatRate: 18.5 }).success).toBe(false);
   });
 
-  it("garde la raison sociale historique des documents et affiche la boutique sous FUTANI SHOP", () => {
+  it("utilise FUTANI GROUP comme raison sociale et affiche la boutique sous FUTANI SHOP", () => {
     const { companyName, shopName, ninea, rccm } = settingsDefaults.company;
-    expect(companyName).toBe("SYSTELEC");
+    expect(companyName).toBe("FUTANI GROUP");
     expect(shopName).toBe("FUTANI SHOP");
     expect([ninea, rccm]).toEqual([null, null]);
   });

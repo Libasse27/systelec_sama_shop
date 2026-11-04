@@ -4,7 +4,7 @@
 # séparée (voir docs/04-mise-en-service.md, « Restaurer »).
 #
 # Usage : scripts/ops/restore.sh <dossier_de_sauvegarde> <base_cible> [dossier_fichiers_cible]
-#   base_cible               nom d'une base qui N'EXISTE PAS encore (ex. systelec_restauration_20261019)
+#   base_cible               nom d'une base qui N'EXISTE PAS encore (ex. futani_restauration_20261019)
 #   dossier_fichiers_cible   défaut : ./restauration/<base_cible>/storage (doit être absent ou vide)
 # Variables : SAMA_ENV_FILE, SAMA_COMPOSE (comme backup.sh).
 set -euo pipefail
@@ -21,8 +21,8 @@ set -a
 # shellcheck disable=SC1090
 . "$ENV_FILE"
 set +a
-DB_USER="${POSTGRES_USER:-systelec_owner}"
-LIVE_DB="${POSTGRES_DB:-systelec}"
+DB_USER="${POSTGRES_USER:-futani_owner}"
+LIVE_DB="${POSTGRES_DB:-futani}"
 [[ "$TARGET_DB" != "$LIVE_DB" ]] || { echo "Refus : la base cible est la base en service ($LIVE_DB)" >&2; exit 1; }
 
 echo "Vérification des empreintes…"

@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.7
 # Image de production de FUTANI SHOP (voir docs/04-mise-en-service.md).
-#   docker build --target app   -t systelec-sama-shop:<version> .   → serveur web (non-root, standalone)
-#   docker build --target tools -t systelec-sama-shop-tools:<version> . → migrations, données de base,
+#   docker build --target app   -t futani-sama-shop:<version> .   → serveur web (non-root, standalone)
+#   docker build --target tools -t futani-sama-shop-tools:<version> . → migrations, données de base,
 #     premier administrateur, tâche planifiée (pnpm orders:expire)
 # Aucun secret n'est intégré à l'image : la configuration est fournie à l'exécution (variables d'environnement).
 

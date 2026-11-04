@@ -24,7 +24,7 @@ describe("partenaires, décision 4 (PostgreSQL)", () => {
     await resetDatabase();
     await syncRolesAndPermissions(db);
     editor = await actorWith("ADMIN");
-    dir = await mkdtemp(path.join(tmpdir(), "systelec-partenaires-"));
+    dir = await mkdtemp(path.join(tmpdir(), "futani-partenaires-"));
     storage = createLocalStorage(dir);
   });
   afterEach(() => rm(dir, { recursive: true, force: true }));

@@ -121,10 +121,10 @@ function FooterBottomBar({ company }: { company: CompanySettings }) {
 }
 
 /**
- * Pied de page : marque, boutique, aide (seules les pages publiées), coordonnées et paiement sur une
- * même rangée (deux colonnes sur tablette, la marque occupant toute la largeur ; une seule sur mobile),
- * puis une bande pleine largeur pour les réseaux sociaux (seulement les liens enregistrés et conformes,
- * src/lib/social-links.ts) et une barre finale : copyright, mentions légales, signature du groupe.
+ * Pied de page : marque (logo, slogan, puis petites icônes des réseaux sociaux : seulement les liens
+ * enregistrés et conformes, src/lib/social-links.ts), boutique, aide (seules les pages publiées),
+ * coordonnées et paiement sur une même rangée (deux colonnes sur tablette, la marque occupant toute la
+ * largeur ; une seule sur mobile), puis une barre finale : copyright, mentions légales, signature du groupe.
  * Les valeurs saisies dans l'administration sont du texte brut et peuvent couper n'importe où (wrap-anywhere).
  */
 export async function SiteFooter() {
@@ -141,6 +141,8 @@ export async function SiteFooter() {
             <br />
             {SHOP_PILLARS_LINE}
           </p>
+          {/* Sous le slogan, sans titre : e2e/social-links.spec.ts vérifie cet emplacement. */}
+          <SocialLinks links={company.socialLinks} />
         </div>
         <FooterSection title="Boutique">
           <Link href="/recherche" className={linkClass}>
@@ -168,8 +170,6 @@ export async function SiteFooter() {
         </FooterSection>
         <FooterContact company={company} />
         <FooterPayment />
-        {/* Sous toutes les colonnes : e2e/social-links.spec.ts vérifie cet emplacement. */}
-        <SocialLinks links={company.socialLinks} className="border-t border-white/10 pt-6 sm:col-span-2 sm:flex-row sm:items-center sm:gap-4 lg:col-span-5" />
       </div>
       <FooterBottomBar company={company} />
     </footer>

@@ -26,10 +26,10 @@ Dans ce document : `C="docker compose -f docker-compose.prod.yml --env-file .env
 
 ### Déroulé
 
-Sur le serveur, dans `/srv/systelec` (dépôt cloné à la version à déployer) :
+Sur le serveur, dans `/srv/futani` (dépôt cloné à la version à déployer) :
 
 ```bash
-git clone https://github.com/Libasse27/systelec_sama_shop.git /srv/systelec && cd /srv/systelec
+git clone https://github.com/Libasse27/systelec_sama_shop.git /srv/futani && cd /srv/futani
 git checkout <étiquette ou commit validé>
 # section 2 : construire les images
 scripts/ops/init-env.sh https://votre-domaine "$(git rev-parse --short HEAD)"   # section 3
@@ -44,8 +44,8 @@ Depuis le dépôt, sur la version à déployer (étiquette Git ou commit) :
 
 ```bash
 VERSION=$(git rev-parse --short HEAD)
-docker build --target app   -t systelec-sama-shop:$VERSION .
-docker build --target tools -t systelec-sama-shop-tools:$VERSION .
+docker build --target app   -t futani-sama-shop:$VERSION .
+docker build --target tools -t futani-sama-shop-tools:$VERSION .
 ```
 
 - `app` : serveur web autonome (Next.js `standalone`). Il tourne sous un utilisateur non-root (`nextjs`, uid 1001), avec la racine en lecture seule, sans capacité Linux et avec une sonde de santé. npm n'y figure pas. Seuls `/app/storage` (fichiers téléversés) et `/app/.next/cache` sont modifiables.
@@ -136,7 +136,7 @@ $C up -d app
 
 **Rôle restreint de l'application** (`scripts/ops/app-role.sql`, idempotent).
 
-L'application se connecte avec `systelec_app`, qui :
+L'application se connecte avec `futani_app`, qui :
 - lit et écrit les données ;
 - n'a pas `TRUNCATE`, qui contournerait les triggers d'ajout seul du journal d'audit, des encaissements et des historiques ;
 - ne peut ni créer, ni modifier, ni supprimer de tables ;
@@ -164,10 +164,10 @@ votre-domaine.sn {
 
 ## 6. Tâche planifiée
 
-Expiration des réservations, paniers et devis, alertes et relances des retours, renvoi des e-mails en échec, toutes les 15 minutes (crontab de l'utilisateur qui exploite Docker). Modèle avec la sauvegarde nocturne : `deploy/crontab.example` (créer d'abord `/var/log/systelec`, accessible en écriture à cet utilisateur).
+Expiration des réservations, paniers et devis, alertes et relances des retours, renvoi des e-mails en échec, toutes les 15 minutes (crontab de l'utilisateur qui exploite Docker). Modèle avec la sauvegarde nocturne : `deploy/crontab.example` (créer d'abord `/var/log/futani`, accessible en écriture à cet utilisateur).
 
 ```
-*/15 * * * * cd /srv/systelec && docker compose -f docker-compose.prod.yml --env-file .env.production run --rm tasks >> /var/log/systelec/taches.log 2>&1
+*/15 * * * * cd /srv/futani && docker compose -f docker-compose.prod.yml --env-file .env.production run --rm tasks >> /var/log/futani/taches.log 2>&1
 ```
 
 ## 7. Sauvegardes
@@ -190,8 +190,8 @@ scripts/ops/backup.sh /srv/sauvegardes        # base (pg_dump -Fc) + fichiers t�
 **Exercice mensuel** (sans toucher au service) :
 
 ```bash
-scripts/ops/restore.sh /srv/sauvegardes/<date> systelec_exercice /srv/exercice/storage
-scripts/ops/verify-restore.sh systelec systelec_exercice   # contenu identique table par table (lignes + MD5)
+scripts/ops/restore.sh /srv/sauvegardes/<date> futani_exercice /srv/exercice/storage
+scripts/ops/verify-restore.sh futani futani_exercice   # contenu identique table par table (lignes + MD5)
 ```
 
 `restore.sh` exige le service `db` démarré, une sauvegarde complète (`SHA256SUMS`, dump, archive et manifeste), et un accès en écriture à la base et au parent du dossier cible. Il vérifie les empreintes et restaure dans une **base neuve** et un **dossier absent ou vide**. Il refuse d'écraser une base existante, la base en service ou un dossier non vide. Il contrôle aussi le nombre de migrations restaurées.
@@ -200,13 +200,13 @@ scripts/ops/verify-restore.sh systelec systelec_exercice   # contenu identique t
 
 **Incident (bascule sur une sauvegarde)** :
 1. `$C stop app` (et suspendre la tâche planifiée).
-2. `scripts/ops/restore.sh <sauvegarde> systelec_restaure_<date> /srv/restaure/storage`.
+2. `scripts/ops/restore.sh <sauvegarde> futani_restaure_<date> /srv/restaure/storage`.
 3. Relancer `scripts/ops/app-role.sql` sur la base restaurée.
 4. Recopier les fichiers dans le volume :
    ```bash
-   docker run --rm -v systelec-sama-shop_storage:/dst -v /srv/restaure/storage:/src:ro alpine sh -c 'cp -a /src/. /dst/'
+   docker run --rm -v futani-sama-shop_storage:/dst -v /srv/restaure/storage:/src:ro alpine sh -c 'cp -a /src/. /dst/'
    ```
-5. Mettre `POSTGRES_DB=systelec_restaure_<date>` dans `.env.production`, puis `$C up -d app` et vérifier la santé et quelques écrans.
+5. Mettre `POSTGRES_DB=futani_restaure_<date>` dans `.env.production`, puis `$C up -d app` et vérifier la santé et quelques écrans.
 6. L'ancienne base est conservée pour l'enquête ; ne la supprimer qu'après décision écrite.
 
 Non exécuté pendant la stabilisation : les étapes 4 et 5. L'application a été démarrée directement sur la base restaurée, avec succès.
@@ -214,6 +214,8 @@ Non exécuté pendant la stabilisation : les étapes 4 et 5. L'application a ét
 ## 9. Mise à jour
 
 La migration `20261019090000_notification_retries` a été testée avec `pnpm test:migration` sur un PostgreSQL jetable : le test provoque un échec, vérifie l'annulation transactionnelle, puis la reprise avec Prisma. La procédure opérationnelle complète ci-dessous (sauvegarde, mise à jour de la pile, contrôles et retour arrière) est documentée, mais n'a pas été vérifiée de bout en bout sur une pile jetable pour cette version. `ANCIENNE` et `NOUVELLE` désignent les étiquettes d'images (section 2).
+
+> **Installation créée avant le passage aux noms `futani` :** le projet Compose, les volumes, la base, les rôles et les images ont changé de nom par défaut. Sans précaution, `up -d` crée des volumes vides et l'application démarre sur une base vide (les anciennes données restent dans les anciens volumes). Avant la mise à jour, fixez dans `.env.production` les valeurs réellement en place : `COMPOSE_PROJECT_NAME`, `POSTGRES_DB`, `POSTGRES_USER`, `APP_DB_USER`, `APP_IMAGE` et `TOOLS_IMAGE`. Vérifiez aussi le dossier et les journaux indiqués dans la crontab (section 6), ainsi que la raison sociale dans Paramètres : la valeur par défaut est désormais FUTANI GROUP.
 
 1. **Construire** les images `NOUVELLE` (section 2). Le service continue de tourner.
 2. **Sauvegarder et vérifier la copie** :
@@ -228,7 +230,7 @@ La migration `20261019090000_notification_retries` a été testée avec `pnpm te
 6. **Appliquer les migrations** : `$C run --rm migrate`, puis `$C run --rm migrate pnpm exec prisma migrate status` doit afficher « Database schema is up to date! ». Si la version ajoute des permissions (c'est le cas du module Contact, section 14), lancer ensuite `$C run --rm tasks pnpm db:seed` : sans cela, personne n'a accès aux nouveaux écrans. C'est aussi le cas de la permission `announcements.manage` (bandeau d'annonces, réservée à l'administrateur principal) : lancer `pnpm db:seed` après le déploiement.
 7. **En cas d'échec de la migration** (le service ancien continue de tourner : le schéma n'a pas changé ou la migration est atomique) :
    - **Diagnostic** : `$C logs --since 30m db | grep ERROR` donne la cause exacte (Prisma n'affiche parfois que « current transaction is aborted »). `migrate status` liste la migration en échec ; une relance est refusée (`P3009`) tant que l'échec n'est pas résolu (`P3018` désigne l'échec lui-même).
-   - **Vérifier ce qui a été appliqué** : `$C exec -T db psql -U systelec_owner -d systelec -c '\d notifications'` (valeurs de `POSTGRES_USER` et `POSTGRES_DB`, à saisir sans charger le fichier dans le shell) (adapter la table à la migration). La migration `20261019090000_notification_retries` est transactionnelle : après un échec, **rien** n'est appliqué (pas de colonne `attempts`).
+   - **Vérifier ce qui a été appliqué** : `$C exec -T db psql -U futani_owner -d futani -c '\d notifications'` (valeurs de `POSTGRES_USER` et `POSTGRES_DB`, à saisir sans charger le fichier dans le shell) (adapter la table à la migration). La migration `20261019090000_notification_retries` est transactionnelle : après un échec, **rien** n'est appliqué (pas de colonne `attempts`).
    - **Reprise, seulement si rien n'a été appliqué** : corriger la cause, puis
      ```bash
      $C run --rm migrate pnpm exec prisma migrate resolve --rolled-back <nom_de_la_migration>
@@ -244,7 +246,7 @@ La migration `20261019090000_notification_retries` a été testée avec `pnpm te
 9. **Vérifier l'envoi et la tâche de renvoi** :
    - e-mail : demander une réinitialisation de mot de passe pour votre propre compte (`/mot-de-passe-oublie`) et vérifier la réception (section 3) ;
    - tâche : la lancer une fois à la main, `$C run --rm tasks`, et vérifier qu'elle se termine par « E-mails renvoyés : … envoyé(s), … en échec, … sans fournisseur. ».
-10. **Réactiver la tâche planifiée** : décommenter la ligne dans `crontab -e`, vérifier `crontab -l`, puis, au quart d'heure suivant, la nouvelle entrée de `/var/log/systelec/taches.log`.
+10. **Réactiver la tâche planifiée** : décommenter la ligne dans `crontab -e`, vérifier `crontab -l`, puis, au quart d'heure suivant, la nouvelle entrée de `/var/log/futani/taches.log`.
 11. **Retour arrière de l'application** (si un contrôle des étapes 8 ou 9 échoue) : `APP_VERSION=ANCIENNE` dans `.env.production`, puis `$C up -d --wait app` et `curl …/api/health` ; la tâche planifiée reprend aussi l'ancienne image.
     - Les migrations ne vont que vers l'avant et restent en place. Celle du renvoi (`20261019090000_notification_retries`) n'ajoute que des colonnes avec valeur par défaut, une contrainte et un index : l'ancienne version fonctionne avec, **aucune restauration n'est nécessaire**. Les e-mails en échec gardent leur prochain essai, repris au retour de la nouvelle version.
     - Pour une future migration qui modifierait le schéma de façon incompatible, restaurer la sauvegarde de l'étape 2 (section 8). Toute nouvelle migration doit indiquer dans son en-tête si l'ancienne version reste compatible.
@@ -355,7 +357,7 @@ La limite de 5 messages par heure et par connexion repose sur l'adresse IP trans
 1. Valeur configurée : `grep '^TRUSTED_PROXY_HOPS=' .env.production` doit afficher `TRUSTED_PROXY_HOPS=1` (un seul proxy). Une ligne absente vaut aussi `1` (valeur par défaut de `docker-compose.prod.yml`).
 2. Preuve de fonctionnement, après l'envoi d'un message d'essai depuis un poste extérieur :
    ```bash
-   $C exec -T db psql -U systelec_owner -d systelec -c "SELECT ip, \"createdAt\" FROM audit_logs WHERE action = 'contact_message.create' ORDER BY \"createdAt\" DESC LIMIT 1"
+   $C exec -T db psql -U futani_owner -d futani -c "SELECT ip, \"createdAt\" FROM audit_logs WHERE action = 'contact_message.create' ORDER BY \"createdAt\" DESC LIMIT 1"
    ```
    (valeurs de `POSTGRES_USER` et `POSTGRES_DB`). Attendu : l'adresse publique du poste d'essai. Une valeur vide signifie qu'aucune limite par IP ne s'applique (valeur `0`, ou supérieure au nombre de proxys) ; une adresse locale (`127.0.0.1`, `172.…`) signale un proxy mal configuré.
 

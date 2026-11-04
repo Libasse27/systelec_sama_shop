@@ -14,7 +14,7 @@ set -a
 # shellcheck disable=SC1090
 . "$ENV_FILE"
 set +a
-DB_USER="${POSTGRES_USER:-systelec_owner}"
+DB_USER="${POSTGRES_USER:-futani_owner}"
 
 # Pour chaque table du schéma public : « table|lignes|md5 », trié (le contenu est ordonné par sa forme texte).
 SNAPSHOT_SQL=$(cat <<'SQL'
