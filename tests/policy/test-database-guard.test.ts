@@ -3,8 +3,8 @@ import { assertDisposableTestDatabase, type DisposableTestDatabase } from "../..
 
 const runId = "a".repeat(24);
 const context: DisposableTestDatabase = {
-  url: `postgresql://it_${runId.slice(0, 12)}:secret@127.0.0.1:54321/systelec_test`,
-  database: "systelec_test",
+  url: `postgresql://it_${runId.slice(0, 12)}:secret@127.0.0.1:54321/futani_test`,
+  database: "futani_test",
   user: `it_${runId.slice(0, 12)}`,
   port: 54321,
   runId,
@@ -20,7 +20,7 @@ describe("garde du PostgreSQL d'intégration jetable", () => {
   it.each([
     { port: 54322 },
     { user: "it_other" },
-    { database: "systelec_test2" },
+    { database: "futani_test2" },
     { containerLabel: "other-run" },
     { containerId: "short" },
     { url: context.url.replace("127.0.0.1", "db.example") },

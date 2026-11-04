@@ -23,7 +23,7 @@ describe("administration des paramètres (PostgreSQL)", () => {
     await resetDatabase();
     await syncRolesAndPermissions(db);
     admin = await actorWith("ADMIN");
-    dir = await mkdtemp(path.join(tmpdir(), "systelec-logo-"));
+    dir = await mkdtemp(path.join(tmpdir(), "futani-logo-"));
     storage = createLocalStorage(dir);
   });
 
@@ -93,17 +93,17 @@ describe("administration des paramètres (PostgreSQL)", () => {
       const { logoUrl } = await uploadLogo(db, storage, admin, PNG);
       const saved = await saveSettings(db, admin, "company", {
         ...settingsDefaults.company,
-        companyName: "SYSTELEC SARL",
+        companyName: "FUTANI SARL",
         address: "Dakar, Plateau",
         phone: "+221 33 000 00 00",
         email: "contact@example.sn",
         socialLinks: submittedLinks,
       });
-      expect(saved).toMatchObject({ companyName: "SYSTELEC SARL", address: "Dakar, Plateau", phone: "+221 33 000 00 00", logoUrl, socialLinks: legacyLinks });
+      expect(saved).toMatchObject({ companyName: "FUTANI SARL", address: "Dakar, Plateau", phone: "+221 33 000 00 00", logoUrl, socialLinks: legacyLinks });
       expect(await getSetting("company")).toEqual(saved);
       expect(await rawStoredLinks()).toEqual(legacyLinks);
       const audit = await db.auditLog.findFirst({ where: { action: "settings.update", entityId: "company" }, orderBy: { createdAt: "desc" } });
-      expect(audit?.after).toMatchObject({ companyName: "SYSTELEC SARL", socialLinks: legacyLinks });
+      expect(audit?.after).toMatchObject({ companyName: "FUTANI SARL", socialLinks: legacyLinks });
     });
 
     it("se corrigent un par un : le lien corrigé est enregistré, les autres restent inchangés", async () => {

@@ -17,7 +17,7 @@ import { assertDisposableTestDatabase } from "./test-database";
 
 /** Même image que la production (docker-compose.prod.yml), épinglée par empreinte. */
 const POSTGRES_IMAGE = "postgres:17.11-alpine@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24";
-const RUN_LABEL = "systelec.migration-test.run";
+const RUN_LABEL = "futani.migration-test.run";
 const READY_TIMEOUT_MS = 60_000;
 const READY_POLL_MS = 500;
 
@@ -131,13 +131,13 @@ export default async function setup(project: TestProject): Promise<() => void> {
   const database = `migtest_${runId}`;
   const user = `migtest_${runId.slice(0, 8)}`;
   const password = randomBytes(24).toString("hex");
-  const secretVolume = `systelec-migsecret-${runId}`;
+  const secretVolume = `futani-migsecret-${runId}`;
   createPasswordVolume(secretVolume, runId, password);
   let containerId: string | undefined;
   try {
     containerId = docker([
       "run", "--detach",
-      "--name", `systelec-migtest-${runId}`,
+      "--name", `futani-migtest-${runId}`,
       "--label", `${RUN_LABEL}=${runId}`,
       "--env", `POSTGRES_USER=${user}`,
       "--env", `POSTGRES_DB=${database}`,
@@ -148,7 +148,7 @@ export default async function setup(project: TestProject): Promise<() => void> {
       POSTGRES_IMAGE,
       "-c", "export POSTGRES_PASSWORD=\"$(cat /run/secrets/password)\"; exec docker-entrypoint.sh postgres",
     ]);
-    const port = await publishedPort(containerId, runId, `systelec-migtest-${runId}`);
+    const port = await publishedPort(containerId, runId, `futani-migtest-${runId}`);
     const url = `postgresql://${user}:${password}@127.0.0.1:${port}/${database}`;
     await waitUntilReady(url, containerId);
     project.provide("migrationDatabase", { url, database, user, port, runId });
@@ -173,18 +173,18 @@ export default async function setup(project: TestProject): Promise<() => void> {
 /** Démarre une instance séparée pour les tests d'intégration, avec un nom de base connu et strictement local. */
 export async function startIntegrationDatabase(project: TestProject): Promise<() => void> {
   const runId = randomBytes(12).toString("hex");
-  const database = "systelec_test";
+  const database = "futani_test";
   const user = `it_${runId.slice(0, 12)}`;
   const password = randomBytes(24).toString("hex");
   const containerLabel = runId;
-  const secretVolume = `systelec-itsecret-${runId}`;
+  const secretVolume = `futani-itsecret-${runId}`;
   createPasswordVolume(secretVolume, runId, password);
   let storageDirectory: string | undefined;
   let containerId: string | undefined;
   try {
     containerId = docker([
       "run", "--detach",
-      "--name", `systelec-it-${runId}`,
+      "--name", `futani-it-${runId}`,
       "--label", `${RUN_LABEL}=${runId}`,
       "--env", `POSTGRES_USER=${user}`,
       "--env", `POSTGRES_DB=${database}`,
@@ -195,10 +195,10 @@ export async function startIntegrationDatabase(project: TestProject): Promise<()
       POSTGRES_IMAGE,
       "-c", "export POSTGRES_PASSWORD=\"$(cat /run/secrets/password)\"; exec docker-entrypoint.sh postgres",
     ]);
-    const port = await publishedPort(containerId, runId, `systelec-it-${runId}`);
+    const port = await publishedPort(containerId, runId, `futani-it-${runId}`);
     const url = `postgresql://${user}:${password}@127.0.0.1:${port}/${database}`;
     await waitUntilReady(url, containerId);
-    const integrationStorageDirectory = mkdtempSync(path.join(os.tmpdir(), `systelec-integration-${runId}-`));
+    const integrationStorageDirectory = mkdtempSync(path.join(os.tmpdir(), `futani-integration-${runId}-`));
     storageDirectory = integrationStorageDirectory;
     const provided = { url, database, user, port, runId, containerId, containerLabel, storageDirectory: integrationStorageDirectory };
     assertDisposableTestDatabase(provided);
@@ -220,7 +220,7 @@ export async function startIntegrationDatabase(project: TestProject): Promise<()
   if (!containerId) throw new Error("Le conteneur PostgreSQL jetable n'a pas été créé.");
   return () => {
     try {
-      if (storageDirectory && path.basename(storageDirectory).startsWith(`systelec-integration-${runId}-`)) {
+      if (storageDirectory && path.basename(storageDirectory).startsWith(`futani-integration-${runId}-`)) {
         rmSync(storageDirectory, { recursive: true, force: true });
       }
     } finally {

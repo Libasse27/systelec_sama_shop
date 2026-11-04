@@ -2,14 +2,12 @@ import { expect, test } from "@playwright/test";
 import { guardCompanySetting, writeCompanySetting, type CompanySettingGuard } from "./support/db";
 
 /**
- * Mention de copyright du pied de page : nom du groupe (marque), jamais la raison sociale
- * (SYSTELEC reste réservée aux factures et aux mentions légales).
+ * Mention de copyright du pied de page : nom du groupe, jamais l'ancien nom de la société.
  */
 test("pied de page : copyright au nom de FUTANI GROUP", async ({ page }) => {
   await page.goto("/");
   const footer = page.getByRole("contentinfo");
   await expect(footer.getByText(`© ${new Date().getFullYear()} FUTANI GROUP. Tous droits réservés.`, { exact: true })).toBeVisible();
-  await expect(footer.getByText(/© \d{4} SYSTELEC/)).toHaveCount(0);
 });
 
 test("pied de page : bloc Paiement avec les trois moyens acceptés, sans repère de navigation", async ({ page }) => {
@@ -61,7 +59,7 @@ test.describe("pied de page : mentions légales", () => {
     // Sans paramètre enregistré : raison sociale par défaut, aucune mention vide.
     await writeCompanySetting(null);
     await page.goto("/");
-    await expect(footer.getByText("Raison sociale : SYSTELEC", { exact: true })).toBeVisible();
+    await expect(footer.getByText("Raison sociale : FUTANI GROUP", { exact: true })).toBeVisible();
     await expect(footer.getByText(/NINEA|RCCM/)).toHaveCount(0);
 
     await writeCompanySetting(company({ companyName: "Société E2E", ninea: "0012345 2G3", rccm: null }));

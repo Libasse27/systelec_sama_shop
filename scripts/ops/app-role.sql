@@ -7,7 +7,7 @@
 --     des historiques), sans droit de créer ou modifier des tables, et sans être propriétaire de rien.
 --
 -- Idempotent. À lancer par le propriétaire, connecté à la base, après la première migration :
---   psql "<URL du propriétaire>" -v app_role=systelec_app -v app_password="$APP_DB_PASSWORD" -f scripts/ops/app-role.sql
+--   psql "<URL du propriétaire>" -v app_role=futani_app -v app_password="$APP_DB_PASSWORD" -f scripts/ops/app-role.sql
 -- Le mot de passe est passé en variable (jamais écrit dans un fichier versionné).
 
 \set ON_ERROR_STOP on

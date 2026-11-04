@@ -3,7 +3,7 @@ import { Client } from "pg";
 import { E2E_DATABASE_NAME, E2E_STORAGE_DIR, resolveE2eDatabaseUrl } from "./support/database-guard";
 
 /**
- * Prépare la base E2E dédiée (systelec_e2e, serveur de test) : identité vérifiée avant toute écriture,
+ * Prépare la base E2E dédiée (futani_e2e, serveur de test) : identité vérifiée avant toute écriture,
  * création si absente (jamais de suppression), migrations, puis structure de base et données de
  * démonstration « [DÉMO] » (idempotent). La base de développement n'est jamais touchée.
  * Lancé par la commande du serveur web de Playwright, AVANT la construction (qui lit déjà la base).

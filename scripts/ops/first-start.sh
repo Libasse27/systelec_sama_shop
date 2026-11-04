@@ -20,9 +20,9 @@ set -a
 # shellcheck disable=SC1090
 . "$ENV_FILE"
 set +a
-DB_USER="${POSTGRES_USER:-systelec_owner}"
-DB_NAME="${POSTGRES_DB:-systelec}"
-APP_ROLE="${APP_DB_USER:-systelec_app}"
+DB_USER="${POSTGRES_USER:-futani_owner}"
+DB_NAME="${POSTGRES_DB:-futani}"
+APP_ROLE="${APP_DB_USER:-futani_app}"
 sql() { $COMPOSE exec -T db psql -U "$DB_USER" -d "$DB_NAME" -v ON_ERROR_STOP=1 -tAc "$1"; }
 
 step "Base PostgreSQL"

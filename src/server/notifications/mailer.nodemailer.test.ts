@@ -28,7 +28,7 @@ vi.mock("nodemailer", async (importOriginal) => {
 });
 
 const BASE = { DATABASE_URL: "postgresql://user:pass@localhost:5432/db", AUTH_SECRET: "x".repeat(32) };
-const SMTP = { SMTP_HOST: "smtp-relay.brevo.com", SMTP_PORT: "587", SMTP_USER: "compte", SMTP_PASSWORD: "cle-smtp-secrete-123", SMTP_FROM: "Boutique <contact@systelec.sn>" };
+const SMTP = { SMTP_HOST: "smtp-relay.brevo.com", SMTP_PORT: "587", SMTP_USER: "compte", SMTP_PASSWORD: "cle-smtp-secrete-123", SMTP_FROM: "Boutique <contact@futani.sn>" };
 
 /** Module rechargé à chaque test : configuration et transport sont mis en cache au premier appel. */
 async function loadMailer() {
@@ -89,10 +89,10 @@ describe("envoi d'e-mails avec le vrai nodemailer (jsonTransport)", () => {
 
     expect(delivered).toHaveLength(1);
     const { envelope, message } = delivered[0]!;
-    expect(envelope).toEqual({ from: "contact@systelec.sn", to: ["awa.diop@example.sn"] });
+    expect(envelope).toEqual({ from: "contact@futani.sn", to: ["awa.diop@example.sn"] });
     const parsed = JSON.parse(message);
     expect(parsed).toMatchObject({
-      from: { address: "contact@systelec.sn", name: "Boutique" },
+      from: { address: "contact@futani.sn", name: "Boutique" },
       to: [{ address: "awa.diop@example.sn" }],
       subject: "Commande CMD-2026-000001 reçue",
       text,

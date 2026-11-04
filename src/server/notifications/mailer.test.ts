@@ -5,7 +5,7 @@ const createTransport = vi.fn(() => ({ sendMail }));
 vi.mock("nodemailer", () => ({ default: { createTransport } }));
 
 const BASE = { DATABASE_URL: "postgresql://user:pass@localhost:5432/db", AUTH_SECRET: "x".repeat(32) };
-const SMTP = { SMTP_HOST: "smtp-relay.brevo.com", SMTP_PORT: "587", SMTP_USER: "compte", SMTP_PASSWORD: "cle-smtp-secrete-123", SMTP_FROM: "Boutique <contact@systelec.sn>" };
+const SMTP = { SMTP_HOST: "smtp-relay.brevo.com", SMTP_PORT: "587", SMTP_USER: "compte", SMTP_PASSWORD: "cle-smtp-secrete-123", SMTP_FROM: "Boutique <contact@futani.sn>" };
 const MESSAGE = { to: "client@example.sn", subject: "Commande CMD-2026-000001 reçue", text: "Bonjour" };
 
 /** Module rechargé à chaque test : configuration et transport sont mis en cache au premier appel. */

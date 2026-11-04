@@ -95,7 +95,7 @@ describe(`migration ${TARGET} : atomique sous PostgreSQL (serveur jetable)`, () 
         to_regclass('public._prisma_migrations') IS NOT NULL AS history`);
     expect(identity).toEqual({ database: target.database, user: target.user, others: "0", history: false });
 
-    workDir = mkdtempSync(path.join(os.tmpdir(), `systelec-migration-${target.runId}-`));
+    workDir = mkdtempSync(path.join(os.tmpdir(), `futani-migration-${target.runId}-`));
     const before = prepareConfig("avant", false);
     full = prepareConfig("complete", true);
     const deployed = prisma(before, "migrate", "deploy");

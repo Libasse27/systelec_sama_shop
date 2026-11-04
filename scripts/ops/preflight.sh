@@ -60,7 +60,7 @@ else
   (( ${#POSTGRES_PASSWORD} >= SECRET_MIN )) && ok "POSTGRES_PASSWORD présent" || fail "POSTGRES_PASSWORD absent ou trop court ($SECRET_MIN caractères)"
   (( ${#APP_DB_PASSWORD} >= SECRET_MIN )) && ok "APP_DB_PASSWORD présent" || fail "APP_DB_PASSWORD absent ou trop court ($SECRET_MIN caractères)"
   [[ "${APP_DB_PASSWORD:-}" != "${POSTGRES_PASSWORD:-}" ]] || fail "APP_DB_PASSWORD identique à POSTGRES_PASSWORD"
-  [[ "${APP_DB_USER:-systelec_app}" != "${POSTGRES_USER:-systelec_owner}" ]] && ok "rôle applicatif distinct du propriétaire" || fail "APP_DB_USER identique à POSTGRES_USER"
+  [[ "${APP_DB_USER:-futani_app}" != "${POSTGRES_USER:-futani_owner}" ]] && ok "rôle applicatif distinct du propriétaire" || fail "APP_DB_USER identique à POSTGRES_USER"
   [[ "${TRUSTED_PROXY_HOPS:-1}" =~ ^[0-5]$ ]] && ok "TRUSTED_PROXY_HOPS=${TRUSTED_PROXY_HOPS:-1}" || fail "TRUSTED_PROXY_HOPS invalide (0 à 5)"
   if [[ -z "${SMTP_HOST:-}" ]]; then
     warn "SMTP_HOST vide : aucun e-mail ne sera envoyé (confirmations, relances des retours, réinitialisations)"
@@ -75,8 +75,8 @@ else
 fi
 
 echo "Images"
-APP_REF="${APP_IMAGE:-systelec-sama-shop}:${APP_VERSION:-absente}"
-TOOLS_REF="${TOOLS_IMAGE:-systelec-sama-shop-tools}:${APP_VERSION:-absente}"
+APP_REF="${APP_IMAGE:-futani-sama-shop}:${APP_VERSION:-absente}"
+TOOLS_REF="${TOOLS_IMAGE:-futani-sama-shop-tools}:${APP_VERSION:-absente}"
 APP_PRESENT=0
 if docker image inspect "$APP_REF" > /dev/null 2>&1; then ok "$APP_REF"; APP_PRESENT=1; else fail "$APP_REF absente (docs/04, section 2)"; fi
 docker image inspect "$TOOLS_REF" > /dev/null 2>&1 && ok "$TOOLS_REF" || fail "$TOOLS_REF absente (docs/04, section 2)"

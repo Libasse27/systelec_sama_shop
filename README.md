@@ -2,7 +2,6 @@
 
 Plateforme e-commerce de **FUTANI SHOP**, la boutique officielle de **FUTANI GROUP**, et des services techniques de **FUTANI TECH** (Sénégal) : vente d'équipements informatiques, réseau, électroniques, électriques et de sécurité ; maintenance, réseaux, vidéosurveillance et électricité. Paiement **hors ligne** : espèces, Orange Money ou Wave, enregistrés à la main par le personnel (aucune passerelle), livraison à domicile et retrait en boutique.
 
-> Nom technique historique : le dépôt, les images Docker, les bases et les rôles PostgreSQL gardent le préfixe `systelec` (identifiants techniques, inchangés).
 
 > Statut : Phase 9 terminée (administration avancée, voir [rapport](docs/rapports/phase-9.md)). Prochaine étape : Phase 10, stabilisation et mise en service.
 
@@ -56,16 +55,16 @@ ouvrables, jours fériés et délais de relance : **Administration → Paramètr
 - `pnpm test` exécute les projets Vitest configurés, y compris les tests PostgreSQL jetables ; Docker
   est donc requis pour cette commande complète.
 
-Les E2E sont distincts des tests Vitest. `pnpm test:e2e` cible la base persistante `systelec_e2e` et le
+Les E2E sont distincts des tests Vitest. `pnpm test:e2e` cible la base persistante `futani_e2e` et le
 stockage `storage-e2e/`. L'adresse du serveur vient de `E2E_DATABASE_URL` ou de `.env.test` ; le nom de
-base est fixé à `systelec_e2e`. Ce parcours n'est pas isolé par exécution. Ne lancez pas les E2E tant
+base est fixé à `futani_e2e`. Ce parcours n'est pas isolé par exécution. Ne lancez pas les E2E tant
 que leur isolation par exécution n'a pas été mise en place et vérifiée. N'utilisez jamais la base de
 développement (`.env`) ou une base partagée pour les tests PostgreSQL.
 
 Les lanceurs PostgreSQL jetables nettoient leurs conteneurs, volumes secrets et répertoires temporaires
 à la fin normale du run et après les erreurs interceptées. Une interruption brutale peut laisser des
 ressources. Pour les récupérer, ne considérez que les conteneurs arrêtés et volumes portant l'étiquette
-`systelec.migration-test.run`, puis vérifiez que leur nom et leur étiquette correspondent au même
+`futani.migration-test.run`, puis vérifiez que leur nom et leur étiquette correspondent au même
 identifiant de run avant de supprimer chaque ressource. Ne supprimez aucun conteneur actif ou ressource
 sans cette vérification et n'utilisez pas `docker system prune`. Le contenu du secret n'est pas
 nécessaire à ce nettoyage.

@@ -30,7 +30,7 @@ Les choix techniques réversibles (bibliothèques, structure) sont documentés d
 | D2 | Paiement partiel en espèces activé au lancement ? | Non (désactivé, activable par l'admin) |
 | D3 | Politique de réservation du stock | Réservé dès la création de la commande ; libéré à l'annulation ou après 48 h sans confirmation (durée paramétrable) |
 | D4 | Point de retrait : adresse, horaires, téléphone ? Espèces au retrait ? | Option masquée tant que l'adresse n'est pas renseignée ; espèces au retrait autorisées |
-| D5 | Zones de livraison, frais, seuils de gratuité, délais | À fournir par SYSTELEC. En attendant : données de démo marquées « DÉMO », jamais chargées en production |
+| D5 | Zones de livraison, frais, seuils de gratuité, délais | À fournir par FUTANI. En attendant : données de démo marquées « DÉMO », jamais chargées en production |
 | D6 | TVA (18 % au Sénégal) : prix TTC ? TVA détaillée sur factures ? | Prix saisis et affichés TTC ; détail TVA désactivé tant que non validé avec votre comptable |
 | D7 | Mentions légales des factures/reçus (NINEA, RCCM, raison sociale) | À fournir ; champs administrables |
 | D8 | Avis clients | Désactivés au lancement ; plus tard, achats vérifiés et modérés uniquement |
@@ -92,7 +92,7 @@ Questions restées ouvertes après les correctifs de la phase 9 (« Reste à dé
 
 **Quotas des demandes du client :** atomiques (verrou consultatif par connexion puis verrou de la commande, comptage dans la transaction), voir `docs/rapports/phase-10.md`.
 
-**Isolation des tests E2E :** base dédiée `systelec_e2e` sur le serveur PostgreSQL de test (service `db-test`), vérifiée avant toute écriture (nom exact, hôte local, différente des bases de développement et d'intégration, pas en production, identité confirmée par `current_database()`), dossier de fichiers `storage-e2e/`, aucun serveur existant réutilisé. La base de développement n'est plus jamais modifiée par les E2E.
+**Isolation des tests E2E :** base dédiée `futani_e2e` sur le serveur PostgreSQL de test (service `db-test`), vérifiée avant toute écriture (nom exact, hôte local, différente des bases de développement et d'intégration, pas en production, identité confirmée par `current_database()`), dossier de fichiers `storage-e2e/`, aucun serveur existant réutilisé. La base de développement n'est plus jamais modifiée par les E2E.
 
 Déploiement : relancer `pnpm db:seed` (rôle `COURIER`, permissions `deliveries.update_own` et `returns.refund_own_decision`), puis relier les livreurs existants (repris comme transporteurs externes) à leur compte.
 
