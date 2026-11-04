@@ -42,7 +42,13 @@ export default async function AnnouncementsPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <PageHeader title="Annonces" />
+      <PageHeader title="Annonces">
+        {/* Le bandeau n'apparaît que sur la boutique publique : rendu réel dans un nouvel onglet (aucune donnée d'administration). */}
+        <a href="/" target="_blank" rel="noopener noreferrer" className="rounded-lg border border-line px-3 py-2 text-sm font-medium hover:bg-surface-muted">
+          Voir sur la boutique
+          <span className="sr-only"> (nouvel onglet)</span>
+        </a>
+      </PageHeader>
       <p className="-mt-4 text-sm text-ink-muted">
         Le bandeau s&apos;affiche tout en haut du site, au-dessus du menu. Il est masqué quand aucune annonce n&apos;est active. Chaque modification est inscrite au journal d&apos;audit.
       </p>

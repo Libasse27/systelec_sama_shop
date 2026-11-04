@@ -3,6 +3,8 @@ import { grantRole } from "./support/db";
 import { signUp, uniqueEmail } from "./support/flows";
 
 const MAX_SLIDES = 10;
+/** Avance manuelle sans défilement automatique concurrent (sinon une annonce peut être sautée). */
+const STEPPING_CONTEXT = { reducedMotion: "reduce" } as const;
 
 /** Supprime l'annonce portant ce texte (confirmation navigateur) ; sans effet si elle n'existe plus. */
 async function removeAnnouncement(page: Page, text: string): Promise<void> {
@@ -31,7 +33,7 @@ test.describe("bandeau d'annonces", () => {
       await addForm.getByRole("button", { name: "Ajouter l'annonce" }).click();
       await expect(page.getByText("Annonce ajoutée.")).toBeVisible();
 
-      const visitor = await browser.newPage();
+      const visitor = await browser.newPage(STEPPING_CONTEXT);
       try {
         await visitor.goto("/");
         const bar = visitor.getByRole("region", { name: "Annonces et promotions" });

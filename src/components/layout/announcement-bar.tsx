@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { BrandIcon } from "@/components/brand/brand-icon";
+import { AnnouncementRefresh } from "@/components/layout/announcement-refresh";
 import { AnnouncementRotator } from "@/components/layout/announcement-rotator";
+import { StorefrontOnly } from "@/components/layout/storefront-only";
 import type { VisibleAnnouncement } from "@/server/modules/announcements/visibility";
 import { getVisibleAnnouncements } from "@/server/storefront";
 
@@ -28,13 +30,25 @@ function Slide({ item }: { item: VisibleAnnouncement }) {
   );
 }
 
-/** Bandeau d'annonces et de promotions au-dessus de l'en-tête ; absent s'il n'y a rien à afficher. */
+/**
+ * Bandeau d'annonces et de promotions au-dessus de l'en-tête, sur la boutique publique uniquement
+ * (absent de /admin/**) ; absent aussi s'il n'y a rien à afficher.
+ * La mise en page racine n'est pas recalculée lors d'une navigation interne : au prochain début ou à
+ * la prochaine fin d'annonce, AnnouncementRefresh redemande le rendu au serveur (même bandeau vide).
+ */
 export async function AnnouncementBar() {
-  const { items, rotationSeconds } = await getVisibleAnnouncements();
-  if (items.length === 0) return null;
+  const { items, rotationSeconds, refreshInMs, computedAt } = await getVisibleAnnouncements();
+  // Clé propre à chaque rendu serveur : le minuteur repart du délai recalculé, même s'il est identique.
+  const refresh = refreshInMs === null ? null : <AnnouncementRefresh key={computedAt} delayMs={refreshInMs} />;
+  if (items.length === 0) return refresh;
   return (
-    <section aria-label="Annonces et promotions" className="bg-brand-accent text-sm text-brand-navy">
-      <AnnouncementRotator slides={items.map((item) => <Slide key={item.id} item={item} />)} rotationSeconds={rotationSeconds} />
-    </section>
+    <>
+      <StorefrontOnly>
+        <section aria-label="Annonces et promotions" className="bg-brand-accent text-sm text-brand-navy">
+          <AnnouncementRotator slides={items.map((item) => <Slide key={item.id} item={item} />)} rotationSeconds={rotationSeconds} />
+        </section>
+      </StorefrontOnly>
+      {refresh}
+    </>
   );
 }

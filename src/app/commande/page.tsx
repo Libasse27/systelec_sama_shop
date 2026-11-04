@@ -127,7 +127,7 @@ export default async function CheckoutPage() {
         </ActionForm>
       </div>
 
-      <aside aria-labelledby="recapitulatif" className="h-fit rounded-xl border border-line bg-surface p-4 lg:sticky lg:top-4">
+      <aside aria-labelledby="recapitulatif" className="h-fit rounded-xl border border-line bg-surface p-4 lg:sticky lg:top-24">
         <h2 id="recapitulatif" className="font-semibold">
           Récapitulatif
         </h2>

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { SettingValue } from "@/server/modules/settings/schemas";
-import { selectVisible } from "./visibility";
+import { msUntilNextChange, selectVisible } from "./visibility";
 
 type Item = SettingValue<"announcements">["items"][number];
 
@@ -41,5 +41,24 @@ describe("selectVisible", () => {
     const snapshot = JSON.stringify(input);
     expect(selectVisible(input, NOW).map((item) => item.id)).toEqual(["a", "c"]);
     expect(JSON.stringify(input)).toBe(snapshot);
+  });
+});
+
+describe("msUntilNextChange", () => {
+  it("renvoie null quand aucune borne future n'existe", () => {
+    expect(msUntilNextChange(value(), NOW)).toBeNull();
+    expect(msUntilNextChange(value(base), NOW)).toBeNull();
+    expect(msUntilNextChange(value({ ...base, startsAt: "2026-11-01T00:00:00Z", endsAt: "2026-11-10T12:00:00.000Z" }), NOW)).toBeNull();
+  });
+
+  it("renvoie le délai jusqu'à la plus proche fin ou au plus proche début, toutes annonces actives confondues", () => {
+    const endsSoon = { ...base, endsAt: "2026-11-10T12:05:00.000Z" };
+    const startsLater = { ...base, id: "6c2f3a52-9c1e-4d52-8d55-0d1c3a6f7a11", startsAt: "2026-11-10T12:01:00.000Z" };
+    expect(msUntilNextChange(value(endsSoon), NOW)).toBe(5 * 60_000);
+    expect(msUntilNextChange(value(endsSoon, startsLater), NOW)).toBe(60_000);
+  });
+
+  it("ignore les annonces désactivées", () => {
+    expect(msUntilNextChange(value({ ...base, isActive: false, endsAt: "2026-11-10T12:05:00.000Z" }), NOW)).toBeNull();
   });
 });

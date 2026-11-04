@@ -15,18 +15,18 @@ export function HeaderSearch() {
   const toggleRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
-    if (open) inputRef.current?.focus();
+    if (open) inputRef.current?.focus({ preventScroll: true });
   }, [open]);
 
   function close() {
     setOpen(false);
-    toggleRef.current?.focus();
+    toggleRef.current?.focus({ preventScroll: true });
   }
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     if (open && inputRef.current?.value.trim()) return;
     event.preventDefault();
-    if (open) inputRef.current?.focus();
+    if (open) inputRef.current?.focus({ preventScroll: true });
     else setOpen(true);
   }
 

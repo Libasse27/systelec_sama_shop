@@ -46,7 +46,8 @@ export async function SiteHeader() {
   const [company, user, cartOwner] = await Promise.all([getCompanySettings(), getCurrentUser(), readCartOwner()]);
   const cartCount = cartOwner ? await countCartItems(db, cartOwner) : 0;
   return (
-    <header className="bg-brand-navy">
+    // Collé en haut pendant le défilement ; le bandeau d'annonces, au-dessus, défile avec la page.
+    <header className="sticky top-0 z-40 bg-brand-navy shadow-md">
       {/* Une seule ligne sur grand écran ; en dessous, marque et compte en haut, navigation et loupe dessous.
           « relative » : la recherche déployée se place par-dessus la ligne de la loupe. */}
       <div className="relative mx-auto flex max-w-6xl flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3">
