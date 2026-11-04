@@ -9,8 +9,11 @@ export const OFFLINE_PAYMENT_METHODS = ["CASH_ON_DELIVERY", "CASH_ON_PICKUP", "C
 export type OfflinePaymentMethod = (typeof OFFLINE_PAYMENT_METHODS)[number];
 
 const optionalText = (max: number) => z.string().trim().min(1).max(max).nullable();
-// http(s) uniquement : ces liens sont rendus en <img src> et <a href> (pas de javascript:, data:…).
-const optionalUrl = z.url({ protocol: /^https?$/ }).max(500).nullable();
+// Lien social ENREGISTRÉ : tout texte est lisible. Un ancien lien devenu non conforme (http, domaine,
+// protocole…) ne doit jamais rendre l'identité entière illisible (pied de page ramené aux valeurs par
+// défaut, écran Paramètres en erreur). Il n'est jamais affiché : le pied de page ne publie que les liens
+// acceptés par src/lib/social-links.ts, et toute saisie modifiée y est contrôlée (reviewSocialLinksInput).
+const storedSocialLink = z.string().nullable();
 
 /** Logo téléversé depuis l'administration (servi par /medias/identite/…), forme stricte. */
 export const UPLOADED_LOGO_PATTERN = /^\/medias\/identite\/logo-[a-f0-9-]{36}\.(?:jpg|png|webp)$/;
@@ -33,14 +36,38 @@ export const companySettingsSchema = z
     rccm: optionalText(60).default(null),
     socialLinks: z
       .object({
-        facebook: optionalUrl,
-        instagram: optionalUrl,
-        linkedin: optionalUrl,
-        tiktok: optionalUrl,
+        facebook: storedSocialLink,
+        instagram: storedSocialLink,
+        linkedin: storedSocialLink,
+        tiktok: storedSocialLink,
+        // Ajoutés après coup : absents d'un paramètre enregistré avant leur ajout.
+        youtube: storedSocialLink.default(null),
+        x: storedSocialLink.default(null),
       })
       .strict(),
   })
   .strict();
+
+/** Lien social SAISI (formulaire) : texte borné ; les règles par réseau s'appliquent dans reviewSocialLinksInput. */
+const socialInput = z.string().max(500).nullable();
+
+/**
+ * Identité SAISIE depuis l'administration : même forme que la valeur enregistrée, liens sociaux bornés.
+ * Les liens sont ensuite contrôlés face à la valeur enregistrée (src/lib/social-links.ts, source unique) :
+ * un lien modifié doit être conforme, un ancien lien laissé inchangé est conservé.
+ */
+export const companySettingsInputSchema = companySettingsSchema.extend({
+  socialLinks: z
+    .object({
+      facebook: socialInput,
+      instagram: socialInput,
+      linkedin: socialInput,
+      tiktok: socialInput,
+      youtube: socialInput.default(null),
+      x: socialInput.default(null),
+    })
+    .strict(),
+});
 
 export const commerceSettingsSchema = z
   .object({
@@ -219,7 +246,7 @@ export const settingsDefaults: { [K in SettingKey]: SettingValue<K> } = {
     openingHours: null,
     ninea: null,
     rccm: null,
-    socialLinks: { facebook: null, instagram: null, linkedin: null, tiktok: null },
+    socialLinks: { facebook: null, instagram: null, linkedin: null, tiktok: null, youtube: null, x: null },
   },
   commerce: {
     currency: "XOF",

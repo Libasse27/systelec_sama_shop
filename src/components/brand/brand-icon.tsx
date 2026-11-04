@@ -7,10 +7,13 @@ export type BrandIconName =
   | "casque"
   | "cle-usb"
   | "email"
+  | "facebook"
   | "especes"
   | "facture"
   | "info"
   | "innovation"
+  | "instagram"
+  | "linkedin"
   | "livraison"
   | "localisation"
   | "maintenance"
@@ -23,8 +26,11 @@ export type BrandIconName =
   | "securite"
   | "succes"
   | "telephone"
+  | "tiktok"
   | "video-surveillance"
-  | "whatsapp";
+  | "whatsapp"
+  | "x"
+  | "youtube";
 
 /**
  * Boîte de référence pour next/image (les sources font de 39 à 150 px, non carrées) : la taille

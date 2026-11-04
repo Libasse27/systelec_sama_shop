@@ -5,6 +5,7 @@ import { BrandIcon } from "@/components/brand/brand-icon";
 import { BrandLogo, Logo } from "@/components/brand/logo";
 import { BRAND, SHOP_PILLARS_LINE } from "@/lib/brand";
 import { telHref, whatsappHref } from "@/lib/contact-links";
+import { socialProfiles } from "@/lib/social-links";
 import { getCompanySettings } from "@/server/storefront";
 import { db } from "@/server/db/client";
 import { listPublishedPages } from "@/server/modules/content/queries";
@@ -34,13 +35,15 @@ function FooterSection({ title, navigation = true, children }: FooterSectionProp
 }
 
 /**
- * Pied de page : marque, boutique, aide (seules les pages publiées), coordonnées.
+ * Pied de page : marque, boutique, aide (seules les pages publiées), coordonnées, puis réseaux sociaux
+ * (seulement les liens enregistrés et conformes, src/lib/social-links.ts).
  * Les coordonnées sont celles de la page Contact (mêmes champs, mêmes liens) ; sans aucune
  * coordonnée renseignée, la colonne l'indique au lieu de promettre un formulaire.
  */
 export async function SiteFooter() {
   const [company, pages] = await Promise.all([getCompanySettings(), listPublishedPages(db)]);
   const whatsapp = company.whatsapp ? whatsappHref(company.whatsapp) : null;
+  const profiles = socialProfiles(company.socialLinks);
   const hasContactDetails = Boolean(company.phone || whatsapp || company.email || company.address || company.openingHours);
   return (
     <footer className="mt-12 bg-brand-navy text-white">
@@ -116,6 +119,28 @@ export async function SiteFooter() {
           )}
           {!hasContactDetails && <p className="text-sm text-white/80">Nos coordonnées seront publiées très prochainement.</p>}
         </FooterSection>
+        {/* Sous les colonnes Boutique, Aide et Contact (alignée sur elles sur grand écran). */}
+        {profiles.length > 0 && (
+          <nav aria-label="Réseaux sociaux" className="border-t border-white/10 pt-6 sm:col-span-2 lg:col-span-3 lg:col-start-2">
+            <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-white">Suivez-nous</h2>
+            <ul className="flex flex-wrap gap-2">
+              {profiles.map(({ network, label, icon, href }) => (
+                <li key={network}>
+                  {/* Pastille blanche : les logos des réseaux restent lisibles sur le fond marine. */}
+                  <a
+                    href={href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label={`${label} (nouvel onglet)`}
+                    className="grid size-10 place-items-center rounded-full bg-white transition hover:scale-110 hover:ring-2 hover:ring-brand-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent focus-visible:ring-offset-2 focus-visible:ring-offset-brand-navy"
+                  >
+                    <BrandIcon name={icon} className="size-5" />
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </nav>
+        )}
       </div>
       <div className="border-t border-white/10">
         <div className="mx-auto flex max-w-6xl flex-col gap-1 px-4 py-4 text-center text-xs text-white/60 sm:flex-row sm:justify-between sm:text-left">

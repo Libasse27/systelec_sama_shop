@@ -38,6 +38,8 @@ export async function saveCompanyAction(_state: ActionState, formData: FormData)
         instagram: nullable(formData, "socialLinks.instagram"),
         linkedin: nullable(formData, "socialLinks.linkedin"),
         tiktok: nullable(formData, "socialLinks.tiktok"),
+        youtube: nullable(formData, "socialLinks.youtube"),
+        x: nullable(formData, "socialLinks.x"),
       },
     });
     refreshSite();

@@ -1,12 +1,13 @@
 import "server-only";
 import type { PrismaClient } from "@/generated/prisma/client";
 import { assertPermission, type Actor } from "@/server/authz/service";
-import { AppError } from "@/server/errors";
+import { reviewSocialLinksInput } from "@/lib/social-links";
+import { AppError, ValidationError } from "@/server/errors";
 import { discardStoredFile, storeLogo } from "@/server/storage/logo-upload";
 import type { FileStorage } from "@/server/storage/storage";
-import { parseInput } from "@/server/validation";
-import { settingsSchemas, type SettingKey, type SettingValue } from "./schemas";
-import { getSetting, updateSetting } from "./service";
+import { fieldErrorsOf, parseInput } from "@/server/validation";
+import { companySettingsInputSchema, settingsSchemas, type SettingKey, type SettingValue } from "./schemas";
+import { getSetting, modifySetting, updateSetting } from "./service";
 
 /**
  * Paramètres modifiables par l'écran « Paramètres » (settings.manage). Le bandeau d'annonces en est
@@ -40,16 +41,41 @@ export async function getAllSettings(client: PrismaClient, actor: Actor): Promis
 
 /**
  * Enregistre un groupe de paramètres (settings.manage) : validé par son schéma Zod strict (erreurs
- * rattachées à chaque champ), audité avant/après dans la même transaction. Le logo ne se change
- * pas par l'identité (décision 4 : téléversement uniquement) : la valeur enregistrée est conservée.
+ * rattachées à chaque champ), audité avant/après dans la même transaction.
  */
 export async function saveSettings<K extends EditableSettingKey>(client: PrismaClient, actor: Actor, key: K, input: unknown): Promise<SettingValue<K>> {
   // Garde d'exécution (le typage ne suffit pas) : jamais d'écriture du bandeau d'annonces par ce circuit.
   if (!isSettingKey(key)) throw new AppError("FORBIDDEN", "Ce paramètre ne se modifie pas depuis cet écran.");
   await assertPermission(client, actor, "settings.manage");
-  const submitted = key === "company" && typeof input === "object" && input !== null ? { ...input, logoUrl: (await getSetting("company", client)).logoUrl } : input;
-  const value = parseInput(settingsSchemas[key], submitted, SETTING_LABELS[key]);
-  return updateSetting(key, value, actor.id, client);
+  if (key === "company") return (await saveCompany(client, actor, input)) as SettingValue<K>;
+  return updateSetting(key, parseInput(settingsSchemas[key], input, SETTING_LABELS[key]), actor.id, client);
+}
+
+/**
+ * Identité : champs validés par companySettingsInputSchema, liens sociaux comparés à la valeur
+ * enregistrée (reviewSocialLinksInput : un ancien lien non conforme laissé tel quel ne bloque pas
+ * l'enregistrement, un lien modifié doit être conforme). Toutes les erreurs sont renvoyées ensemble.
+ * Le logo ne se change pas par l'identité (décision 4 : téléversement uniquement) : la valeur
+ * enregistrée est conservée. `stored` est la valeur lue sous verrou (modifySetting).
+ */
+function companyValue(input: unknown, stored: SettingValue<"company">): SettingValue<"company"> {
+  const submitted = typeof input === "object" && input !== null ? { ...input, logoUrl: stored.logoUrl } : input;
+  const parsed = companySettingsInputSchema.safeParse(submitted);
+  // Liens contrôlés même si un autre champ est en erreur : toutes les erreurs sont affichées en une fois.
+  const links = companySettingsInputSchema.shape.socialLinks.safeParse((submitted as { socialLinks?: unknown } | null)?.socialLinks);
+  const review = links.success ? reviewSocialLinksInput(links.data, stored.socialLinks) : null;
+  const fieldErrors = { ...(parsed.success ? {} : fieldErrorsOf(parsed.error)), ...review?.fieldErrors };
+  if (!parsed.success || !review || Object.keys(fieldErrors).length > 0) {
+    throw new ValidationError(`${SETTING_LABELS.company} invalide`, { fieldErrors });
+  }
+  return { ...parsed.data, socialLinks: review.links };
+}
+
+async function saveCompany(client: PrismaClient, actor: Actor, input: unknown): Promise<SettingValue<"company">> {
+  // Contrôle préalable hors verrou (une saisie invalide n'obtient pas le verrou), puis contrôle définitif
+  // sous verrou : la comparaison « lien inchangé » porte sur la valeur réellement enregistrée.
+  companyValue(input, await getSetting("company", client));
+  return modifySetting("company", (current) => companyValue(input, current), actor.id, client);
 }
 
 /**

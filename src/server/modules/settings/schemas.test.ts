@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MAX_ANNOUNCEMENTS, OFFLINE_PAYMENT_METHODS, announcementItemSchema, announcementsSchema, paymentSettingsSchema, settingsDefaults, settingsSchemas } from "./schemas";
+import { MAX_ANNOUNCEMENTS, OFFLINE_PAYMENT_METHODS, announcementItemSchema, companySettingsInputSchema, announcementsSchema, paymentSettingsSchema, settingsDefaults, settingsSchemas } from "./schemas";
 
 describe("paramètres : schémas", () => {
   it("les valeurs par défaut sont valides et n'inventent aucune coordonnée", () => {
@@ -22,7 +22,7 @@ describe("paramètres : schémas", () => {
     expect(paymentSettingsSchema.safeParse(withGateway).success).toBe(false);
   });
 
-  it("logo téléversé uniquement (décision 4) ; liens http(s) seulement pour les réseaux sociaux", () => {
+  it("logo téléversé uniquement (décision 4)", () => {
     const company = settingsDefaults.company;
     const withLogo = (logoUrl: string) => settingsSchemas.company.safeParse({ ...company, logoUrl }).success;
     expect(withLogo("https://cdn.example.sn/logo.png")).toBe(false);
@@ -34,8 +34,6 @@ describe("paramètres : schémas", () => {
     expect(withLogo("/medias/produits/x/logo.png")).toBe(false);
     expect(withLogo("//evil.example/logo.png")).toBe(false);
 
-    const socialLinks = { ...company.socialLinks, facebook: "javascript:alert(1)" };
-    expect(settingsSchemas.company.safeParse({ ...company, socialLinks }).success).toBe(false);
   });
 
   it("heures ouvrables : jours ISO, une ou deux plages ordonnées sans chevauchement", () => {
@@ -154,5 +152,36 @@ describe("paramètres : bandeau d'annonces", () => {
     expect(ok([], 21)).toBe(false);
     expect(ok([], 4)).toBe(true);
     expect(announcementsSchema.safeParse({ items: [], rotationSeconds: 6, extra: true }).success).toBe(false);
+  });
+});
+
+describe("paramètres : liens des réseaux sociaux", () => {
+  const company = settingsDefaults.company;
+  // Valeur enregistrée avant l'ajout de YouTube et X.
+  const older = { facebook: null, instagram: null, linkedin: null, tiktok: null };
+  const withLink = (network: keyof typeof company.socialLinks, href: string) => ({ ...company, socialLinks: { ...company.socialLinks, [network]: href } });
+
+  it("saisie : forme bornée seulement (les règles par réseau relèvent de src/lib/social-links.ts)", () => {
+    expect(companySettingsInputSchema.safeParse(withLink("facebook", "https://www.facebook.com/futani")).success).toBe(true);
+    expect(companySettingsInputSchema.safeParse(withLink("facebook", `https://www.facebook.com/${"a".repeat(500)}`)).success).toBe(false);
+    expect(companySettingsInputSchema.safeParse({ ...company, socialLinks: { ...company.socialLinks, mastodon: null } }).success).toBe(false);
+  });
+
+  it("saisie : YouTube et X facultatifs (null ou absents)", () => {
+    const parsed = companySettingsInputSchema.parse({ ...company, socialLinks: older });
+    expect(parsed.socialLinks).toMatchObject({ youtube: null, x: null });
+  });
+
+  it("lecture : une valeur enregistrée avant l'ajout de YouTube et X reste lisible (null par défaut)", () => {
+    const parsed = settingsSchemas.company.parse({ ...company, socialLinks: { ...older, facebook: "https://facebook.com/futani" } });
+    expect(parsed.socialLinks).toMatchObject({ facebook: "https://facebook.com/futani", youtube: null, x: null });
+  });
+
+  it("lecture : un ancien lien non conforme (http, protocole dangereux, texte mal formé, vide) ne rend jamais l'identité illisible", () => {
+    for (const href of ["http://youtube.com/futani", "javascript:alert(1)", "facebook.com/futani", "", "   "]) {
+      expect(settingsSchemas.company.safeParse(withLink("youtube", href)).success).toBe(true);
+    }
+    // Forme toujours contrôlée : un type inattendu est refusé.
+    expect(settingsSchemas.company.safeParse({ ...company, socialLinks: { ...company.socialLinks, x: 42 } }).success).toBe(false);
   });
 });
