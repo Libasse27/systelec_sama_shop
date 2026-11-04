@@ -1,37 +1,32 @@
 import { BrandIcon } from "@/components/brand/brand-icon";
-import { socialProfiles, type SocialLinks as StoredSocialLinks } from "@/lib/social-links";
+import type { SocialProfile } from "@/lib/social-links";
 
 interface SocialLinksProps {
-  /** Liens enregistrés (paramètres « company ») : seuls ceux qui passent la validation sont affichés. */
-  links: Readonly<StoredSocialLinks>;
+  /** Profils déjà validés (socialProfiles) : un bouton par profil. */
+  profiles: readonly SocialProfile[];
 }
 
 /**
- * Réseaux sociaux (colonne de la marque du pied de page) : petites icônes en ligne, sans titre, un lien
- * par profil conforme (src/lib/social-links.ts), ouvert dans un nouvel onglet. Ne rend rien quand aucun
- * lien valide n'existe.
+ * Boutons des réseaux sociaux (section dédiée du pied de page) : icône seule, un lien par profil,
+ * ouvert dans un nouvel onglet. Le titre et le repère de navigation viennent de la section parente.
  */
-export function SocialLinks({ links }: SocialLinksProps) {
-  const profiles = socialProfiles(links);
-  if (profiles.length === 0) return null;
+export function SocialLinks({ profiles }: SocialLinksProps) {
   return (
-    <nav aria-label="Réseaux sociaux">
-      <ul className="flex flex-wrap gap-2">
-        {profiles.map(({ network, label, icon, href }) => (
-          <li key={network}>
-            {/* Pastille blanche : les logos des réseaux restent lisibles sur le fond marine. */}
-            <a
-              href={href}
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label={`${label} (nouvel onglet)`}
-              className="grid size-8 place-items-center rounded-full bg-white transition hover:scale-110 hover:ring-2 hover:ring-brand-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent focus-visible:ring-offset-2 focus-visible:ring-offset-brand-navy"
-            >
-              <BrandIcon name={icon} className="size-4" />
-            </a>
-          </li>
-        ))}
-      </ul>
-    </nav>
+    <ul className="flex flex-wrap gap-2">
+      {profiles.map(({ network, label, icon, href }) => (
+        <li key={network}>
+          {/* Fond blanc : les logos de X et de TikTok sont sombres et disparaîtraient sur le marine. */}
+          <a
+            href={href}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label={`${label} (nouvel onglet)`}
+            className="grid size-11 place-items-center rounded-lg bg-white transition-colors motion-reduce:transition-none hover:bg-white/90 hover:ring-2 hover:ring-white/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent focus-visible:ring-offset-2 focus-visible:ring-offset-brand-navy"
+          >
+            <BrandIcon name={icon} className="size-6" />
+          </a>
+        </li>
+      ))}
+    </ul>
   );
 }

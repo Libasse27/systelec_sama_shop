@@ -8,6 +8,8 @@ import { SocialLinks } from "@/components/layout/social-links";
 import { BRAND, SHOP_PILLARS_LINE } from "@/lib/brand";
 import { telHref, whatsappHref } from "@/lib/contact-links";
 import { PAYMENT_METHOD_OPTIONS } from "@/lib/payment-methods";
+import { socialProfiles } from "@/lib/social-links";
+import { cn } from "@/lib/utils";
 import { db } from "@/server/db/client";
 import { listPublishedPages } from "@/server/modules/content/queries";
 import type { SettingValue } from "@/server/modules/settings/schemas";
@@ -25,14 +27,16 @@ interface FooterSectionProps {
   title: string;
   /** Colonne de liens (repère de navigation) ou simple bloc d'informations. */
   navigation?: boolean;
+  /** Classes ajoutées à la colonne (ex. étendue sur la grille). */
+  className?: string;
   children: ReactNode;
 }
 
 /** Colonne titrée ; pour une colonne de liens, le titre nomme aussi la navigation pour les lecteurs d'écran. */
-function FooterSection({ title, navigation = true, children }: FooterSectionProps) {
+function FooterSection({ title, navigation = true, className, children }: FooterSectionProps) {
   const Container = navigation ? "nav" : "div";
   return (
-    <Container aria-label={navigation ? title : undefined} className="flex flex-col gap-2">
+    <Container aria-label={navigation ? title : undefined} className={cn("flex flex-col gap-2", className)}>
       <h2 className="mb-1 text-sm font-semibold uppercase tracking-wide text-white">{title}</h2>
       {children}
     </Container>
@@ -99,6 +103,17 @@ function FooterPayment() {
   );
 }
 
+/** Réseaux sociaux : section dédiée (liens enregistrés et conformes seulement), absente quand aucun lien n'est valide. */
+function FooterSocial({ company }: { company: CompanySettings }) {
+  const profiles = socialProfiles(company.socialLinks);
+  if (profiles.length === 0) return null;
+  return (
+    <FooterSection title="Réseaux sociaux" className="sm:col-span-2 lg:col-span-1">
+      <SocialLinks profiles={profiles} />
+    </FooterSection>
+  );
+}
+
 /** Copyright au nom du groupe, mentions légales de la société (saisies dans l'administration), signature du groupe. */
 function FooterBottomBar({ company }: { company: CompanySettings }) {
   const legalMentions = [`Raison sociale : ${company.companyName}`, company.ninea && `NINEA : ${company.ninea}`, company.rccm && `RCCM : ${company.rccm}`].filter(Boolean).join(" · ");
@@ -121,17 +136,18 @@ function FooterBottomBar({ company }: { company: CompanySettings }) {
 }
 
 /**
- * Pied de page : marque (logo, slogan, puis petites icônes des réseaux sociaux : seulement les liens
- * enregistrés et conformes, src/lib/social-links.ts), boutique, aide (seules les pages publiées),
- * coordonnées et paiement sur une même rangée (deux colonnes sur tablette, la marque occupant toute la
- * largeur ; une seule sur mobile), puis une barre finale : copyright, mentions légales, signature du groupe.
+ * Pied de page : marque (logo, slogan), boutique, aide (seules les pages publiées), puis coordonnées,
+ * paiement et réseaux sociaux (section dédiée, seulement les liens enregistrés et conformes,
+ * src/lib/social-links.ts). Trois colonnes sur deux rangées sur ordinateur, deux colonnes sur tablette
+ * (la marque et les réseaux sociaux occupant toute la largeur), une seule sur mobile ; puis une barre
+ * finale : copyright, mentions légales, signature du groupe.
  * Les valeurs saisies dans l'administration sont du texte brut et peuvent couper n'importe où (wrap-anywhere).
  */
 export async function SiteFooter() {
   const [company, pages] = await Promise.all([getCompanySettings(), listPublishedPages(db)]);
   return (
     <footer className="mt-12 bg-brand-navy text-white wrap-anywhere">
-      <div className="mx-auto grid max-w-6xl grid-cols-1 gap-8 px-4 py-10 sm:grid-cols-2 lg:grid-cols-[1.4fr_1fr_1fr_1.3fr_1fr]">
+      <div className="mx-auto grid max-w-6xl grid-cols-1 gap-8 px-4 py-10 sm:grid-cols-2 lg:grid-cols-3">
         <div className="flex flex-col gap-3 sm:col-span-2 lg:col-span-1">
           <Link href="/" aria-label={`${company.shopName}, accueil`} className="self-start">
             <Logo shopName={company.shopName} logoUrl={company.logoUrl} />
@@ -141,8 +157,6 @@ export async function SiteFooter() {
             <br />
             {SHOP_PILLARS_LINE}
           </p>
-          {/* Sous le slogan, sans titre : e2e/social-links.spec.ts vérifie cet emplacement. */}
-          <SocialLinks links={company.socialLinks} />
         </div>
         <FooterSection title="Boutique">
           <Link href="/recherche" className={linkClass}>
@@ -170,6 +184,7 @@ export async function SiteFooter() {
         </FooterSection>
         <FooterContact company={company} />
         <FooterPayment />
+        <FooterSocial company={company} />
       </div>
       <FooterBottomBar company={company} />
     </footer>

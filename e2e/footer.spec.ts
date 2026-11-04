@@ -73,6 +73,15 @@ test.describe("pied de page : mentions légales", () => {
     await expect(footer.getByText(`© ${new Date().getFullYear()} FUTANI GROUP. Tous droits réservés.`, { exact: true })).toBeVisible();
   });
 
+  test("sans lien social enregistré : ni titre ni repère « Réseaux sociaux », copyright visible", async ({ page }) => {
+    await writeCompanySetting(company({ companyName: "Société E2E", ninea: null, rccm: null }));
+    await page.goto("/");
+    const footer = page.getByRole("contentinfo");
+    await expect(footer.getByRole("heading", { name: "Réseaux sociaux" })).toHaveCount(0);
+    await expect(footer.getByRole("navigation", { name: "Réseaux sociaux" })).toHaveCount(0);
+    await expect(footer.getByText(`© ${new Date().getFullYear()} FUTANI GROUP. Tous droits réservés.`, { exact: true })).toBeVisible();
+  });
+
   test("valeurs saisies affichées en texte brut, jamais interprétées comme du HTML", async ({ page }) => {
     await writeCompanySetting(company({ companyName: "Société <b>E2E</b>", ninea: null, rccm: null }));
     await page.goto("/");
