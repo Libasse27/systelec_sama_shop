@@ -11,7 +11,6 @@ import { readCartOwner } from "@/server/modules/cart/session";
 import { getCategoryIndex, getCompanySettings } from "@/server/storefront";
 
 const linkClass = "rounded-md px-3 py-2 text-sm font-medium text-white/90 hover:bg-white/10";
-const iconLinkClass = "grid size-9 place-items-center rounded-md text-white/90 hover:bg-white/10";
 
 /** Menu des familles de produits : élément <details> natif, utilisable sans JavaScript. */
 async function CatalogMenu() {
@@ -79,9 +78,9 @@ export async function SiteHeader() {
               </form>
             </>
           ) : (
-            <Link href="/connexion" title="Se connecter" className={iconLinkClass}>
-              <BrandIcon name="mon-compte" className="size-6" />
-              <span className="sr-only">Se connecter</span>
+            <Link href="/connexion" className={`${linkClass} flex items-center gap-1`}>
+              <BrandIcon name="mon-compte" className="size-5" />
+              <span className="sr-only whitespace-nowrap sm:not-sr-only">Se connecter</span>
             </Link>
           )}
         </nav>
