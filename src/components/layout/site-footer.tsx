@@ -3,12 +3,11 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { BrandIcon } from "@/components/brand/brand-icon";
 import { BrandLogo, Logo } from "@/components/brand/logo";
-import { PaymentMethodIcon } from "@/components/brand/payment-method-icons";
-import { SocialLinks } from "@/components/layout/social-links";
+import { FOOTER_ICON_TILE, SocialLinks } from "@/components/layout/social-links";
 import { BRAND, SHOP_PILLARS_LINE } from "@/lib/brand";
 import { telHref, whatsappHref } from "@/lib/contact-links";
-import { PAYMENT_METHOD_OPTIONS } from "@/lib/payment-methods";
-import { socialProfiles } from "@/lib/social-links";
+import { PAYMENT_METHOD_ICONS, PAYMENT_METHOD_OPTIONS } from "@/lib/payment-methods";
+import { socialButtons } from "@/lib/social-links";
 import { cn } from "@/lib/utils";
 import { db } from "@/server/db/client";
 import { listPublishedPages } from "@/server/modules/content/queries";
@@ -17,9 +16,9 @@ import { getCompanySettings } from "@/server/storefront";
 
 type CompanySettings = SettingValue<"company">;
 
-const linkClass = "text-sm text-white/80 hover:text-white hover:underline";
-const contactLinkClass = "flex items-start gap-2 text-sm text-white/80 hover:text-white";
-const contactTextClass = "flex items-start gap-2 text-sm text-white/80";
+const linkClass = "text-sm text-ink-muted hover:text-ink hover:underline";
+const contactLinkClass = "flex items-start gap-2 text-sm text-ink-muted hover:text-ink";
+const contactTextClass = "flex items-start gap-2 text-sm text-ink-muted";
 const contactIconClass = "mt-0.5 size-4 shrink-0 text-brand-accent";
 const contactPictoClass = "mt-0.5 size-5";
 
@@ -37,7 +36,7 @@ function FooterSection({ title, navigation = true, className, children }: Footer
   const Container = navigation ? "nav" : "div";
   return (
     <Container aria-label={navigation ? title : undefined} className={cn("flex flex-col gap-2", className)}>
-      <h2 className="mb-1 text-sm font-semibold uppercase tracking-wide text-white">{title}</h2>
+      <h2 className="mb-1 text-sm font-semibold uppercase tracking-wide text-ink">{title}</h2>
       {children}
     </Container>
   );
@@ -79,7 +78,7 @@ function FooterContact({ company }: { company: CompanySettings }) {
           <span className="whitespace-pre-line">{company.openingHours}</span>
         </p>
       )}
-      {!hasContactDetails && <p className="text-sm text-white/80">Nos coordonnées seront publiées très prochainement.</p>}
+      {!hasContactDetails && <p className="text-sm text-ink-muted">Nos coordonnées seront publiées très prochainement.</p>}
     </FooterSection>
   );
 }
@@ -90,26 +89,32 @@ function FooterPayment() {
     <FooterSection title="Paiement" navigation={false}>
       <ul className="flex flex-col gap-2">
         {PAYMENT_METHOD_OPTIONS.map(({ value, label }) => (
-          <li key={value} className="flex items-center gap-2 text-sm text-white/80">
-            <span className="flex w-10 shrink-0">
-              <PaymentMethodIcon method={value} />
+          <li key={value} className="flex items-center gap-2 text-sm text-ink-muted">
+            {/* Même cadre teinté que les réseaux sociaux, sans survol : les moyens de paiement ne sont pas cliquables.
+                Boîte h-9 w-10 : object-contain garde les proportions (une icône 2 fois plus large remplit les 40 px). */}
+            <span className={FOOTER_ICON_TILE}>
+              <BrandIcon name={PAYMENT_METHOD_ICONS[value].name} className="h-9 w-10" />
             </span>
             {label}
           </li>
         ))}
       </ul>
-      <p className="text-sm text-white/80">À la livraison ou au retrait.</p>
+      <p className="text-sm text-ink-muted">À la livraison ou au retrait.</p>
     </FooterSection>
   );
 }
 
-/** Réseaux sociaux : section dédiée (liens enregistrés et conformes seulement), absente quand aucun lien n'est valide. */
+/**
+ * Réseaux sociaux : section dédiée, toujours rendue avec les six icônes. Une icône dont l'adresse est valide
+ * est un lien ; les autres restent visibles sans lien. La section n'est un repère de navigation nommé
+ * que s'il existe au moins un lien (pas de repère vide pour les lecteurs d'écran).
+ */
 function FooterSocial({ company }: { company: CompanySettings }) {
-  const profiles = socialProfiles(company.socialLinks);
-  if (profiles.length === 0) return null;
+  const buttons = socialButtons(company.socialLinks);
+  const hasLink = buttons.some((button) => button.href !== null);
   return (
-    <FooterSection title="Réseaux sociaux" className="sm:col-span-2 lg:col-span-1">
-      <SocialLinks profiles={profiles} />
+    <FooterSection title="Réseaux sociaux" navigation={hasLink} className="sm:col-span-2 lg:col-span-1">
+      <SocialLinks buttons={buttons} />
     </FooterSection>
   );
 }
@@ -118,8 +123,8 @@ function FooterSocial({ company }: { company: CompanySettings }) {
 function FooterBottomBar({ company }: { company: CompanySettings }) {
   const legalMentions = [`Raison sociale : ${company.companyName}`, company.ninea && `NINEA : ${company.ninea}`, company.rccm && `RCCM : ${company.rccm}`].filter(Boolean).join(" · ");
   return (
-    <div className="border-t border-white/10">
-      <div className="mx-auto flex max-w-6xl flex-col gap-3 px-4 py-4 text-center text-xs text-white/60 sm:flex-row sm:items-center sm:justify-between sm:gap-6 sm:text-left">
+    <div className="border-t border-ink/10">
+      <div className="mx-auto flex max-w-6xl flex-col gap-3 px-4 py-4 text-center text-xs text-ink-muted sm:flex-row sm:items-center sm:justify-between sm:gap-6 sm:text-left">
         <div className="flex flex-col gap-1">
           <p>
             © {new Date().getFullYear()} {BRAND.group.name}. Tous droits réservés.
@@ -146,13 +151,13 @@ function FooterBottomBar({ company }: { company: CompanySettings }) {
 export async function SiteFooter() {
   const [company, pages] = await Promise.all([getCompanySettings(), listPublishedPages(db)]);
   return (
-    <footer className="mt-12 bg-brand-navy text-white wrap-anywhere">
+    <footer className="mt-12 border-t border-ink/10 bg-brand-bar text-ink wrap-anywhere">
       <div className="mx-auto grid max-w-6xl grid-cols-1 gap-8 px-4 py-10 sm:grid-cols-2 lg:grid-cols-3">
         <div className="flex flex-col gap-3 sm:col-span-2 lg:col-span-1">
           <Link href="/" aria-label={`${company.shopName}, accueil`} className="self-start">
             <Logo shopName={company.shopName} logoUrl={company.logoUrl} />
           </Link>
-          <p className="text-sm text-white/80">
+          <p className="text-sm text-ink-muted">
             {BRAND.shop.tagline}
             <br />
             {SHOP_PILLARS_LINE}

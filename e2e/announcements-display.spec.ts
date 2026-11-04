@@ -231,12 +231,12 @@ test.describe("bandeau d'annonces : affichage", () => {
         await visitor.goto("/");
         const bar = visitor.getByRole("region", { name: BAR_NAME });
         await expect(bar.getByRole("button", { name: "Annonce suivante" })).toBeVisible();
-        const first = (await bar.innerText()).trim();
+        const first = ((await bar.textContent()) ?? "").trim();
         await expect(bar).not.toHaveText(first, { timeout: 9_000 });
 
         // Pause au survol : rien ne change pendant plus d'une période.
         await bar.hover();
-        const hovered = (await bar.innerText()).trim();
+        const hovered = ((await bar.textContent()) ?? "").trim();
         await visitor.waitForTimeout(6_000);
         await expect(bar).toHaveText(hovered);
         await visitor.mouse.move(0, 600);
@@ -249,7 +249,7 @@ test.describe("bandeau d'annonces : affichage", () => {
         await visitor.keyboard.press("Enter");
         const resume = bar.getByRole("button", { name: "Reprendre le défilement des annonces" });
         await expect(resume).toBeFocused();
-        const pausedText = (await bar.innerText()).trim();
+        const pausedText = ((await bar.textContent()) ?? "").trim();
         await visitor.waitForTimeout(6_000);
         await expect(bar).toHaveText(pausedText);
         await visitor.keyboard.press("Enter");
@@ -267,7 +267,7 @@ test.describe("bandeau d'annonces : affichage", () => {
         await expect(bar.getByRole("button", { name: "Annonce suivante" })).toBeVisible();
         // Aucun défilement automatique : pas de bouton Pause.
         await expect(bar.getByRole("button", { name: /défilement des annonces/ })).toHaveCount(0);
-        const shown = (await bar.innerText()).trim();
+        const shown = ((await bar.textContent()) ?? "").trim();
         await calm.waitForTimeout(6_000);
         await expect(bar).toHaveText(shown);
         await bar.getByRole("button", { name: "Annonce suivante" }).click();
@@ -302,7 +302,7 @@ test.describe("bandeau d'annonces : affichage", () => {
       await pause.tap();
       const resume = bar.getByRole("button", { name: "Reprendre le défilement des annonces" });
       await expect(resume).toBeVisible();
-      const pausedText = (await bar.innerText()).trim();
+      const pausedText = ((await bar.textContent()) ?? "").trim();
       // Plus d'une période (20 s au plus) sans changement : on attend la durée maximale autorisée + marge.
       await page.waitForTimeout(8_000);
       await expect(bar).toHaveText(pausedText);

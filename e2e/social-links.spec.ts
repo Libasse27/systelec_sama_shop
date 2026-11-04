@@ -113,6 +113,10 @@ test("section réseaux sociaux : 6 boutons d'au moins 44×44 px, sans débordeme
       const box = (await link.boundingBox())!;
       expect(box.width).toBeGreaterThanOrEqual(44);
       expect(box.height).toBeGreaterThanOrEqual(44);
+      const iconBox = (await link.locator("img").boundingBox())!;
+      expect(iconBox.width).toBeGreaterThanOrEqual(32);
+      expect(iconBox.height).toBeGreaterThanOrEqual(32);
+      expect(iconBox.width).toBeLessThanOrEqual(box.width);
       const src = await link.locator("img").getAttribute("src");
       expect(decodeURIComponent(src ?? "")).toContain("/icones/");
     }
@@ -140,6 +144,7 @@ test("anciens liens non conformes en base : masqués un par un, n'empêchent pas
   };
   const address = `Adresse E2E ${Math.random().toString(36).slice(2, 8)}`;
   const footerSocial = () => page.getByRole("navigation", { name: "Réseaux sociaux" });
+  const section = () => socialSection(page);
   const storedLinks = async () => ((await readCompanySetting()) as { socialLinks: unknown }).socialLinks;
   const saveIdentity = async () => {
     await page.getByRole("button", { name: "Enregistrer l'identité", exact: true }).click();
@@ -162,17 +167,20 @@ test("anciens liens non conformes en base : masqués un par un, n'empêchent pas
     socialLinks: legacyLinks,
   });
 
-  // Pied de page : seul le lien conforme est publié, le reste du pied de page fonctionne.
+  // Pied de page : seul le lien conforme est un lien ; les 5 autres icônes restent visibles, sans lien.
   await page.goto("/");
   await expect(footerSocial().getByRole("link", { name: "Instagram (nouvel onglet)" })).toHaveAttribute("href", instagram);
   await expect(footerSocial().getByRole("link")).toHaveCount(1);
+  await expect(section().getByRole("img", { name: /\(lien non disponible\)$/ })).toHaveCount(5);
+  await expect(section().getByRole("img", { name: "Facebook (lien non disponible)", exact: true })).toBeVisible();
   await expect(page.locator('footer a[href^="javascript:"], footer a[href^="http://"], footer a[href*="evil.example"], footer a[href*="tiktok.com"]')).toHaveCount(0);
   await expect(page.getByRole("contentinfo").getByText(/Tous droits réservés/)).toBeVisible();
 
   // Paramètres : avertissement clair, raison sous chaque champ concerné.
   await page.goto("/admin/parametres");
-  await expect(page.getByRole("alert").filter({ hasText: "non affiché(s) sur le site" })).toBeVisible();
-  await expect(page.getByRole("textbox", { name: /^YouTube/ })).toHaveAccessibleDescription(/Non affiché sur le site\. Lien YouTube : l'adresse doit commencer par https:\/\//);
+  await expect(page.getByRole("alert").filter({ hasText: "enregistré(s) mais non publié(s)" })).toBeVisible();
+  await expect(page.getByText(/non affiché/i)).toHaveCount(0);
+  await expect(page.getByRole("textbox", { name: /^YouTube/ })).toHaveAccessibleDescription(/Lien non publié\. Lien YouTube : l'adresse doit commencer par https:\/\//);
   await expect(page.getByRole("textbox", { name: /^LinkedIn/ })).toHaveAccessibleDescription(/domaine officiel de LinkedIn/);
   await expect(page.getByRole("textbox", { name: /^Facebook/ })).toHaveValue("javascript:alert(1)");
 
@@ -198,6 +206,8 @@ test("anciens liens non conformes en base : masqués un par un, n'empêchent pas
   await expect(footerSocial().getByRole("link", { name: "YouTube (nouvel onglet)" })).toHaveAttribute("href", "https://www.youtube.com/@futani-e2e");
   await expect(footerSocial().getByRole("link", { name: "Facebook (nouvel onglet)" })).toHaveCount(0);
   await expect(footerSocial().getByRole("link")).toHaveCount(2);
+  await expect(section().getByRole("img", { name: "Facebook (lien non disponible)", exact: true })).toBeVisible();
+  await expect(section().getByRole("img", { name: /\(lien non disponible\)$/ })).toHaveCount(4);
 });
 
 /* ------------------------------------------------------------------------------------------------
@@ -212,6 +222,8 @@ interface NetworkCase {
   field: RegExp;
   /** Nom accessible du lien dans le pied de page. */
   linkName: string;
+  /** Libellé affiché du réseau. */
+  label: string;
   icon: string;
   href: string;
   host: string;
@@ -219,14 +231,18 @@ interface NetworkCase {
 
 /** Dans l'ordre d'affichage du pied de page. */
 const NETWORKS: readonly NetworkCase[] = [
-  { network: "facebook", field: /^Facebook/, linkName: "Facebook (nouvel onglet)", icon: "/icones/facebook.png", href: "https://www.facebook.com/futani-e2e", host: "www.facebook.com" },
-  { network: "instagram", field: /^Instagram/, linkName: "Instagram (nouvel onglet)", icon: "/icones/instagram.png", href: "https://www.instagram.com/futani-e2e", host: "www.instagram.com" },
-  { network: "linkedin", field: /^LinkedIn/, linkName: "LinkedIn (nouvel onglet)", icon: "/icones/linkedin.png", href: "https://www.linkedin.com/company/futani-e2e", host: "www.linkedin.com" },
-  { network: "tiktok", field: /^TikTok/, linkName: "TikTok (nouvel onglet)", icon: "/icones/tiktok.png", href: "https://www.tiktok.com/@futani-e2e", host: "www.tiktok.com" },
-  { network: "youtube", field: /^YouTube/, linkName: "YouTube (nouvel onglet)", icon: "/icones/youtube.png", href: "https://www.youtube.com/@futani-e2e", host: "www.youtube.com" },
-  { network: "x", field: /^X \(Twitter\)/, linkName: "X (Twitter) (nouvel onglet)", icon: "/icones/x.png", href: "https://x.com/futani-e2e", host: "x.com" },
+  { network: "facebook", field: /^Facebook/, linkName: "Facebook (nouvel onglet)", label: "Facebook", icon: "/icones/facebook.png", href: "https://www.facebook.com/futani-e2e", host: "www.facebook.com" },
+  { network: "instagram", field: /^Instagram/, linkName: "Instagram (nouvel onglet)", label: "Instagram", icon: "/icones/instagram.png", href: "https://www.instagram.com/futani-e2e", host: "www.instagram.com" },
+  { network: "linkedin", field: /^LinkedIn/, linkName: "LinkedIn (nouvel onglet)", label: "LinkedIn", icon: "/icones/linkedin.png", href: "https://www.linkedin.com/company/futani-e2e", host: "www.linkedin.com" },
+  { network: "tiktok", field: /^TikTok/, linkName: "TikTok (nouvel onglet)", label: "TikTok", icon: "/icones/tiktok.png", href: "https://www.tiktok.com/@futani-e2e", host: "www.tiktok.com" },
+  { network: "youtube", field: /^YouTube/, linkName: "YouTube (nouvel onglet)", label: "YouTube", icon: "/icones/youtube.png", href: "https://www.youtube.com/@futani-e2e", host: "www.youtube.com" },
+  { network: "x", field: /^X \(Twitter\)/, linkName: "X (Twitter) (nouvel onglet)", label: "X (Twitter)", icon: "/icones/x.png", href: "https://x.com/futani-e2e", host: "x.com" },
 ];
 
+/** Section « Réseaux sociaux » (parent du titre) : existe aussi sans lien, contrairement au repère de navigation. */
+const socialSection = (page: Page) => page.getByRole("contentinfo").getByRole("heading", { level: 2, name: "Réseaux sociaux", exact: true }).locator("..");
+/** Icône d'un réseau sans adresse valide (ni lien ni bouton). */
+const disabledIcon = (page: Page, item: NetworkCase) => socialSection(page).getByRole("img", { name: `${item.label} (lien non disponible)`, exact: true });
 const socialNav = (page: Page) => page.getByRole("contentinfo").getByRole("navigation", { name: "Réseaux sociaux" });
 const socialLink = (page: Page, item: NetworkCase) => socialNav(page).getByRole("link", { name: item.linkName, exact: true });
 
@@ -262,7 +278,7 @@ async function saveIdentityForm(page: Page): Promise<void> {
 }
 
 /** Valeur calculée d'une propriété CSS sur le premier élément trouvé. */
-const computed = (link: ReturnType<typeof socialLink>, property: "box-shadow" | "background-color") =>
+const computed = (link: ReturnType<typeof socialLink>, property: "box-shadow" | "background-color" | "--tw-ring-shadow") =>
   link.evaluate((element, name) => getComputedStyle(element).getPropertyValue(name), property);
 
 test("administration vers pied de page : les 6 réseaux saisis, conservés après rechargement, sans croisement nom/href/icône", async ({ page }) => {
@@ -290,7 +306,7 @@ test("administration vers pied de page : les 6 réseaux saisis, conservés aprè
   }
 });
 
-test("effacement : vider un champ ne retire que ce réseau, tout vider supprime la section", async ({ page }) => {
+test("effacement : vider un champ ne rend que ce réseau non cliquable, tout vider garde la section avec 6 icônes sans lien", async ({ page }) => {
   await signInAdmin(page);
   await seedAllProfiles();
   await page.goto("/admin/parametres");
@@ -301,6 +317,10 @@ test("effacement : vider un champ ne retire que ce réseau, tout vider supprime 
   await page.goto("/");
   await expect(socialNav(page).getByRole("link")).toHaveCount(5);
   await expect(socialLink(page, cleared)).toHaveCount(0);
+  // Le réseau vidé reste visible, en icône non cliquable.
+  await expect(socialSection(page).getByRole("img", { name: /\(lien non disponible\)$/ })).toHaveCount(1);
+  await expect(disabledIcon(page, cleared)).toBeVisible();
+  await expect(socialSection(page).locator("img")).toHaveCount(6);
   for (const item of NETWORKS.filter((candidate) => candidate !== cleared)) {
     await expect(socialLink(page, item)).toHaveAttribute("href", item.href);
   }
@@ -313,8 +333,10 @@ test("effacement : vider un champ ne retire que ce réseau, tout vider supprime 
   await page.goto("/");
   const footer = page.getByRole("contentinfo");
   await expect(footer.getByText(/Tous droits réservés/)).toBeVisible();
+  await expect(footer.getByRole("heading", { level: 2, name: "Réseaux sociaux", exact: true })).toBeVisible();
   await expect(socialNav(page)).toHaveCount(0);
-  await expect(footer.getByRole("heading", { level: 2, name: "Réseaux sociaux", exact: true })).toHaveCount(0);
+  await expect(socialSection(page).getByRole("link")).toHaveCount(0);
+  await expect(socialSection(page).getByRole("img", { name: /\(lien non disponible\)$/ })).toHaveCount(6);
 });
 
 test("sécurité des liens : nouvel onglet isolé, https, et aucun autre lien du pied de page vers un réseau social", async ({ page }) => {
@@ -372,12 +394,26 @@ for (const viewport of [
     }
     expect(reached, "Le premier lien social doit être atteignable avec Tab").toBe(true);
 
+    // Ombre au repos (sans focus ni survol), mesurée sur le dernier lien avant de parcourir les liens au clavier.
+    const unfocusedShadow = await computed(socialLink(page, NETWORKS[NETWORKS.length - 1]!), "box-shadow");
+    // Cadre teinté sans ombre : au repos, aucun anneau.
+    expect(unfocusedShadow, "Aucune ombre attendue au repos (cadre teinté)").toBe("none");
     for (const [index, item] of NETWORKS.entries()) {
       if (index > 0) await page.keyboard.press("Tab");
       const link = socialLink(page, item);
       expect(await activeHref(), `Focus attendu sur ${item.linkName}`).toBe(item.href);
       await expect(link).toBeFocused();
-      expect(await computed(link, "box-shadow"), `Anneau de focus absent sur ${item.linkName}`).not.toBe("none");
+      // Le cadre porte déjà une ombre interne : l'anneau doit changer l'ombre par rapport à l'état non focalisé.
+      const focusedShadow = await computed(link, "box-shadow");
+      expect(focusedShadow, `Anneau de focus absent sur ${item.linkName}`).not.toBe(unfocusedShadow);
+      // Anneau réel : une ombre pleine (sans flou, d'épaisseur non nulle, de couleur non transparente) absente au repos.
+      expect(focusedShadow, `Anneau de focus non opaque sur ${item.linkName}`).toMatch(/rgb\((?!0, 0, 0\))[^)]*\) 0px 0px 0px [1-9]\d*px/);
+      expect(unfocusedShadow).not.toMatch(/rgb\([^)]*\) 0px 0px 0px [1-9]\d*px/);
+      // Anneau d'au moins 3:1 sur le fond blanc du pied de page (le bleu de marque, pas l'orange à 2,1:1).
+      const [red, green, blue] = ([...focusedShadow.matchAll(/rgb\((\d+), (\d+), (\d+)\)/g)].at(-1) ?? []).slice(1).map(Number); // dernier : l'anneau (le premier est le décalage blanc)
+      const channel = (value: number) => (value / 255 <= 0.03928 ? value / 255 / 12.92 : ((value / 255 + 0.055) / 1.055) ** 2.4);
+      const ringContrast = 1.05 / (0.2126 * channel(red!) + 0.7152 * channel(green!) + 0.0722 * channel(blue!) + 0.05);
+      expect(ringContrast, `Contraste de l'anneau sur ${item.linkName}`).toBeGreaterThanOrEqual(3);
       await expect(link).toHaveAccessibleName(item.linkName);
       await expect(link.locator("img")).toHaveAttribute("alt", "");
     }
@@ -411,7 +447,16 @@ test("survol à 1280 px : le style calculé du bouton change", async ({ page }) 
     const link = socialLink(page, item);
     await link.scrollIntoViewIfNeeded();
     await page.mouse.move(0, 0);
-    await expect.poll(() => computed(link, "box-shadow")).toBe("none");
+    // Attendre la fin de la transition de retour au repos : deux lectures successives identiques.
+    let previous = "";
+    await expect
+      .poll(async () => {
+        const current = (await computed(link, "background-color")) + (await computed(link, "box-shadow"));
+        const stable = current === previous;
+        previous = current;
+        return stable;
+      })
+      .toBe(true);
     const before = { shadow: await computed(link, "box-shadow"), background: await computed(link, "background-color") };
     await link.hover();
     await expect
@@ -428,5 +473,130 @@ test("chargement réel : l'image de chaque bouton est chargée (naturalWidth > 0
     await link.scrollIntoViewIfNeeded();
     const image = link.locator("img");
     await expect.poll(() => image.evaluate((element) => (element as HTMLImageElement).complete && (element as HTMLImageElement).naturalWidth), { message: `Image non chargée : ${item.linkName}` }).toBeGreaterThan(0);
+  }
+});
+
+/* ------------------------------------------------------------------------------------------------
+ * Six réseaux toujours visibles : un lien avec adresse valide, une icône inerte sans adresse.
+ * ---------------------------------------------------------------------------------------------- */
+const VIEWPORTS = [
+  { width: 1280, height: 800 },
+  { width: 820, height: 1100 },
+  { width: 390, height: 844 },
+] as const;
+
+/** Écrit un état précis des six réseaux (null : non configuré), le garde restaure la valeur d'origine. */
+async function seedLinks(links: Record<Network, string | null>): Promise<void> {
+  const base = (guard?.original ?? {}) as Record<string, unknown>;
+  await writeCompanySetting({
+    companyName: "FUTANI GROUP",
+    shopName: "FUTANI SHOP",
+    logoUrl: null,
+    phone: null,
+    whatsapp: null,
+    email: null,
+    address: null,
+    openingHours: null,
+    ninea: null,
+    rccm: null,
+    ...base,
+    socialLinks: links,
+  });
+}
+
+const horizontalOverflow = (page: Page) => page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+
+// Facebook, LinkedIn et X configurés ; Instagram, TikTok et YouTube non configurés.
+const MIXED_CONFIGURED = new Set<Network>(["facebook", "linkedin", "x"]);
+
+for (const viewport of VIEWPORTS) {
+  test(`réseaux mixtes à ${viewport.width} px : 6 icônes visibles, liens seulement pour les réseaux configurés, icônes inertes non focalisables`, async ({ page, context }, testInfo) => {
+    await seedLinks(Object.fromEntries(NETWORKS.map((item) => [item.network, MIXED_CONFIGURED.has(item.network) ? item.href : null])) as Record<Network, string | null>);
+    // Aucune requête ne doit joindre un vrai site, et aucun onglet ne doit s'ouvrir sur un clic d'une icône inerte.
+    const external: string[] = [];
+    await context.route(
+      (url) => url.hostname !== "localhost",
+      async (route) => {
+        external.push(route.request().url());
+        await route.fulfill({ status: 200, contentType: "text/html", body: "<!doctype html><title>stub</title>" });
+      },
+    );
+    const opened: string[] = [];
+    context.on("page", (opener) => opened.push(opener.url()));
+
+    await page.setViewportSize(viewport);
+    await page.goto("/");
+    const section = socialSection(page);
+    await section.scrollIntoViewIfNeeded();
+    await expect(section.locator("img")).toHaveCount(6);
+    for (const image of await section.locator("img").all()) await expect(image).toBeVisible();
+
+    const configured = NETWORKS.filter((item) => MIXED_CONFIGURED.has(item.network));
+    const inert = NETWORKS.filter((item) => !MIXED_CONFIGURED.has(item.network));
+    await expect(section.getByRole("link")).toHaveCount(configured.length);
+    for (const item of configured) {
+      const link = socialLink(page, item);
+      await expect(link).toBeVisible();
+      await expect(link).toHaveAttribute("href", item.href);
+    }
+
+    for (const item of inert) {
+      const icon = disabledIcon(page, item);
+      await expect(icon).toBeVisible();
+      await expect(icon).toHaveAccessibleName(`${item.label} (lien non disponible)`);
+      expect(await icon.evaluate((element) => element.tagName), `${item.label} ne doit pas être un lien`).not.toBe("A");
+      await expect(icon).not.toHaveAttribute("href");
+      await expect(icon).not.toHaveAttribute("tabindex");
+      await expect(icon.locator("xpath=ancestor-or-self::a")).toHaveCount(0);
+      // Même forcé, le focus ne s'y pose pas.
+      const focusable = await icon.evaluate((element) => {
+        (element as HTMLElement).focus();
+        return document.activeElement === element;
+      });
+      expect(focusable, `${item.label} ne doit pas être focalisable`).toBe(false);
+    }
+
+    // Clavier : depuis le début de la page, Tab ne s'arrête que sur les liens, dans l'ordre, sans jamais passer par une icône inerte.
+    const activeHref = () => page.evaluate(() => (document.activeElement as HTMLAnchorElement | null)?.href ?? "");
+    await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    let reached = false;
+    for (let press = 0; press < 150 && !reached; press++) {
+      await page.keyboard.press("Tab");
+      reached = (await activeHref()) === configured[0]!.href;
+    }
+    expect(reached, "Le premier lien social doit être atteignable avec Tab").toBe(true);
+    for (const [index, item] of configured.entries()) {
+      if (index > 0) await page.keyboard.press("Tab");
+      expect(await activeHref(), `Focus attendu sur ${item.linkName}`).toBe(item.href);
+      await expect(socialLink(page, item)).toBeFocused();
+    }
+
+    // Clic sur chaque icône inerte : ni onglet, ni navigation, ni requête vers un réseau.
+    for (const item of inert) await disabledIcon(page, item).click();
+    await page.waitForTimeout(300);
+    expect(opened, "Aucun onglet ne doit s'ouvrir").toEqual([]);
+    expect(new URL(page.url()).pathname).toBe("/");
+    expect(external, "Aucune requête externe attendue").toEqual([]);
+    expect(context.pages()).toHaveLength(1);
+
+    expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
+    await page.getByRole("contentinfo").scrollIntoViewIfNeeded();
+    await page.getByRole("contentinfo").screenshot({ path: testInfo.outputPath(`footer-social-mixte-${viewport.width}.png`) });
+  });
+}
+
+test("sans aucun lien aux trois largeurs : section visible, 6 icônes inertes, aucun lien, captures", async ({ page }, testInfo) => {
+  await seedLinks({ facebook: null, instagram: null, linkedin: null, tiktok: null, youtube: null, x: null });
+  for (const viewport of VIEWPORTS) {
+    await page.setViewportSize(viewport);
+    await page.goto("/");
+    const section = socialSection(page);
+    await expect(section).toBeVisible();
+    await expect(section.getByRole("link")).toHaveCount(0);
+    await expect(socialNav(page)).toHaveCount(0);
+    for (const item of NETWORKS) await expect(disabledIcon(page, item)).toBeVisible();
+    expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
+    await page.getByRole("contentinfo").scrollIntoViewIfNeeded();
+    await page.getByRole("contentinfo").screenshot({ path: testInfo.outputPath(`footer-social-vide-${viewport.width}.png`) });
   }
 });
