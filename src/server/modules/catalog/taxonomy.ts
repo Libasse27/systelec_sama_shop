@@ -188,6 +188,11 @@ export const SERVICE_CATEGORIES: readonly ServiceCategorySeed[] = [
       "Maintenance électrique",
     ],
   },
+  {
+    name: "Développement web",
+    description: "Conception et développement d'applications et de sites web, du front-end au back-end.",
+    services: ["Développement web fullstack"],
+  },
 ];
 
 /** Pages d'information créées en BROUILLON : aucun texte légal n'est inventé. */

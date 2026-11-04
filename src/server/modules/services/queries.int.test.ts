@@ -11,16 +11,17 @@ describe("services et contenu publics (PostgreSQL)", () => {
     await seedBaseCatalog(db);
   });
 
-  it("présente les 4 familles du §7, toutes sur devis tant que les tarifs ne sont pas fixés", async () => {
+  it("présente les 5 familles (4 du §7 et le développement web), toutes sur devis tant que les tarifs ne sont pas fixés", async () => {
     const groups = await listServiceGroups(db);
     expect(groups.map((group) => group.name)).toEqual([
       "Maintenance informatique",
       "Réseaux informatiques",
       "Vidéosurveillance",
       "Électricité",
+      "Développement web",
     ]);
     const services = groups.flatMap((group) => group.services);
-    expect(services).toHaveLength(41);
+    expect(services).toHaveLength(42);
     expect(services.every((service) => service.pricingMode === "QUOTE_ONLY" && service.price === null)).toBe(true);
   });
 
