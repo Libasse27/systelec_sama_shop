@@ -34,7 +34,7 @@ function ReturnCard({ entry, orderNumber, token }: { entry: CustomerReturnView; 
         <p className="mt-1">
           Demande acceptée.
           {entry.decision.refundAmount > 0 &&
-            (entry.refunded ? ` Remboursement de ${formatFcfa(entry.decision.refundAmount)} versé.` : ` Remboursement prévu : ${formatFcfa(entry.decision.refundAmount)}, en espèces à la boutique.`)}
+            (entry.refunded ? ` Remboursement de ${formatFcfa(entry.decision.refundAmount)} versé.` : ` Remboursement prévu : ${formatFcfa(entry.decision.refundAmount)}.`)}
         </p>
       )}
       {entry.decision?.outcome === "REJECTED" && <p className="mt-1">Demande refusée{entry.decision.note && ` : ${entry.decision.note}`}.</p>}

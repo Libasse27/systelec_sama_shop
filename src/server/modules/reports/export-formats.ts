@@ -10,8 +10,8 @@ type XlsxSheet = Parameters<typeof writeXlsxFile>[0][number];
 /** Journal des écritures de la période (une ligne par reçu), pour un tableur ou un comptable. */
 export function financialReportCsv(report: FinancialReport): string {
   const rows: CsvCell[][] = [
-    ["Date", "Reçu", "Type", "Document", "Montant (FCFA)", "Agent", "Motif"],
-    ...report.entries.map((entry) => [formatDateTime(entry.createdAt), entry.receiptNumber, entry.kind, entry.document, entry.amount, entry.recordedBy, entry.reason]),
+    ["Date", "Reçu", "Type", "Moyen", "Référence", "Document", "Montant (FCFA)", "Agent", "Motif"],
+    ...report.entries.map((entry) => [formatDateTime(entry.createdAt), entry.receiptNumber, entry.kind, entry.method, entry.transactionReference, entry.document, entry.amount, entry.recordedBy, entry.reason]),
     // Un journal tronqué ne doit jamais passer pour complet.
     ...(report.truncated ? [[`EXPORT TRONQUÉ : ${report.entries.length} écritures au plus ; réduisez la période pour obtenir le détail complet.`]] : []),
   ];
@@ -33,11 +33,12 @@ function summarySheet(report: FinancialReport): XlsxSheet {
     data: [
       [{ value: `Rapport financier du ${formatDate(report.period.from)} au ${formatDate(new Date(report.period.to.getTime() - 1))}`, fontWeight: "bold" }],
       [],
-      header(["Caisse (espèces)", "FCFA"]),
+      header(["Encaissements", "FCFA"]),
       line("Encaissé", cash.received),
       line("Annulé (contre-écritures)", cash.voided),
       line("Remboursé (retours)", cash.refunded),
-      line("Net en caisse", cash.net),
+      line("Net encaissé", cash.net),
+      ...report.byMethod.map((row) => line(`Dont ${row.label}`, row.net)),
       line("Dont commandes", byDocument.orders),
       line("Dont interventions", byDocument.interventions),
       [],
@@ -76,10 +77,10 @@ export function financialReportXlsx(report: FinancialReport): Promise<Buffer> {
     },
     {
       sheet: "Écritures",
-      columns: [{ width: 18 }, { width: 18 }, { width: 16 }, { width: 28 }, { width: 14 }, { width: 24 }, { width: 40 }],
+      columns: [{ width: 18 }, { width: 18 }, { width: 16 }, { width: 16 }, { width: 22 }, { width: 28 }, { width: 14 }, { width: 24 }, { width: 40 }],
       data: [
-        header(["Date", "Reçu", "Type", "Document", "Montant (FCFA)", "Agent", "Motif"]),
-        ...report.entries.map((entry) => [dateTime(entry.createdAt), text(entry.receiptNumber), text(entry.kind), text(entry.document), money(entry.amount), text(entry.recordedBy), text(entry.reason)]),
+        header(["Date", "Reçu", "Type", "Moyen", "Référence", "Document", "Montant (FCFA)", "Agent", "Motif"]),
+        ...report.entries.map((entry) => [dateTime(entry.createdAt), text(entry.receiptNumber), text(entry.kind), text(entry.method), text(entry.transactionReference), text(entry.document), money(entry.amount), text(entry.recordedBy), text(entry.reason)]),
       ],
     },
     {

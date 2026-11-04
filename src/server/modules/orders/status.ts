@@ -109,7 +109,7 @@ export async function applyOrderTransition(
   if (to === "CANCELLED" && order.amountPaid > 0) {
     throw new AppError(
       "CONFLICT",
-      `Des encaissements sont enregistrés (${formatFcfa(order.amountPaid)}) : annulez-les par contre-écriture, en rendant les espèces, avant d'annuler la commande.`,
+      `Des encaissements sont enregistrés (${formatFcfa(order.amountPaid)}) : annulez-les par contre-écriture, en rendant les sommes reçues, avant d'annuler la commande.`,
     );
   }
 

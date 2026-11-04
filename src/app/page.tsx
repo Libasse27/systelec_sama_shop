@@ -1,9 +1,11 @@
 import Link from "next/link";
 import { BrandIcon, type BrandIconName } from "@/components/brand/brand-icon";
+import { PaymentMethodIcons } from "@/components/brand/payment-method-icons";
 import { ProductGrid } from "@/components/catalog/product-card";
 import { JsonLd } from "@/components/seo/json-ld";
 import { BRAND, SHOP_PILLARS_LINE } from "@/lib/brand";
 import { servicePriceLabel } from "@/lib/labels";
+import { PAYMENT_NOTICE, SCHEMA_ORG_PAYMENT_ACCEPTED } from "@/lib/payment-methods";
 import { db } from "@/server/db/client";
 import { featuredProducts } from "@/server/modules/catalog/queries";
 import { listActivePartners } from "@/server/modules/partners/queries";
@@ -51,8 +53,8 @@ export default async function HomePage() {
           </Link>
         </div>
         <p className="mt-6 inline-flex items-center gap-2 rounded-lg bg-white/10 px-3 py-2 text-sm">
-          <BrandIcon name="especes" className="size-5" />
-          Paiement exclusivement en espèces, à la livraison ou au retrait.
+          <PaymentMethodIcons />
+          {PAYMENT_NOTICE}
         </p>
       </section>
 
@@ -154,7 +156,7 @@ export default async function HomePage() {
           slogan: BRAND.shop.tagline,
           parentOrganization: { "@type": "Organization", name: BRAND.group.name, slogan: BRAND.group.signature },
           url: absoluteUrl("/"),
-          paymentAccepted: "Cash",
+          paymentAccepted: SCHEMA_ORG_PAYMENT_ACCEPTED,
           currenciesAccepted: "XOF",
           ...(company.phone && { telephone: company.phone }),
           ...(company.address && { address: company.address }),

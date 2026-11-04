@@ -1,14 +1,15 @@
 import Image from "next/image";
+import type { PaymentIconName } from "@/lib/payment-methods";
 import { cn } from "@/lib/utils";
 
 /** Pictogrammes FUTANI (fond détouré), servis depuis public/icones. */
 export type BrandIconName =
+  | PaymentIconName
   | "boutique"
   | "casque"
   | "cle-usb"
   | "email"
   | "facebook"
-  | "especes"
   | "facture"
   | "info"
   | "innovation"

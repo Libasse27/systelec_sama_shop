@@ -4,6 +4,7 @@ import { BrandLogo } from "@/components/brand/logo";
 import { Breadcrumbs } from "@/components/layout/breadcrumbs";
 import { BRAND } from "@/lib/brand";
 import { servicePriceLabel } from "@/lib/labels";
+import { ACCEPTED_PAYMENT_METHODS } from "@/lib/payment-methods";
 import { db } from "@/server/db/client";
 import { listServiceGroups } from "@/server/modules/services/queries";
 
@@ -24,7 +25,7 @@ export default async function ServicesPage() {
           <h1 className="text-2xl font-bold">Services techniques</h1>
           <p className="mt-2 max-w-2xl text-ink-muted">
             Des interventions réalisées par du personnel qualifié. Chaque prestation fait l&apos;objet d&apos;un devis
-            adapté à votre besoin ; le règlement se fait en espèces après la prestation.
+            adapté à votre besoin ; le règlement se fait {ACCEPTED_PAYMENT_METHODS}, après la prestation.
           </p>
         </div>
       </header>

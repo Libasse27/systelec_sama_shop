@@ -7,6 +7,7 @@ import { ActionForm, CheckboxField, IntegerField, SelectField, SubmitButton, Tex
 import { formatDateTime } from "@/lib/dates";
 import { RETURN_EVENT_LABELS, RETURN_EXCEPTION_GROUND_LABELS, RETURN_STATUS_LABELS, RETURN_VERIFICATION_KIND_LABELS } from "@/lib/labels";
 import { formatFcfa } from "@/lib/money";
+import { PAYMENT_METHOD_OPTIONS } from "@/lib/payment-methods";
 import { requirePermission, type CurrentUser } from "@/server/auth/session";
 import { db } from "@/server/db/client";
 import { RETURN_DECLARATION_HOURS, RETURN_PROCESSING_BUSINESS_HOURS } from "@/server/modules/returns/policy";
@@ -175,9 +176,11 @@ function RefundForm({ entry, user }: { entry: ReturnView; user: CurrentUser }) {
           )}
           <div className="flex flex-wrap items-end gap-2">
             <input type="hidden" name="idempotencyKey" value={randomUUID()} />
+            <SelectField name="method" label="Moyen de remboursement" options={PAYMENT_METHOD_OPTIONS} defaultValue="CASH" />
+            <TextField name="transactionReference" label="Référence de la transaction" required={false} hint="Obligatoire pour un paiement mobile." />
             <TextField name="note" label="Note interne" required={false} className="min-w-56 flex-1" />
-            <SubmitButton confirm={`Valider et verser ${formatFcfa(entry.refundAmount)} en espèces au client ?`}>
-              Rembourser {formatFcfa(entry.refundAmount)} en espèces
+            <SubmitButton confirm={`Valider et verser ${formatFcfa(entry.refundAmount)} au client ?`}>
+              Rembourser {formatFcfa(entry.refundAmount)}
             </SubmitButton>
           </div>
         </>

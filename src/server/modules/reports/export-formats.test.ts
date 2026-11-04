@@ -12,13 +12,25 @@ const report = (truncated: boolean): FinancialReport => ({
   sales: { count: 0, total: 0, deliveryFees: 0, itemsSold: 0 },
   refunds: [],
   invoicedInterventions: { count: 0, total: 0, rows: [] },
-  entries: [{ createdAt: new Date("2026-10-01T10:00:00Z"), receiptNumber: "REC-2026-000001", kind: "Encaissement", document: "Commande CMD-2026-000001", amount: 1000, recordedBy: "@agent", reason: null }],
+  entries: [{ createdAt: new Date("2026-10-01T10:00:00Z"), receiptNumber: "REC-2026-000001", kind: "Encaissement", document: "Commande CMD-2026-000001", method: "Wave", transactionReference: "-WV1234", amount: 1000, recordedBy: "@agent", reason: null }],
   truncated,
 });
 
 describe("export CSV du rapport financier", () => {
   it("neutralise une cellule commençant par un caractère de formule", () => {
     expect(financialReportCsv(report(false))).toContain(";'@agent;");
+  });
+
+  it("indique le moyen de paiement de chaque écriture", () => {
+    const csv = financialReportCsv(report(false));
+    expect(csv).toContain("Moyen");
+    expect(csv).toContain(";Wave;");
+  });
+
+  it("ajoute la colonne Référence après le moyen, formule neutralisée", () => {
+    const [header, line] = financialReportCsv(report(false)).split("\r\n");
+    expect(header).toContain(";Moyen;Référence;Document;");
+    expect(line).toContain(";Wave;'-WV1234;Commande CMD-2026-000001;");
   });
 
   it("signale un journal tronqué au lieu de le faire passer pour complet", () => {

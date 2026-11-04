@@ -1,9 +1,11 @@
 import { randomUUID } from "node:crypto";
 import { Section } from "@/components/admin/admin-ui";
-import { ActionForm, IntegerField, SubmitButton, TextField } from "@/components/forms/form-controls";
+import { PaymentMethodIcon } from "@/components/brand/payment-method-icons";
+import { ActionForm, IntegerField, SelectField, SubmitButton, TextField } from "@/components/forms/form-controls";
 import { formatDateTime } from "@/lib/dates";
 import { PAYMENT_STATUS_LABELS } from "@/lib/labels";
 import { formatFcfa } from "@/lib/money";
+import { PAYMENT_METHOD_LABELS, PAYMENT_METHOD_OPTIONS } from "@/lib/payment-methods";
 import type { CurrentUser } from "@/server/auth/session";
 import { db } from "@/server/db/client";
 import type { PaymentStatus } from "@/generated/prisma/client";
@@ -27,7 +29,7 @@ export interface PaymentsSectionProps {
   user: CurrentUser;
 }
 
-/** Solde, encaissement en espèces et contre-écritures d'une commande ou d'une intervention (selon les permissions). */
+/** Solde, encaissement et contre-écritures d'une commande ou d'une intervention (selon les permissions). */
 export async function PaymentsSection({ target, total, amountPaid, refundedAmount = 0, paymentStatus, payable, voidable, user }: PaymentsSectionProps) {
   const canRecord = user.permissions.has("payments.record");
   const canCorrect = user.permissions.has("payments.correct");
@@ -63,14 +65,16 @@ export async function PaymentsSection({ target, total, amountPaid, refundedAmoun
               <div className="grid gap-3 sm:grid-cols-2">
                 <IntegerField
                   name="amount"
-                  label="Montant reçu en espèces (FCFA)"
+                  label="Montant reçu (FCFA)"
                   defaultValue={String(balance)}
                   hint={commerce.partialPaymentEnabled ? "Acompte possible, jamais au-delà du reste à payer." : "Paiement partiel désactivé : solde complet uniquement."}
                 />
+                <SelectField name="method" label="Moyen de paiement" options={PAYMENT_METHOD_OPTIONS} defaultValue="CASH" hint="Pour un paiement mobile, vérifiez d'abord la réception du transfert." />
+                <TextField name="transactionReference" label="Référence de la transaction" required={false} hint="Obligatoire pour un paiement mobile." />
                 <TextField name="note" label="Note interne" required={false} hint="Jamais imprimée sur le reçu." />
               </div>
               <div>
-                <SubmitButton confirm="Confirmer la réception de ces espèces ? L'encaissement ne pourra être corrigé que par contre-écriture.">
+                <SubmitButton confirm="Confirmer la réception de ce paiement ? L'encaissement ne pourra être corrigé que par contre-écriture.">
                   Enregistrer l&apos;encaissement
                 </SubmitButton>
               </div>
@@ -91,7 +95,9 @@ export async function PaymentsSection({ target, total, amountPaid, refundedAmoun
                   {payment.receiptNumber}
                 </a>{" "}
                 — {formatDateTime(payment.createdAt)} · {payment.amount > 0 ? "encaissement" : payment.refundOf ? `remboursement du retour ${payment.refundOf}` : "contre-écriture"}{" "}
-                <span className={payment.amount < 0 ? "text-red-800" : undefined}>{formatFcfa(payment.amount)}</span> · {payment.recordedBy}
+                <span className={payment.amount < 0 ? "text-red-800" : undefined}>{formatFcfa(payment.amount)}</span> · <span className="inline-flex items-center gap-1 align-middle">
+                  <PaymentMethodIcon method={payment.method} /> {PAYMENT_METHOD_LABELS[payment.method]}
+                </span>{payment.transactionReference && <> · réf. <span className="font-mono">{payment.transactionReference}</span></>} · {payment.recordedBy}
                 {payment.reverses && <span className="text-ink-muted"> · annule {payment.reverses} ({payment.reason})</span>}
                 {payment.reversedBy && <span className="text-red-800"> · annulé par {payment.reversedBy}</span>}
                 {payment.note && <div className="text-xs text-ink-muted">Note : {payment.note}</div>}
@@ -101,7 +107,7 @@ export async function PaymentsSection({ target, total, amountPaid, refundedAmoun
                   {!payment.reversedBy && (
                     <div className="flex flex-wrap items-end gap-2">
                       <TextField name="reason" label={`Motif d'annulation de ${payment.receiptNumber}`} hint="Imprimé sur le reçu d'annulation." className="min-w-56 flex-1" />
-                      <SubmitButton variant="danger" confirm="Annuler cet encaissement par contre-écriture ? Les espèces doivent être rendues ou l'erreur avérée.">
+                      <SubmitButton variant="danger" confirm="Annuler cet encaissement par contre-écriture ? La somme doit être rendue ou l'erreur avérée.">
                         Annuler l&apos;encaissement
                       </SubmitButton>
                     </div>

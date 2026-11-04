@@ -2,8 +2,10 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { randomUUID } from "node:crypto";
 import { redirect } from "next/navigation";
+import { PaymentMethodIcons } from "@/components/brand/payment-method-icons";
 import { ActionForm, SubmitButton, TextAreaField, TextField } from "@/components/forms/form-controls";
 import { formatFcfa } from "@/lib/money";
+import { ACCEPTED_PAYMENT_METHODS } from "@/lib/payment-methods";
 import { getCurrentUser } from "@/server/auth/session";
 import { db } from "@/server/db/client";
 import { getCartView } from "@/server/modules/cart/service";
@@ -118,9 +120,12 @@ export default async function CheckoutPage() {
           )}
 
           <TextAreaField name="notes" label="Remarques" required={false} rows={3} />
-          <p className="rounded-lg bg-brand-navy p-3 text-sm text-white">
-            Paiement <strong>en espèces uniquement</strong>, à la livraison ou au retrait. Aucun paiement en ligne.
-          </p>
+          <div className="flex flex-col gap-2 rounded-lg bg-brand-navy p-3 text-sm text-white">
+            <PaymentMethodIcons />
+            <p>
+              Paiement <strong>{ACCEPTED_PAYMENT_METHODS}</strong>, à la livraison ou au retrait. Rien à payer sur le site.
+            </p>
+          </div>
           <div>
             <SubmitButton>Confirmer la commande</SubmitButton>
           </div>

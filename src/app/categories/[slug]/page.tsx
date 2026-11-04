@@ -19,7 +19,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   if (!category) return {};
   return {
     title: category.seoTitle ?? category.name,
-    description: category.seoDescription ?? category.description ?? `${category.name} : prix en FCFA, stock réel, paiement en espèces.`,
+    description: category.seoDescription ?? category.description ?? `${category.name} : prix en FCFA, stock réel, paiement à la livraison ou au retrait.`,
     alternates: { canonical: `/categories/${category.slug}` },
   };
 }

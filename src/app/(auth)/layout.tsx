@@ -1,12 +1,13 @@
+import { PaymentMethodIcons } from "@/components/brand/payment-method-icons";
 import { BrandIcon, type BrandIconName } from "@/components/brand/brand-icon";
 import { BrandLogo, Logo } from "@/components/brand/logo";
 import { BRAND, SHOP_PILLARS_LINE } from "@/lib/brand";
+import { PAYMENT_NOTICE } from "@/lib/payment-methods";
 import { getCompanySettings } from "@/server/storefront";
 
 const BENEFITS: readonly { icon: BrandIconName; text: string }[] = [
   { icon: "livraison", text: "Suivez vos commandes, de la préparation à la remise." },
   { icon: "facture", text: `Retrouvez vos demandes de devis et d'intervention ${BRAND.tech.name}.` },
-  { icon: "especes", text: "Paiement en espèces uniquement, à la livraison ou au retrait." },
 ];
 
 /**
@@ -33,6 +34,10 @@ export default async function AuthLayout({ children }: Readonly<{ children: Reac
                 {text}
               </li>
             ))}
+            <li className="flex flex-col gap-2 text-sm text-white/85">
+              <PaymentMethodIcons />
+              {PAYMENT_NOTICE}
+            </li>
           </ul>
           <div className="mt-auto hidden flex-col items-start gap-2 lg:flex">
             <BrandLogo variant="group" className="h-9" />

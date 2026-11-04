@@ -2,6 +2,7 @@ import { formatDateTime, formatTime } from "@/lib/dates";
 import { INTERVENTION_STATUS_LABELS, PAYMENT_STATUS_LABELS } from "@/lib/labels";
 import { formatFcfa } from "@/lib/money";
 import type { CustomerIntervention } from "@/server/modules/quotes/queries";
+import { ACCEPTED_PAYMENT_METHODS } from "@/lib/payment-methods";
 
 /** Suivi client d'une intervention : statut, rendez-vous, paiement, facture et reçus (lien avec jeton pour un invité). */
 export function InterventionFollowUp({ intervention, documentQuery }: { intervention: CustomerIntervention; documentQuery: string }) {
@@ -25,7 +26,7 @@ export function InterventionFollowUp({ intervention, documentQuery }: { interven
         <dt className="text-ink-muted">Paiement</dt>
         <dd>
           {PAYMENT_STATUS_LABELS[intervention.paymentStatus]}
-          {balance > 0 && ` — reste ${formatFcfa(balance)} en espèces après la prestation`}
+          {balance > 0 && ` — reste ${formatFcfa(balance)} à régler ${ACCEPTED_PAYMENT_METHODS}, après la prestation`}
         </dd>
       </dl>
       {(intervention.receipts.length > 0 || intervention.invoiceNumber) && (

@@ -13,6 +13,8 @@ export async function recordPaymentAction(target: PaymentTarget, _state: ActionS
   return adminAction(pathOf(target), async (actor) => {
     const { receiptNumber, replayed } = await recordPayment(db, actor, target, {
       amount: int(formData, "amount"),
+      method: text(formData, "method"),
+      transactionReference: text(formData, "transactionReference"),
       note: text(formData, "note"),
       idempotencyKey: text(formData, "idempotencyKey"),
     });

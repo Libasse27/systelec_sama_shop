@@ -4,6 +4,7 @@ import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteHeader } from "@/components/layout/site-header";
 import { BRAND } from "@/lib/brand";
 import { getServerEnv } from "@/lib/env";
+import { ACCEPTED_PAYMENT_METHODS } from "@/lib/payment-methods";
 import "./globals.css";
 
 export function generateMetadata(): Metadata {
@@ -14,7 +15,7 @@ export function generateMetadata(): Metadata {
       default: `${BRAND.shop.name}, la boutique de ${BRAND.group.name}`,
       template: `%s | ${BRAND.shop.name}`,
     },
-    description: `${BRAND.shop.tagline} Équipements informatiques, réseaux, électronique, électricité et sécurité, et services techniques au Sénégal. Paiement en espèces uniquement.`,
+    description: `${BRAND.shop.tagline} Équipements informatiques, réseaux, électronique, électricité et sécurité, et services techniques au Sénégal. Paiement ${ACCEPTED_PAYMENT_METHODS}.`,
     applicationName: BRAND.shop.name,
     openGraph: { siteName: BRAND.shop.name, locale: "fr_SN", type: "website" },
   };

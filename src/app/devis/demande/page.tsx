@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { randomUUID } from "node:crypto";
 import { ActionForm, CheckboxField, SubmitButton, TextAreaField, TextField } from "@/components/forms/form-controls";
 import { stringParam } from "@/components/admin/admin-ui";
+import { ACCEPTED_PAYMENT_METHODS } from "@/lib/payment-methods";
 import { getCurrentUser } from "@/server/auth/session";
 import { db } from "@/server/db/client";
 import { getServiceDetail } from "@/server/modules/services/queries";
@@ -24,7 +25,7 @@ export default async function QuoteRequestPage({ searchParams }: Props) {
     <main className="mx-auto max-w-2xl px-4 py-8">
       <h1 className="text-2xl font-bold">Demande de devis ou d&apos;intervention</h1>
       <p className="mt-2 text-ink-muted">
-        {service ? `Service : ${service.name}. ` : ""}Décrivez votre besoin : nous l&apos;étudions et vous envoyons un devis détaillé. Règlement en espèces,
+        {service ? `Service : ${service.name}. ` : ""}Décrivez votre besoin : nous l&apos;étudions et vous envoyons un devis détaillé. Règlement {ACCEPTED_PAYMENT_METHODS},
         après la prestation.
       </p>
       <ActionForm action={submitQuoteRequestAction} className="mt-6">

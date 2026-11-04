@@ -28,7 +28,7 @@ test.describe("panier et commande (§20 n° 7 à 14)", () => {
     await expect(page).toHaveURL(/\/commande\/CMD-\d{4}-\d{6}\?jeton=/);
     await expect(page.getByText("Merci ! Votre commande est enregistrée")).toBeVisible();
     // 2 × 12 500 + 1 500 de livraison (zone A de démonstration) : total recalculé par le serveur.
-    await expect(page.getByRole("row", { name: /Total à payer en espèces/ })).toContainText("26");
+    await expect(page.getByRole("row", { name: /Total à payer/ })).toContainText("26");
     const number = (await page.getByRole("heading", { level: 1 }).textContent())!.replace("Commande ", "").trim();
     expect(await stockOf(product.sku)).toEqual({ onHand: 3, reserved: 2 });
 

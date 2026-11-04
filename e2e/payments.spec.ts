@@ -50,12 +50,24 @@ test.describe("encaissements en espèces (§20 n° 15, 16 et 26)", () => {
     await staff.getByRole("button", { name: "Remise au client", exact: true }).click();
     await expect(staff.getByText(/Commande non soldée/)).toBeVisible();
 
-    // Encaissement du solde (prérempli) : reçu numéroté.
+    // Encaissement du solde (prérempli) par Wave : sans référence de transaction, refusé avec le message sous le champ.
+    await staff.getByLabel("Moyen de paiement").selectOption({ label: "Wave" });
+    staff.once("dialog", (dialog) => dialog.accept());
+    await staff.getByRole("button", { name: "Enregistrer l'encaissement" }).click();
+    await expect(staff.getByText("Indiquez la référence de la transaction")).toBeVisible();
+    await expect(staff.getByText("Soldé : il ne reste rien à encaisser.")).toHaveCount(0);
+
+    // Avec la référence (saisie en minuscules, avec espaces : normalisée) : reçu numéroté, moyen et référence dans l'historique.
+    const reference = `WV${Date.now()}`;
+    await staff.getByLabel("Référence de la transaction").fill(`${reference.toLowerCase()} `);
     staff.once("dialog", (dialog) => dialog.accept());
     await staff.getByRole("button", { name: "Enregistrer l'encaissement" }).click();
     await expect(staff.getByText(/Encaissement enregistré : reçu REC-\d{4}-\d{6}\./)).toBeVisible();
     await expect(staff.getByText("Soldé : il ne reste rien à encaisser.")).toBeVisible();
     const receipt = (await staff.getByText(/Encaissement enregistré/).textContent())!.match(/REC-\d{4}-\d{6}/)![0];
+    // L'entrée de l'historique portant ce reçu affiche Wave (et non l'option du sélecteur).
+    await expect(staff.getByRole("listitem").filter({ has: staff.getByRole("link", { name: receipt }) }).filter({ hasText: "encaissement" })).toContainText("Wave");
+    await expect(staff.getByRole("listitem").filter({ has: staff.getByRole("link", { name: receipt }) }).filter({ hasText: "encaissement" })).toContainText(`réf. ${reference}`);
 
     const pdf = await staff.request.get(`/recus/${receipt}`);
     expect(pdf.status()).toBe(200);

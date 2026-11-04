@@ -19,8 +19,13 @@ export async function startMyDeliveryAction(orderId: string): Promise<ActionStat
 
 export async function collectMyDeliveryAction(orderId: string, _state: ActionState, formData: FormData): Promise<ActionState> {
   return adminAction(PATH, async (actor) => {
-    const { receiptNumber, replayed } = await recordOrderPayment(db, actor, orderId, { amount: int(formData, "amount"), idempotencyKey: text(formData, "idempotencyKey") });
-    return replayed ? `Encaissement déjà enregistré (reçu ${receiptNumber}).` : `Espèces encaissées : reçu ${receiptNumber}.`;
+    const { receiptNumber, replayed } = await recordOrderPayment(db, actor, orderId, {
+      amount: int(formData, "amount"),
+      method: text(formData, "method"),
+      transactionReference: text(formData, "transactionReference"),
+      idempotencyKey: text(formData, "idempotencyKey"),
+    });
+    return replayed ? `Encaissement déjà enregistré (reçu ${receiptNumber}).` : `Encaissement enregistré : reçu ${receiptNumber}.`;
   });
 }
 

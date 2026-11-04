@@ -1,6 +1,6 @@
 # FUTANI SHOP
 
-Plateforme e-commerce de **FUTANI SHOP**, la boutique officielle de **FUTANI GROUP**, et des services techniques de **FUTANI TECH** (Sénégal) : vente d'équipements informatiques, réseau, électroniques, électriques et de sécurité ; maintenance, réseaux, vidéosurveillance et électricité. Paiement **exclusivement hors ligne** (espèces), livraison à domicile et retrait en boutique.
+Plateforme e-commerce de **FUTANI SHOP**, la boutique officielle de **FUTANI GROUP**, et des services techniques de **FUTANI TECH** (Sénégal) : vente d'équipements informatiques, réseau, électroniques, électriques et de sécurité ; maintenance, réseaux, vidéosurveillance et électricité. Paiement **hors ligne** : espèces, Orange Money ou Wave, enregistrés à la main par le personnel (aucune passerelle), livraison à domicile et retrait en boutique.
 
 > Nom technique historique : le dépôt, les images Docker, les bases et les rôles PostgreSQL gardent le préfixe `systelec` (identifiants techniques, inchangés).
 

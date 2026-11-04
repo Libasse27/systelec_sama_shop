@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { strFromU8, unzipSync } from "fflate";
 import { beforeEach, describe, expect, it } from "vitest";
+import { PAYMENT_METHOD_LABELS, PAYMENT_METHODS } from "@/lib/payment-methods";
 import { businessDateKey } from "@/lib/dates";
 import type { Actor } from "@/server/authz/service";
 import { syncRolesAndPermissions } from "@/server/authz/sync";
@@ -51,7 +52,8 @@ describe("rapports financiers et tableau de bord (PostgreSQL)", () => {
     await activity();
     const report = await getFinancialReport(db, cashier, today);
     expect(report.cash).toEqual({ received: 70_000, voided: 20_000, refunded: 25_000, net: 25_000, count: 4 });
-    expect(report.byMethod).toEqual([{ method: "CASH", label: "Espèces", net: 25_000 }]);
+    expect(report.byMethod).toEqual(PAYMENT_METHODS.map((method) => ({ method, label: PAYMENT_METHOD_LABELS[method], net: method === "CASH" ? 25_000 : 0 })));
+    expect(report.entries[0]?.method).toBe("Espèces");
     expect(report.byCashier).toEqual([{ name: "FINANCE_MANAGER", received: 70_000, voided: 20_000, refunded: 25_000, net: 25_000, count: 4 }]);
     expect(report.byDay).toEqual([{ day: today.fromKey, received: 70_000, voided: 20_000, refunded: 25_000, net: 25_000 }]);
     expect(report.byDocument).toEqual({ orders: 25_000, interventions: 0 });
@@ -81,11 +83,24 @@ describe("rapports financiers et tableau de bord (PostgreSQL)", () => {
     expect(file.contentType).toBe("text/csv; charset=utf-8");
     expect(file.filename).toBe(`rapport-financier-${today.fromKey}-${today.toKey}.csv`);
     const csv = file.body as string;
-    expect(csv.split("\r\n")[0]).toBe("﻿Date;Reçu;Type;Document;Montant (FCFA);Agent;Motif");
+    expect(csv.split("\r\n")[0]).toBe("﻿Date;Reçu;Type;Moyen;Référence;Document;Montant (FCFA);Agent;Motif");
     expect(csv).toContain(";'=1+1 erreur de saisie");
     expect(csv).not.toMatch(/;=1\+1/);
     expect(csv).not.toContain("HYPERLINK"); // la note interne n'est pas exportée
     expect(await db.auditLog.findFirst({ where: { action: "report.export" } })).toMatchObject({ actorId: cashier.id, after: { format: "csv", entries: 4 } });
+  });
+
+  it("la référence d'un paiement mobile figure dans les exports CSV et Excel, en texte", async () => {
+    const order = await confirmedOrder(fixtures, manager);
+    await recordOrderPayment(db, cashier, order.id, { amount: 50_000, method: "WAVE", transactionReference: "-ref 4242", idempotencyKey: randomUUID() });
+    const report = await getFinancialReport(db, cashier, today);
+    expect(report.entries[0]).toMatchObject({ method: "Wave", transactionReference: "-REF4242" });
+    const csv = (await exportFinancialReport(db, cashier, today, "csv")).body as string;
+    expect(csv).toContain(";Wave;'-REF4242;");
+    const entries = unzipSync((await exportFinancialReport(db, cashier, today, "xlsx")).body as Uint8Array);
+    const allXml = Object.values(entries).map((bytes) => strFromU8(bytes)).join("");
+    expect(allXml).toContain("-REF4242");
+    expect(allXml).not.toMatch(/<f>|<f /);
   });
 
   it("Excel : classeur multi-feuilles, texte jamais écrit comme formule", async () => {

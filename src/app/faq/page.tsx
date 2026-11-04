@@ -7,7 +7,7 @@ import { listFaq } from "@/server/modules/content/queries";
 
 export const metadata: Metadata = {
   title: "Questions fréquentes",
-  description: "Commande, paiement en espèces, livraison, retrait et garanties : nos réponses.",
+  description: "Commande, paiement, livraison, retrait et garanties : nos réponses.",
   alternates: { canonical: "/faq" },
 };
 

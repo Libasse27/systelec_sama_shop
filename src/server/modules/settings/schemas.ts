@@ -2,8 +2,8 @@ import { z } from "zod";
 import { BRAND } from "@/lib/brand";
 
 /**
- * Moyens de règlement PHYSIQUES uniquement. Aucun moyen électronique n'existe dans
- * cette liste et les schémas sont stricts : un paramètre inconnu est refusé.
+ * Modalités du règlement EN ESPÈCES. Les paiements mobiles ne sont pas des paramètres : ils se choisissent
+ * à l'encaissement (lib/payment-methods). Les schémas sont stricts : un paramètre inconnu est refusé.
  */
 export const OFFLINE_PAYMENT_METHODS = ["CASH_ON_DELIVERY", "CASH_ON_PICKUP", "CASH_AFTER_SERVICE"] as const;
 export type OfflinePaymentMethod = (typeof OFFLINE_PAYMENT_METHODS)[number];

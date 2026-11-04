@@ -75,7 +75,7 @@ docs/
 - **Total de commande** : toujours recalculé côté serveur = Σ(prix catalogue × qté) + frais de livraison − remises autorisées. Les prix sont figés dans `OrderItem`.
 - **Idempotence** : chaque soumission de commande porte une clé d'idempotence (contrainte unique) pour empêcher les doublons.
 - **Stock** : réservation et décrément dans une transaction avec verrouillage de ligne ; chaque variation produit un `StockMovement`.
-- **Paiement** : aucune passerelle, aucun champ bancaire. L'enum des méthodes ne contient que des moyens physiques (`CASH`). Un test automatisé vérifie l'absence de dépendances et de routes de paiement électronique.
+- **Paiement** : aucune passerelle, aucun champ bancaire. Le personnel enregistre à la main le moyen utilisé (`CASH`, `ORANGE_MONEY`, `WAVE`, dans `lib/payment-methods.ts`) : le client règle Orange Money ou Wave depuis son téléphone, et l'application ne les appelle jamais. Un test automatisé vérifie l'absence de dépendances et de routes de paiement en ligne.
 - **Encaissements** : immuables. Correction = annulation + contre-écriture liée. Le statut de paiement est recalculé à partir des encaissements valides.
 - **Autorisation** : vérifiée dans le service (pas seulement dans l'UI ou le middleware). Les requêtes client sont toujours restreintes au `customerId` de la session.
 - **Audit** : table append-only, protégée par un trigger PostgreSQL interdisant `UPDATE`/`DELETE`. Aucun secret ni mot de passe journalisé.

@@ -108,7 +108,7 @@ test.describe("administration avancée (phase 9)", () => {
 
     // Les finances valident et versent le remboursement ; l'historique du retour est complet.
     await staff.reload();
-    await submit(staff, /^Rembourser .+ en espèces$/, /Remboursement versé : reçu REC-/, true);
+    await submit(staff, /^Rembourser /, /Remboursement versé : reçu REC-/, true);
     const history = staff.getByRole("region", { name: "Historique du retour" });
     for (const step of ["Retour déclaré", "Vérification demandée", "Réponse à la vérification", "Retour accepté", "Remboursement versé"]) {
       await expect(history.getByText(step, { exact: true })).toBeVisible();
@@ -300,7 +300,7 @@ test.describe("administration avancée (phase 9)", () => {
     await expect(page.getByRole("heading", { name: "Alertes de stock" })).toHaveCount(0);
 
     await page.goto("/admin/rapports");
-    await expect(page.getByText("Net en caisse (espèces)")).toBeVisible();
+    await expect(page.getByText("Net encaissé")).toBeVisible();
     const exports = [
       ["csv", "text/csv; charset=utf-8", "﻿Date;"],
       ["xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "PK"],

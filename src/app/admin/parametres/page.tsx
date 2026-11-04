@@ -127,7 +127,7 @@ export default async function SettingsPage() {
       <Section title="Commande et paiement (D1, D2, D3)">
         <ActionForm action={saveCommerceAction}>
           <CheckboxField name="guestCheckoutEnabled" label="D1 — Commande sans compte (invité, téléphone obligatoire)" defaultChecked={commerce.guestCheckoutEnabled} />
-          <CheckboxField name="partialPaymentEnabled" label="D2 — Paiement partiel en espèces (acompte)" defaultChecked={commerce.partialPaymentEnabled} />
+          <CheckboxField name="partialPaymentEnabled" label="D2 — Paiement partiel (acompte)" defaultChecked={commerce.partialPaymentEnabled} />
           <IntegerField
             name="stockReservationHours"
             label="D3 — Durée de réservation du stock (heures)"
@@ -196,7 +196,7 @@ export default async function SettingsPage() {
 
       <Section title="Moyens de règlement">
         <ActionForm action={savePaymentsAction}>
-          <p className="text-sm text-ink-muted">Espèces uniquement : aucun paiement électronique n&apos;existe dans l&apos;application.</p>
+          <p className="text-sm text-ink-muted">Modalités du règlement en espèces. Les paiements mobiles se choisissent à l&apos;encaissement et aucune passerelle de paiement n&apos;existe dans l&apos;application.</p>
           {Object.entries(PAYMENT_METHOD_LABELS).map(([method, label]) => (
             <CheckboxField key={method} name={method} label={label} defaultChecked={payments.enabledMethods.includes(method as keyof typeof PAYMENT_METHOD_LABELS)} />
           ))}
