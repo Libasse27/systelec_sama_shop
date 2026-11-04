@@ -114,7 +114,7 @@ test.describe("retours et livraisons (phase 10)", () => {
 
     // Une autre personne autorisée verse le remboursement.
     await staff.goto(returnUrl);
-    await submit(staff, /^Rembourser .+ en espèces$/, /Remboursement versé : reçu REC-/, true);
+    await submit(staff, /^Rembourser /, /Remboursement versé : reçu REC-/, true);
     await staff.close();
 
     await page.reload();
@@ -156,7 +156,7 @@ test.describe("retours et livraisons (phase 10)", () => {
     await expect(courierPage.getByRole("heading", { name: `Commande ${number} · Livreur assigné` })).toBeVisible();
     await expect(courierPage.getByRole("navigation", { name: "Administration" }).getByRole("link", { name: "Commandes" })).toHaveCount(0);
     await submit(courierPage, "Je pars livrer", "Départ enregistré.");
-    await submit(courierPage, /^Encaisser .+ en espèces$/, /Espèces encaissées : reçu REC-/, true);
+    await submit(courierPage, /^Encaisser /, /Encaissement enregistré : reçu REC-/, true);
     await courierPage.getByLabel("Remise à (nom)").fill("Mariama Ba");
     await submit(courierPage, "Livraison effectuée", "Livraison effectuée.");
     await expect(courierPage.getByRole("heading", { name: `Commande ${number} · Livrée` })).toBeVisible();

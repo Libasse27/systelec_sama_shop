@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { createTestProduct, grantRole, hideTestCategory, stockOf } from "./support/db";
+import { createTestProduct, grantRole, guardCompanySetting, hideTestCategory, stockOf, type CompanySettingGuard } from "./support/db";
 import { addToCart, signUp, uniqueEmail } from "./support/flows";
 
 const unique = () => `${Date.now()}${Math.random().toString(36).slice(2, 6)}`;
@@ -108,7 +108,7 @@ test.describe("administration avancée (phase 9)", () => {
 
     // Les finances valident et versent le remboursement ; l'historique du retour est complet.
     await staff.reload();
-    await submit(staff, /^Rembourser .+ en espèces$/, /Remboursement versé : reçu REC-/, true);
+    await submit(staff, /^Rembourser /, /Remboursement versé : reçu REC-/, true);
     const history = staff.getByRole("region", { name: "Historique du retour" });
     for (const step of ["Retour déclaré", "Vérification demandée", "Réponse à la vérification", "Retour accepté", "Remboursement versé"]) {
       await expect(history.getByText(step, { exact: true })).toBeVisible();
@@ -216,30 +216,44 @@ test.describe("administration avancée (phase 9)", () => {
     await admin.close();
   });
 
-  test("paramètres (D7) et contenu : mentions légales, page publiée, audit", async ({ page }) => {
-    await staffPage(page, ["ADMIN"], "Paramètres E2E");
-    const ninea = `E2E${unique()}`.slice(0, 20);
-    await page.goto("/admin/parametres");
-    await page.getByLabel("NINEA").fill(ninea);
-    await submit(page, "Enregistrer l'identité", "Identité et mentions légales enregistrées.");
-    // Valeur invalide : refusée, rattachée au champ.
-    await page.getByLabel("Durée de réservation du stock (heures)", { exact: false }).fill("0");
-    await page.getByRole("button", { name: "Enregistrer les règles de commande" }).click();
-    await expect(page.getByText("Vérifiez les champs signalés.")).toBeVisible();
+  // Le NINEA est enregistré dans le paramètre partagé « company » : valeur d'origine sauvegardée puis
+  // restaurée à l'identique, même en cas d'échec (verrou commun avec e2e/social-links.spec.ts).
+  test.describe("paramètres de l'entreprise", () => {
+    let guard: CompanySettingGuard | undefined;
+    test.beforeEach(async () => {
+      guard = await guardCompanySetting();
+    });
+    test.afterEach(async () => {
+      const current = guard;
+      guard = undefined;
+      await current?.restore();
+    });
 
-    const slug = `page-e2e-${unique()}`;
-    await page.goto("/admin/contenu");
-    const pages = page.getByRole("region", { name: "Pages d'information" });
-    await pages.getByLabel("Titre").last().fill("Page de test E2E");
-    await pages.getByLabel("Adresse (/pages/…)").last().fill(slug);
-    await pages.getByLabel("Texte").last().fill("Premier paragraphe de la page de test.\n\nSecond paragraphe.");
-    await pages.getByLabel("Publiée (visible par tous)").last().check();
-    await submit(page, "Créer la page", "Page créée.");
-    await page.goto(`/pages/${slug}`);
-    await expect(page.getByRole("heading", { name: "Page de test E2E" })).toBeVisible();
+    test("paramètres (D7) et contenu : mentions légales, page publiée, audit", async ({ page }) => {
+      await staffPage(page, ["ADMIN"], "Paramètres E2E");
+      const ninea = `E2E${unique()}`.slice(0, 20);
+      await page.goto("/admin/parametres");
+      await page.getByLabel("NINEA").fill(ninea);
+      await submit(page, "Enregistrer l'identité", "Identité et mentions légales enregistrées.");
+      // Valeur invalide : refusée, rattachée au champ.
+      await page.getByLabel("Durée de réservation du stock (heures)", { exact: false }).fill("0");
+      await page.getByRole("button", { name: "Enregistrer les règles de commande" }).click();
+      await expect(page.getByText("Vérifiez les champs signalés.")).toBeVisible();
 
-    await page.goto(`/admin/audit?action=settings.update&acteur=${encodeURIComponent("Paramètres E2E")}`);
-    await expect(page.getByText("settings.update").first()).toBeVisible();
+      const slug = `page-e2e-${unique()}`;
+      await page.goto("/admin/contenu");
+      const pages = page.getByRole("region", { name: "Pages d'information" });
+      await pages.getByLabel("Titre").last().fill("Page de test E2E");
+      await pages.getByLabel("Adresse (/pages/…)").last().fill(slug);
+      await pages.getByLabel("Texte").last().fill("Premier paragraphe de la page de test.\n\nSecond paragraphe.");
+      await pages.getByLabel("Publiée (visible par tous)").last().check();
+      await submit(page, "Créer la page", "Page créée.");
+      await page.goto(`/pages/${slug}`);
+      await expect(page.getByRole("heading", { name: "Page de test E2E" })).toBeVisible();
+
+      await page.goto(`/admin/audit?action=settings.update&acteur=${encodeURIComponent("Paramètres E2E")}`);
+      await expect(page.getByText("settings.update").first()).toBeVisible();
+    });
   });
 
   test("partenaires (décision 4) : logo téléversé, affichage sur l'accueil, désactivation ; aucun logo externe", async ({ page }) => {
@@ -286,7 +300,7 @@ test.describe("administration avancée (phase 9)", () => {
     await expect(page.getByRole("heading", { name: "Alertes de stock" })).toHaveCount(0);
 
     await page.goto("/admin/rapports");
-    await expect(page.getByText("Net en caisse (espèces)")).toBeVisible();
+    await expect(page.getByText("Net encaissé")).toBeVisible();
     const exports = [
       ["csv", "text/csv; charset=utf-8", "﻿Date;"],
       ["xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "PK"],

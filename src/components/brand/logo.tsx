@@ -1,24 +1,48 @@
+import Image from "next/image";
+import { BRAND } from "@/lib/brand";
+import { cn } from "@/lib/utils";
+
+/** Logos officiels (fond détouré), servis depuis public/logos ; dimensions intrinsèques des fichiers. */
+const BRAND_LOGOS = {
+  shop: { src: "/logos/futani-shop.png", width: 354, height: 146, alt: BRAND.shop.name },
+  group: { src: "/logos/futani-group.png", width: 396, height: 161, alt: BRAND.group.name },
+  tech: { src: "/logos/futani-tech.png", width: 142, height: 159, alt: BRAND.tech.name },
+} as const;
+
+export type BrandLogoVariant = keyof typeof BRAND_LOGOS;
+
+interface BrandLogoProps {
+  variant: BrandLogoVariant;
+  /** Hauteur Tailwind (ex. « h-10 ») ; la largeur suit les proportions. */
+  className?: string;
+  /** Logo affiché au-dessus de la ligne de flottaison : chargé en priorité. */
+  priority?: boolean;
+}
+
+/**
+ * Logo d'une entité FUTANI, posé sur une pastille blanche : le bleu foncé du logo reste lisible
+ * sur les fonds marine de l'en-tête, du pied de page et des panneaux de marque.
+ */
+export function BrandLogo({ variant, className, priority = false }: BrandLogoProps) {
+  const logo = BRAND_LOGOS[variant];
+  return (
+    <span className="inline-flex rounded-lg bg-white px-2 py-1">
+      <Image src={logo.src} alt={logo.alt} width={logo.width} height={logo.height} priority={priority} className={cn("h-10 w-auto", className)} />
+    </span>
+  );
+}
+
 interface LogoProps {
   shopName: string;
   logoUrl: string | null;
+  priority?: boolean;
 }
 
-/** Logo administrable ; à défaut, logo typographique provisoire. */
-export function Logo({ shopName, logoUrl }: LogoProps) {
+/** Logo de la boutique : logo téléversé dans l'administration, à défaut le logo officiel FUTANI SHOP. */
+export function Logo({ shopName, logoUrl, priority = false }: LogoProps) {
   if (logoUrl) {
-    // eslint-disable-next-line @next/next/no-img-element -- URL administrable, domaine inconnu à la compilation
+    // eslint-disable-next-line @next/next/no-img-element -- logo téléversé, servi par /medias
     return <img src={logoUrl} alt={shopName} className="h-9 w-auto" />;
   }
-  const [brand, ...rest] = shopName.split(" ");
-  return (
-    <span className="inline-flex items-center gap-2 font-bold tracking-tight" aria-label={shopName}>
-      <span aria-hidden className="grid size-8 place-items-center rounded-md bg-brand-blue text-sm text-white">
-        {shopName.charAt(0).toUpperCase()}
-      </span>
-      <span className="text-lg text-white">
-        {brand}
-        {rest.length > 0 && <span className="ml-1 font-semibold text-brand-accent">{rest.join(" ")}</span>}
-      </span>
-    </span>
-  );
+  return <BrandLogo variant="shop" priority={priority} />;
 }

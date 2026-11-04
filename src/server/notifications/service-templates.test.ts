@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { formatFcfa } from "@/lib/money";
+import { ACCEPTED_PAYMENT_METHODS } from "@/lib/payment-methods";
 import { renderServiceMessage } from "./service-templates";
 
 const data = { number: "INT-2026-000001", customerName: "Fatou" };
@@ -14,7 +15,7 @@ describe("messages des services techniques", () => {
   });
 
   it("fin d'intervention : montant restant, ou rien à régler", () => {
-    expect(renderServiceMessage("intervention.done", { ...data, total: 25_000 }).text).toContain(`Montant à régler en espèces : ${formatFcfa(25_000)}`);
+    expect(renderServiceMessage("intervention.done", { ...data, total: 25_000 }).text).toContain(`Montant à régler ${ACCEPTED_PAYMENT_METHODS} : ${formatFcfa(25_000)}`);
     expect(renderServiceMessage("intervention.done", { ...data, total: 0 }).text).toContain("Aucun montant ne reste à régler");
   });
 

@@ -1,6 +1,7 @@
 import "server-only";
 import { Document, Page, Text, View, renderToBuffer } from "@react-pdf/renderer";
 import { formatDate } from "@/lib/dates";
+import { ACCEPTED_PAYMENT_METHODS } from "@/lib/payment-methods";
 import { PdfCompanyHeader, PdfFooter, PdfLine, pdfMoney, pdfStyles, pdfText } from "@/server/documents/pdf-kit";
 import type { InvoiceData } from "./service";
 
@@ -33,12 +34,12 @@ function InvoiceDocument({ invoice }: { invoice: InvoiceData }) {
           ))}
           <PdfLine label="Total TTC" value={pdfMoney(invoice.total)} strong />
           {invoice.vat && <PdfLine label={`Dont TVA (${invoice.vat.rate} %)`} value={pdfMoney(invoice.vat.amount)} />}
-          <PdfLine label="Réglé en espèces" value={pdfMoney(invoice.amountPaid)} />
+          <PdfLine label="Déjà réglé" value={pdfMoney(invoice.amountPaid)} />
           {invoice.refunded > 0 && <PdfLine label="Remboursé depuis (retour d'articles)" value={pdfMoney(invoice.refunded)} />}
           <PdfLine label="Reste à payer" value={pdfMoney(balance)} strong />
         </View>
 
-        <PdfFooter text={`Règlement en espèces uniquement. Prix TTC. Document commercial établi par ${company.name}.`} />
+        <PdfFooter text={`Règlement ${ACCEPTED_PAYMENT_METHODS}. Prix TTC. Document commercial établi par ${company.name}.`} />
       </Page>
     </Document>
   );

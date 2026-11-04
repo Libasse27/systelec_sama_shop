@@ -1,13 +1,15 @@
-import { Banknote, ShieldCheck } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { cache } from "react";
+import { BrandIcon } from "@/components/brand/brand-icon";
+import { PaymentMethodIcons } from "@/components/brand/payment-method-icons";
 import { AvailabilityBadge, Price, ProductImage } from "@/components/catalog/product-card";
 import { AddToCartForm } from "@/components/cart/add-to-cart-form";
 import { Breadcrumbs } from "@/components/layout/breadcrumbs";
 import { JsonLd } from "@/components/seo/json-ld";
 import { conditionLabel } from "@/lib/labels";
+import { PAYMENT_NOTICE } from "@/lib/payment-methods";
 import { db } from "@/server/db/client";
 import { toParagraphs } from "@/server/modules/content/queries";
 import { categoryPath, getProductDetail, type ProductDetail } from "@/server/modules/catalog/queries";
@@ -148,12 +150,12 @@ export default async function ProductPage({ params }: Props) {
           <Variants product={product} />
           <div className="flex flex-col gap-2 rounded-xl bg-brand-navy p-4 text-sm text-white">
             <p className="flex items-center gap-2">
-              <Banknote aria-hidden className="size-4 text-brand-accent" />
-              Paiement en espèces uniquement, à la livraison ou au retrait.
+              <PaymentMethodIcons />
+              {PAYMENT_NOTICE}
             </p>
             {(product.warrantyText || product.warrantyMonths) && (
               <p className="flex items-center gap-2">
-                <ShieldCheck aria-hidden className="size-4 text-brand-accent" />
+                <BrandIcon name="securite" className="size-5" />
                 {product.warrantyText ?? `Garantie ${product.warrantyMonths} mois`}
               </p>
             )}

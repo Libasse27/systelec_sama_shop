@@ -60,7 +60,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Sear
           Afficher
         </button>
       </form>
-      <p className="-mt-4 text-xs text-ink-muted">Bornes incluses, {MAX_REPORT_DAYS} jours au plus. Montants TTC, en espèces uniquement.</p>
+      <p className="-mt-4 text-xs text-ink-muted">Bornes incluses, {MAX_REPORT_DAYS} jours au plus. Montants TTC.</p>
 
       {"error" in period ? (
         <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
@@ -86,7 +86,8 @@ export default async function ReportsPage({ searchParams }: { searchParams: Sear
                     ["Encaissé", report.cash.received],
                     ["Annulé (contre-écritures)", report.cash.voided],
                     ["Remboursé (retours)", report.cash.refunded],
-                    ["Net en caisse (espèces)", report.cash.net, true],
+                    ["Net encaissé", report.cash.net, true],
+                    ...report.byMethod.map((row): [string, number] => [`Dont ${row.label}`, row.net]),
                     ["Dont commandes", report.byDocument.orders],
                     ["Dont interventions", report.byDocument.interventions],
                   ]}

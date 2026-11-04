@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { PaymentMethodIcon } from "@/components/brand/payment-method-icons";
 import { PageHeader, Section, stringParam } from "@/components/admin/admin-ui";
 import { businessDateKey, businessDayRange, formatDate, formatDateTime } from "@/lib/dates";
 import { formatFcfa } from "@/lib/money";
+import { PAYMENT_METHOD_LABELS } from "@/lib/payment-methods";
 import { requirePermission } from "@/server/auth/session";
 import { db } from "@/server/db/client";
 import { getPaymentJournal, JOURNAL_LIMIT } from "@/server/modules/payments/queries";
@@ -37,7 +39,7 @@ export default async function PaymentJournalPage({ searchParams }: { searchParam
 
       <Section title={`Caisse du ${formatDate(range.from)}`}>
         <dl className="grid gap-x-6 gap-y-1 text-sm sm:grid-cols-[14rem_1fr]">
-          <dt className="text-ink-muted">Encaissé en espèces</dt>
+          <dt className="text-ink-muted">Encaissé</dt>
           <dd>{formatFcfa(journal.totals.received)}</dd>
           <dt className="text-ink-muted">Annulé (contre-écritures)</dt>
           <dd>{formatFcfa(journal.totals.voided)}</dd>
@@ -46,9 +48,18 @@ export default async function PaymentJournalPage({ searchParams }: { searchParam
           <dt className="text-ink-muted">Net de la journée</dt>
           <dd className="font-semibold">{formatFcfa(journal.totals.net)}</dd>
         </dl>
+        <h3 className="mt-4 text-sm font-semibold">Net par moyen de paiement</h3>
+        <ul className="mt-1 flex flex-col gap-1 text-sm">
+          {journal.byMethod.map((row) => (
+            <li key={row.method} className="flex items-center gap-2">
+              <PaymentMethodIcon method={row.method} />
+              {row.label} : <span className="font-semibold">{formatFcfa(row.net)}</span>
+            </li>
+          ))}
+        </ul>
         {journal.byRecorder.length > 0 && (
           <>
-            <h3 className="mt-4 text-sm font-semibold">Net à remettre par agent</h3>
+            <h3 className="mt-4 text-sm font-semibold">Espèces à remettre par agent</h3>
             <ul className="mt-1 flex flex-col gap-1 text-sm">
               {journal.byRecorder.map((row) => (
                 <li key={row.name}>
@@ -70,6 +81,8 @@ export default async function PaymentJournalPage({ searchParams }: { searchParam
                 <th scope="col" className="px-3 py-2">Reçu</th>
                 <th scope="col" className="px-3 py-2">Document</th>
                 <th scope="col" className="px-3 py-2">Agent</th>
+                <th scope="col" className="px-3 py-2">Moyen</th>
+                <th scope="col" className="px-3 py-2">Référence</th>
                 <th scope="col" className="px-3 py-2 text-right">Montant</th>
               </tr>
             </thead>
@@ -96,6 +109,13 @@ export default async function PaymentJournalPage({ searchParams }: { searchParam
                     </Link>
                   </td>
                   <td className="px-3 py-2">{row.recordedBy}</td>
+                  <td className="px-3 py-2">
+                    <span className="flex items-center gap-2">
+                      <PaymentMethodIcon method={row.method} />
+                      {PAYMENT_METHOD_LABELS[row.method]}
+                    </span>
+                  </td>
+                  <td className="px-3 py-2 font-mono text-xs">{row.transactionReference ?? ""}</td>
                   <td className={`whitespace-nowrap px-3 py-2 text-right ${row.amount < 0 ? "text-red-800" : ""}`}>{formatFcfa(row.amount)}</td>
                 </tr>
               ))}

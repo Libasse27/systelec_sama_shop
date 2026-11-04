@@ -1,5 +1,6 @@
 import "server-only";
 import type { DeliveryStatus, FulfillmentMethod, OrderHistoryField, OrderStatus, PaymentStatus, Prisma } from "@/generated/prisma/client";
+import type { PaymentMethod } from "@/lib/payment-methods";
 import { assertPermission, type Actor } from "@/server/authz/service";
 import type { Db } from "@/server/db/client";
 import { verifyAccessToken, type AccessScope } from "./access-token";
@@ -58,7 +59,7 @@ export interface OrderView {
   createdAt: Date;
   history: { to: string; comment: string | null; createdAt: Date }[];
   /** Reçus (montant négatif = annulation d'un encaissement, ou remboursement d'un retour). */
-  payments: { receiptNumber: string; amount: number; createdAt: Date; isRefund: boolean }[];
+  payments: { receiptNumber: string; amount: number; method: PaymentMethod; createdAt: Date; isRefund: boolean }[];
   invoiceNumber: string | null;
   deliveryStatus: DeliveryStatus | null;
 }
@@ -84,7 +85,7 @@ const ORDER_VIEW_SELECT = {
   notes: true,
   createdAt: true,
   history: { where: { field: "ORDER" }, orderBy: { createdAt: "asc" }, select: { to: true, comment: true, createdAt: true } },
-  payments: { orderBy: [{ createdAt: "asc" }, { id: "asc" }], select: { receiptNumber: true, amount: true, createdAt: true, returnId: true } },
+  payments: { orderBy: [{ createdAt: "asc" }, { id: "asc" }], select: { receiptNumber: true, amount: true, method: true, createdAt: true, returnId: true } },
   invoice: { select: { number: true } },
   delivery: { select: { status: true } },
 } satisfies Prisma.OrderSelect;

@@ -1,5 +1,6 @@
 import "server-only";
 import type { OrderStatus, PaymentStatus, Prisma } from "@/generated/prisma/client";
+import type { PaymentMethod } from "@/lib/payment-methods";
 import { AppError } from "@/server/errors";
 import { lockOrderRow } from "@/server/modules/orders/lock";
 import type { Contact } from "@/server/modules/orders/schemas";
@@ -25,6 +26,7 @@ export interface PaymentNotice {
   amount: number;
   balance: number;
   receiptNumber: string;
+  method: PaymentMethod;
 }
 
 /** Cible verrouillée : solde exact, règles d'encaissement et effets propres à son type. */

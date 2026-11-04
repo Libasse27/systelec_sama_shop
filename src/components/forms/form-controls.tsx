@@ -150,7 +150,7 @@ interface TextFieldProps {
   defaultValue?: string | number | null;
   required?: boolean;
   hint?: string;
-  type?: "text" | "number" | "search" | "date" | "time" | "email" | "tel";
+  type?: "text" | "number" | "search" | "date" | "time" | "datetime-local" | "email" | "tel";
   inputMode?: "numeric" | "text";
   className?: string;
 }

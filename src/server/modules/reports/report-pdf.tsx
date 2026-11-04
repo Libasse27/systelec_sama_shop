@@ -27,14 +27,17 @@ function ReportDocument({ report, company }: { report: FinancialReport; company:
       <Page size="A4" style={pdfStyles.page}>
         <PdfCompanyHeader company={company} />
         <Text style={pdfStyles.title}>{pdfText(`Rapport financier du ${formatDate(report.period.from)} au ${formatDate(lastDay)}`)}</Text>
-        <Text style={pdfStyles.muted}>{pdfText(`Édité le ${formatDateTime(new Date())}. Espèces uniquement.`)}</Text>
+        <Text style={pdfStyles.muted}>{pdfText(`Édité le ${formatDateTime(new Date())}.`)}</Text>
 
         <Text style={sectionTitle}>Caisse</Text>
         <View style={pdfStyles.table}>
           <PdfLine label="Encaissé" value={pdfMoney(cash.received)} />
           <PdfLine label="Annulé (contre-écritures)" value={pdfMoney(cash.voided)} />
           <PdfLine label="Remboursé (retours)" value={pdfMoney(cash.refunded)} />
-          <PdfLine label="Net en caisse" value={pdfMoney(cash.net)} strong />
+          <PdfLine label="Net encaissé" value={pdfMoney(cash.net)} strong />
+          {report.byMethod.map((row) => (
+            <PdfLine key={row.method} label={`Dont ${row.label}`} value={pdfMoney(row.net)} />
+          ))}
           <PdfLine label="Dont commandes" value={pdfMoney(report.byDocument.orders)} />
           <PdfLine label="Dont interventions" value={pdfMoney(report.byDocument.interventions)} />
         </View>

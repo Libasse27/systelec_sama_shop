@@ -3,8 +3,9 @@ import { join, relative } from "node:path";
 import { describe, expect, it } from "vitest";
 
 /**
- * Règle non négociable (cahier des charges §3.1) : aucun paiement électronique.
- * Ce test échoue si une dépendance ou du code de paiement en ligne apparaît.
+ * Règle (cahier des charges §3.1, assouplie à la demande du propriétaire le 2026-11-04) : aucun paiement EN LIGNE.
+ * Orange Money et Wave sont admis comme moyens ENREGISTRÉS À LA MAIN par le personnel, et ne sont nommés que
+ * dans les fichiers listés ci-dessous. Ce test échoue si une dépendance ou du code de paiement en ligne apparaît.
  */
 const ROOT = process.cwd();
 
@@ -27,8 +28,16 @@ const FORBIDDEN_PACKAGES = [
 
 const FORBIDDEN_CODE = /stripe|paypal|braintree|paystack|flutterwave|cinetpay|paydunya|kkiapay|fedapay|orange[\s_-]?money|wave[\s_-]?(api|pay|checkout)|checkout[\s_-]?session|card[\s_-]?number|\bcvv\b|\biban\b/i;
 
-/** Fichiers autorisés à mentionner ces termes (listes de détection / masquage). */
-const ALLOWED_FILES = new Set(["tests/policy/no-electronic-payment.test.ts", "src/server/audit/redact.ts", "src/server/modules/settings/schemas.test.ts"]);
+/** Fichiers autorisés à mentionner ces termes (listes de détection / masquage, moyens enregistrés à la main). */
+const ALLOWED_FILES = new Set([
+  "tests/policy/no-electronic-payment.test.ts",
+  "src/server/audit/redact.ts",
+  "src/server/modules/settings/schemas.test.ts",
+  "src/lib/payment-methods.ts",
+  "src/lib/payment-methods.test.ts",
+  "prisma/schema.prisma",
+  "prisma/migrations/20261104090000_payment_methods/migration.sql",
+]);
 
 const SCANNED_DIRS = ["src", "prisma"];
 const SCANNED_EXTENSIONS = /\.(ts|tsx|js|mjs|prisma|sql)$/;

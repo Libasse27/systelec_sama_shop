@@ -1,5 +1,5 @@
-import { Package } from "lucide-react";
 import Link from "next/link";
+import { BrandIcon } from "@/components/brand/brand-icon";
 import { availability, conditionLabel } from "@/lib/labels";
 import { formatFcfa } from "@/lib/money";
 import { cn } from "@/lib/utils";
@@ -38,7 +38,7 @@ export function ProductImage({ image, priority = false }: { image: { url: string
   if (!image) {
     return (
       <div className="grid aspect-square place-items-center rounded-lg bg-surface-muted" aria-hidden>
-        <Package aria-hidden className="size-10 text-ink-muted" />
+        <BrandIcon name="boutique" className="size-12 opacity-40" />
       </div>
     );
   }

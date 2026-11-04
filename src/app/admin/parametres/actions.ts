@@ -38,6 +38,8 @@ export async function saveCompanyAction(_state: ActionState, formData: FormData)
         instagram: nullable(formData, "socialLinks.instagram"),
         linkedin: nullable(formData, "socialLinks.linkedin"),
         tiktok: nullable(formData, "socialLinks.tiktok"),
+        youtube: nullable(formData, "socialLinks.youtube"),
+        x: nullable(formData, "socialLinks.x"),
       },
     });
     refreshSite();
@@ -95,7 +97,7 @@ export async function removeLogoAction(): Promise<ActionState> {
   return adminAction(PATH, async (actor) => {
     await removeLogo(db, actor);
     refreshSite();
-    return "Logo retiré : le logo typographique provisoire est affiché.";
+    return "Logo retiré : le logo officiel FUTANI SHOP est affiché.";
   });
 }
 

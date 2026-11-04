@@ -1,7 +1,9 @@
-import { CheckCircle2, Clock, Mail, MapPin, MessageCircle, Phone, type LucideIcon } from "lucide-react";
+import { Clock } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
+import type { ReactNode } from "react";
 import { randomUUID } from "node:crypto";
+import { BrandIcon } from "@/components/brand/brand-icon";
 import { ActionForm, SelectField, SubmitButton, TextAreaField, TextField } from "@/components/forms/form-controls";
 import { Breadcrumbs } from "@/components/layout/breadcrumbs";
 import { BRAND } from "@/lib/brand";
@@ -26,8 +28,10 @@ interface Props {
   searchParams: Promise<{ service?: string; objet?: string; envoye?: string }>;
 }
 
+const CHANNEL_ICON_CLASS = "mt-0.5 size-6 shrink-0";
+
 interface Channel {
-  icon: LucideIcon;
+  icon: ReactNode;
   label: string;
   value: string;
   href?: string;
@@ -44,11 +48,11 @@ export default async function ContactPage({ searchParams }: Props) {
   const sentNumber = envoye && MESSAGE_NUMBER.test(envoye) ? envoye : null;
   const whatsapp = company.whatsapp ? whatsappHref(company.whatsapp) : null;
   const candidates: (Channel | null)[] = [
-    company.phone ? { icon: Phone, label: "Téléphone", value: company.phone, href: telHref(company.phone) } : null,
-    company.whatsapp && whatsapp ? { icon: MessageCircle, label: "WhatsApp", value: company.whatsapp, href: whatsapp } : null,
-    company.email ? { icon: Mail, label: "E-mail", value: company.email, href: `mailto:${company.email}` } : null,
-    company.address ? { icon: MapPin, label: "Adresse", value: company.address } : null,
-    company.openingHours ? { icon: Clock, label: "Horaires", value: company.openingHours } : null,
+    company.phone ? { icon: <BrandIcon name="telephone" className={CHANNEL_ICON_CLASS} />, label: "Téléphone", value: company.phone, href: telHref(company.phone) } : null,
+    company.whatsapp && whatsapp ? { icon: <BrandIcon name="whatsapp" className={CHANNEL_ICON_CLASS} />, label: "WhatsApp", value: company.whatsapp, href: whatsapp } : null,
+    company.email ? { icon: <BrandIcon name="email" className={CHANNEL_ICON_CLASS} />, label: "E-mail", value: company.email, href: `mailto:${company.email}` } : null,
+    company.address ? { icon: <BrandIcon name="localisation" className={CHANNEL_ICON_CLASS} />, label: "Adresse", value: company.address } : null,
+    company.openingHours ? { icon: <Clock aria-hidden className={`${CHANNEL_ICON_CLASS} text-brand-blue`} />, label: "Horaires", value: company.openingHours } : null,
   ];
   const channels = candidates.filter((channel): channel is Channel => channel !== null);
 
@@ -64,9 +68,9 @@ export default async function ContactPage({ searchParams }: Props) {
       )}
       {channels.length > 0 ? (
         <ul className="flex flex-col gap-3">
-          {channels.map(({ icon: Icon, label, value, href }) => (
+          {channels.map(({ icon, label, value, href }) => (
             <li key={label} className="flex items-start gap-3 rounded-xl border border-line bg-surface p-4">
-              <Icon aria-hidden className="mt-0.5 size-5 text-brand-blue" />
+              {icon}
               <div>
                 <p className="text-sm text-ink-muted">{label}</p>
                 {href ? (
@@ -89,7 +93,7 @@ export default async function ContactPage({ searchParams }: Props) {
         </h2>
         {sentNumber ? (
           <div id="confirmation" role="status" className="mt-4 flex items-start gap-3 rounded-lg border border-green-200 bg-green-50 p-4 text-green-900">
-            <CheckCircle2 aria-hidden className="mt-0.5 size-5 shrink-0" />
+            <BrandIcon name="succes" className="mt-0.5 size-6" />
             <div>
               <p className="font-semibold">Message envoyé, merci !</p>
               <p className="text-sm">

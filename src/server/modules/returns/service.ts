@@ -2,6 +2,7 @@ import "server-only";
 import type { Prisma, PrismaClient, ReturnEventType, ReturnExceptionGround, ReturnStatus, ReturnVerificationKind } from "@/generated/prisma/client";
 import { businessYear } from "@/lib/dates";
 import { formatFcfa } from "@/lib/money";
+import { paymentMethodPhrase } from "@/lib/payment-methods";
 import { recordAudit } from "@/server/audit/audit";
 import { assertPermission, type Actor } from "@/server/authz/service";
 import { isUniqueViolation } from "@/server/db/errors";
@@ -285,7 +286,7 @@ export async function decideReturn(client: PrismaClient, actor: Actor, returnId:
         }
         const refundable = order.amountPaid - order.returns.reduce((sum, entry) => sum + entry.refundAmount, 0);
         if (decision.refundAmount > refundable) {
-          throw new AppError("CONFLICT", `Le remboursement ne peut dépasser les espèces encaissées restantes (${formatFcfa(Math.max(0, refundable))}).`);
+          throw new AppError("CONFLICT", `Le remboursement ne peut dépasser les sommes encaissées restantes (${formatFcfa(Math.max(0, refundable))}).`);
         }
         if (decision.restock) await restock(tx, actor, orderId, current);
         status = decision.refundAmount > 0 ? "REFUND_PENDING" : "COMPLETED";
@@ -497,25 +498,25 @@ function selfApprovalFor(actor: Actor, decidedById: string | null, selfApprovalN
 }
 
 /**
- * Verse en espèces le remboursement d'un retour accepté (payments.correct) : validation DISTINCTE et
+ * Verse le remboursement d'un retour, avec son moyen de paiement, accepté (payments.correct) : validation DISTINCTE et
  * explicite d'une personne autorisée, après l'acceptation (jamais automatique), et par une AUTRE
  * personne que celle qui a décidé (sauf exception motivée, voir selfApprovalFor ; contrôlé aussi en
  * base). Écriture négative liée au retour, avec son reçu ; montant encaissé de la commande diminué
- * d'autant, montant remboursé augmenté, statut « Remboursement effectué ». Jamais au-delà des espèces
+ * d'autant, montant remboursé augmenté, statut « Remboursement effectué ». Jamais au-delà des sommes
  * encaissées (contrôlé aussi en base). Idempotent ; un retour n'est remboursé qu'une fois (unicité en base).
  */
 export async function refundReturn(client: PrismaClient, actor: Actor, returnId: string, input: unknown): Promise<RecordedRefund> {
   await assertPermission(client, actor, "payments.correct");
-  const { idempotencyKey, note, selfApprovalNote } = parseInput(refundReturnSchema, input, "Remboursement");
+  const { method, transactionReference, idempotencyKey, note, selfApprovalNote } = parseInput(refundReturnSchema, input, "Remboursement");
   const orderId = await orderOfReturn(client, returnId);
   let refund: RecordedRefund;
   try {
     refund = await client.$transaction(async (tx) => {
       await lockOrderRow(tx, orderId);
       const current = await lockReturn(tx, returnId);
-      const existing = await tx.payment.findUnique({ where: { idempotencyKey }, select: { receiptNumber: true, returnId: true } });
+      const existing = await tx.payment.findUnique({ where: { idempotencyKey }, select: { receiptNumber: true, returnId: true, method: true, transactionReference: true } });
       if (existing) {
-        if (existing.returnId !== returnId) throw new AppError("CONFLICT", "Ce remboursement a déjà été envoyé.");
+        if (existing.returnId !== returnId || existing.method !== method || existing.transactionReference !== transactionReference) throw new AppError("CONFLICT", "Ce remboursement a déjà été envoyé.");
         return { receiptNumber: existing.receiptNumber, replayed: true };
       }
       if (current.status !== "REFUND_PENDING") throw new AppError("CONFLICT", "Ce retour n'attend aucun remboursement.");
@@ -525,7 +526,7 @@ export async function refundReturn(client: PrismaClient, actor: Actor, returnId:
         select: { number: true, total: true, amountPaid: true, refundedAmount: true, contact: true, fulfillmentMethod: true },
       });
       const amount = current.refundAmount;
-      if (amount > order.amountPaid) throw new AppError("CONFLICT", `Remboursement supérieur aux espèces encaissées (${formatFcfa(order.amountPaid)}).`);
+      if (amount > order.amountPaid) throw new AppError("CONFLICT", `Remboursement supérieur aux sommes encaissées (${formatFcfa(order.amountPaid)}).`);
 
       const receiptNumber = await nextBusinessNumber(tx, "receipt", businessYear());
       const reason = `Remboursement du retour ${current.number}`;
@@ -534,6 +535,8 @@ export async function refundReturn(client: PrismaClient, actor: Actor, returnId:
           receiptNumber,
           orderId,
           amount: -amount,
+          method,
+          transactionReference,
           // Reste à payer inchangé : la commande reste réglée, une partie est rendue au client.
           balanceAfter: order.total - order.amountPaid - order.refundedAmount,
           recordedById: actor.id,
@@ -553,13 +556,13 @@ export async function refundReturn(client: PrismaClient, actor: Actor, returnId:
         comment: refundExceptionNote ? `${reason} — exception (décideur) : ${refundExceptionNote}` : reason,
         details: { amount, receiptNumber, ...(refundExceptionNote && { selfApproval: true, refundExceptionNote }) },
       });
-      await refreshPaymentStatus(tx, orderId, actor.id, `${reason} : ${formatFcfa(amount)} en espèces (${receiptNumber})`);
+      await refreshPaymentStatus(tx, orderId, actor.id, `${reason} : ${formatFcfa(amount)} ${paymentMethodPhrase(method)} (${receiptNumber})`);
       const contact = order.contact as unknown as Contact;
       await queueOrderNotifications(
         tx,
         orderId,
         "order.refund",
-        { number: order.number, customerName: contact.name, total: order.total, fulfillment: order.fulfillmentMethod, refund: { amount, returnNumber: current.number, receiptNumber } },
+        { number: order.number, customerName: contact.name, total: order.total, fulfillment: order.fulfillmentMethod, refund: { amount, returnNumber: current.number, receiptNumber, method } },
         { email: contact.email, phone: contact.phone },
       );
       await recordAudit(tx, {
@@ -571,6 +574,8 @@ export async function refundReturn(client: PrismaClient, actor: Actor, returnId:
         after: {
           receiptNumber,
           amount,
+          method,
+          transactionReference,
           amountPaid: order.amountPaid - amount,
           refundedAmount: order.refundedAmount + amount,
           ...(refundExceptionNote && { selfApproval: true, refundExceptionNote }),

@@ -8,7 +8,7 @@ import { db } from "@/server/db/client";
 import { createLocalStorage, keyFromMediaUrl, type FileStorage } from "@/server/storage/storage";
 import { resetDatabase } from "../../../../tests/setup/db";
 import { actorWith } from "../../../../tests/support/actors";
-import { getAllSettings, removeLogo, saveSettings, uploadLogo } from "./admin";
+import { getAllSettings, isSettingKey, removeLogo, saveSettings, uploadLogo } from "./admin";
 import { settingsDefaults } from "./schemas";
 import { getSetting } from "./service";
 
@@ -53,6 +53,82 @@ describe("administration des paramètres (PostgreSQL)", () => {
     expect(await db.siteSetting.count()).toBe(0);
   });
 
+  it("réseaux sociaux : un nouveau lien non conforme est refusé sur son champ, rien n'est écrit", async () => {
+    const links = settingsDefaults.company.socialLinks;
+    for (const [network, href] of [["youtube", "http://youtube.com/futani"], ["x", "https://user:pw@x.com/futani"], ["tiktok", "javascript:alert(1)"]] as const) {
+      await expect(saveSettings(db, admin, "company", { ...settingsDefaults.company, socialLinks: { ...links, [network]: href } })).rejects.toMatchObject({
+        code: "VALIDATION",
+        details: { fieldErrors: { [`socialLinks.${network}`]: expect.any(Array) } },
+      });
+    }
+    // Erreurs des champs ordinaires et des liens renvoyées ensemble.
+    await expect(saveSettings(db, admin, "company", { ...settingsDefaults.company, companyName: "", socialLinks: { ...links, x: "https://t.co/abc" } })).rejects.toMatchObject({
+      details: { fieldErrors: { companyName: expect.any(Array), "socialLinks.x": expect.any(Array) } },
+    });
+    expect(await db.siteSetting.count()).toBe(0);
+  });
+
+  describe("réseaux sociaux : anciens liens non conformes déjà en base", () => {
+    const legacyLinks = {
+      facebook: "javascript:alert(1)",
+      instagram: "https://www.instagram.com/futani",
+      linkedin: "linkedin.com/company/futani",
+      tiktok: "https://vm.tiktok.com/ZMabc",
+      youtube: "http://youtube.com/futani",
+      // Espaces autour : le formulaire renvoie la valeur nettoyée, la valeur brute doit rester intacte.
+      x: "  https://t.co/abc ",
+    };
+    /** Ce que renvoie le formulaire : les valeurs affichées dans les champs, sans espaces autour. */
+    const submittedLinks = { ...legacyLinks, x: "https://t.co/abc" };
+    const rawStoredLinks = async () => ((await db.siteSetting.findUniqueOrThrow({ where: { key: "company" } })).value as { socialLinks: unknown }).socialLinks;
+    // Valeur enregistrée avant le durcissement (écrite directement, comme une donnée historique).
+    beforeEach(() => db.siteSetting.create({ data: { key: "company", value: { ...settingsDefaults.company, socialLinks: legacyLinks } } }));
+
+    it("restent lisibles (écran Paramètres, pied de page) sans rien perdre", async () => {
+      expect((await getAllSettings(db, admin)).company.socialLinks).toEqual(legacyLinks);
+      expect((await getSetting("company")).socialLinks).toEqual(legacyLinks);
+    });
+
+    it("n'empêchent pas d'enregistrer le nom, l'adresse, le téléphone et les autres informations ; ils sont conservés tels quels", async () => {
+      const { logoUrl } = await uploadLogo(db, storage, admin, PNG);
+      const saved = await saveSettings(db, admin, "company", {
+        ...settingsDefaults.company,
+        companyName: "SYSTELEC SARL",
+        address: "Dakar, Plateau",
+        phone: "+221 33 000 00 00",
+        email: "contact@example.sn",
+        socialLinks: submittedLinks,
+      });
+      expect(saved).toMatchObject({ companyName: "SYSTELEC SARL", address: "Dakar, Plateau", phone: "+221 33 000 00 00", logoUrl, socialLinks: legacyLinks });
+      expect(await getSetting("company")).toEqual(saved);
+      expect(await rawStoredLinks()).toEqual(legacyLinks);
+      const audit = await db.auditLog.findFirst({ where: { action: "settings.update", entityId: "company" }, orderBy: { createdAt: "desc" } });
+      expect(audit?.after).toMatchObject({ companyName: "SYSTELEC SARL", socialLinks: legacyLinks });
+    });
+
+    it("se corrigent un par un : le lien corrigé est enregistré, les autres restent inchangés", async () => {
+      const saved = await saveSettings(db, admin, "company", { ...settingsDefaults.company, socialLinks: { ...submittedLinks, youtube: "https://www.youtube.com/@futani" } });
+      expect(saved.socialLinks).toEqual({ ...legacyLinks, youtube: "https://www.youtube.com/@futani" });
+      expect(await rawStoredLinks()).toEqual({ ...legacyLinks, youtube: "https://www.youtube.com/@futani" });
+    });
+
+    it("un ancien lien remplacé par une autre adresse non conforme est refusé sur son seul champ, rien n'est écrit", async () => {
+      await expect(saveSettings(db, admin, "company", { ...settingsDefaults.company, companyName: "Autre", socialLinks: { ...submittedLinks, tiktok: "https://vt.tiktok.com/autre" } })).rejects.toMatchObject({
+        code: "VALIDATION",
+        details: { fieldErrors: { "socialLinks.tiktok": expect.any(Array) } },
+      });
+      expect((await getSetting("company")).companyName).toBe(settingsDefaults.company.companyName);
+      expect(await db.auditLog.count({ where: { action: "settings.update", entityId: "company" } })).toBe(0);
+      expect(await rawStoredLinks()).toEqual(legacyLinks);
+    });
+
+    it("vider un champ efface seulement ce lien", async () => {
+      const saved = await saveSettings(db, admin, "company", { ...settingsDefaults.company, socialLinks: { ...submittedLinks, facebook: null } });
+      expect(saved.socialLinks).toEqual({ ...legacyLinks, facebook: null });
+      expect(await rawStoredLinks()).toEqual({ ...legacyLinks, facebook: null });
+    });
+  });
+
   it("droits : settings.manage exigé, refus journalisé", async () => {
     const finance = await actorWith("FINANCE_MANAGER");
     await expect(saveSettings(db, finance, "tax", { vatDetailEnabled: true, vatRate: 18 })).rejects.toMatchObject({ code: "FORBIDDEN" });
@@ -86,6 +162,11 @@ describe("administration des paramètres (PostgreSQL)", () => {
     await expect(
       db.siteSetting.create({ data: { key: "company", value: { ...settingsDefaults.company, logoUrl: "https://cdn.example.sn/logo.png" } } }),
     ).rejects.toThrow(/site_settings_logo_check/);
+  });
+
+  it("isSettingKey refuse « announcements » (relève de announcements.manage)", () => {
+    expect(isSettingKey("announcements")).toBe(false);
+    expect(isSettingKey("tax")).toBe(true);
   });
 
   it("heures ouvrables (décision 2) : validées et auditées", async () => {

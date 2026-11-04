@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { PageHeader, Section } from "@/components/admin/admin-ui";
 import { ActionForm, CheckboxField, FileField, GroupErrors, IntegerField, SubmitButton, TextAreaField, TextField } from "@/components/forms/form-controls";
+import { hiddenSocialLinkMessage, hiddenSocialLinks, type SocialNetwork } from "@/lib/social-links";
 import { requirePermission } from "@/server/auth/session";
 import { db } from "@/server/db/client";
 import { getAllSettings } from "@/server/modules/settings/admin";
@@ -42,6 +43,12 @@ export default async function SettingsPage() {
   const settings = await getAllSettings(db, user);
   const { company, commerce, payments, tax, features, businessHours, returnReminders } = settings;
   const [morning, afternoon] = businessHours.ranges;
+  const hiddenLinks = hiddenSocialLinks(company.socialLinks);
+  // Sous le champ concerné : pourquoi le lien enregistré n'est pas affiché (rien sinon).
+  const socialHint = (network: SocialNetwork) => {
+    const message = hiddenSocialLinkMessage(network, company.socialLinks[network]);
+    return message ? `Non affiché sur le site. ${message}` : undefined;
+  };
 
   return (
     <div className="flex flex-col gap-6">
@@ -55,6 +62,16 @@ export default async function SettingsPage() {
       </p>
 
       <Section title="Identité et mentions légales (D7)">
+        {hiddenLinks.length > 0 && (
+          <div role="alert" className="mb-4 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+            <p className="font-medium">Lien(s) enregistré(s) mais non affiché(s) sur le site : non conforme(s) aux règles actuelles. Ils sont conservés et n&apos;empêchent pas d&apos;enregistrer les autres informations ; corrigez ou videz chaque champ concerné pour le(s) remplacer.</p>
+            <ul className="mt-1 list-disc pl-5">
+              {hiddenLinks.map(({ network, message }) => (
+                <li key={network}>{message}</li>
+              ))}
+            </ul>
+          </div>
+        )}
         <ActionForm action={saveCompanyAction}>
           <div className="grid gap-3 sm:grid-cols-2">
             <TextField name="companyName" label="Raison sociale" defaultValue={company.companyName} hint="Imprimée sur les reçus et factures." />
@@ -66,10 +83,12 @@ export default async function SettingsPage() {
             <TextField name="email" label="E-mail" type="email" defaultValue={company.email} required={false} />
             <TextField name="openingHours" label="Horaires" defaultValue={company.openingHours} required={false} />
             <TextField name="address" label="Adresse" defaultValue={company.address} required={false} className="sm:col-span-2" />
-            <TextField name="socialLinks.facebook" label="Facebook" defaultValue={company.socialLinks.facebook} required={false} />
-            <TextField name="socialLinks.instagram" label="Instagram" defaultValue={company.socialLinks.instagram} required={false} />
-            <TextField name="socialLinks.linkedin" label="LinkedIn" defaultValue={company.socialLinks.linkedin} required={false} />
-            <TextField name="socialLinks.tiktok" label="TikTok" defaultValue={company.socialLinks.tiktok} required={false} />
+            <TextField name="socialLinks.facebook" label="Facebook" defaultValue={company.socialLinks.facebook} required={false} hint={socialHint("facebook")} />
+            <TextField name="socialLinks.instagram" label="Instagram" defaultValue={company.socialLinks.instagram} required={false} hint={socialHint("instagram")} />
+            <TextField name="socialLinks.linkedin" label="LinkedIn" defaultValue={company.socialLinks.linkedin} required={false} hint={socialHint("linkedin")} />
+            <TextField name="socialLinks.tiktok" label="TikTok" defaultValue={company.socialLinks.tiktok} required={false} hint={socialHint("tiktok")} />
+            <TextField name="socialLinks.youtube" label="YouTube" defaultValue={company.socialLinks.youtube} required={false} hint={socialHint("youtube")} />
+            <TextField name="socialLinks.x" label="X (Twitter)" defaultValue={company.socialLinks.x} required={false} hint={socialHint("x")} />
           </div>
           <div>
             <SubmitButton>Enregistrer l&apos;identité</SubmitButton>
@@ -80,7 +99,7 @@ export default async function SettingsPage() {
       <Section title="Logo (D13)">
         <div className="flex flex-col gap-4">
           <p className="text-sm text-ink-muted">
-            {company.logoUrl ? "Logo actuel :" : "Aucun logo : le logo typographique provisoire est affiché."} Le logo se téléverse uniquement : aucune adresse
+            {company.logoUrl ? "Logo actuel :" : "Aucun logo : le logo officiel FUTANI SHOP est affiché."} Le logo se téléverse uniquement : aucune adresse
             externe n&apos;est acceptée.
           </p>
           {company.logoUrl && (
@@ -108,7 +127,7 @@ export default async function SettingsPage() {
       <Section title="Commande et paiement (D1, D2, D3)">
         <ActionForm action={saveCommerceAction}>
           <CheckboxField name="guestCheckoutEnabled" label="D1 — Commande sans compte (invité, téléphone obligatoire)" defaultChecked={commerce.guestCheckoutEnabled} />
-          <CheckboxField name="partialPaymentEnabled" label="D2 — Paiement partiel en espèces (acompte)" defaultChecked={commerce.partialPaymentEnabled} />
+          <CheckboxField name="partialPaymentEnabled" label="D2 — Paiement partiel (acompte)" defaultChecked={commerce.partialPaymentEnabled} />
           <IntegerField
             name="stockReservationHours"
             label="D3 — Durée de réservation du stock (heures)"
@@ -177,7 +196,7 @@ export default async function SettingsPage() {
 
       <Section title="Moyens de règlement">
         <ActionForm action={savePaymentsAction}>
-          <p className="text-sm text-ink-muted">Espèces uniquement : aucun paiement électronique n&apos;existe dans l&apos;application.</p>
+          <p className="text-sm text-ink-muted">Modalités du règlement en espèces. Les paiements mobiles se choisissent à l&apos;encaissement et aucune passerelle de paiement n&apos;existe dans l&apos;application.</p>
           {Object.entries(PAYMENT_METHOD_LABELS).map(([method, label]) => (
             <CheckboxField key={method} name={method} label={label} defaultChecked={payments.enabledMethods.includes(method as keyof typeof PAYMENT_METHOD_LABELS)} />
           ))}

@@ -11,10 +11,10 @@ const rolesWith = (permission: Permission) =>
  * Matrice attendue, écrite indépendamment de roles.ts : toute modification des droits
  * d'un rôle doit être reportée ici consciemment (§20 n° 3).
  */
-const EXPECTED: Record<string, readonly Permission[] | "ALL" | "ALL_BUT_SELF_REFUND"> = {
+const EXPECTED: Record<string, readonly Permission[] | "ALL" | "ALL_BUT_OWNER_ONLY"> = {
   SUPER_ADMIN: "ALL",
-  // Décision 1 (phase 10) : l'exception « décider puis rembourser soi-même » est réservée à l'administrateur principal.
-  ADMIN: "ALL_BUT_SELF_REFUND",
+  // Réservé à l'administrateur principal : décision 1 (phase 10, décider puis rembourser soi-même) et bandeau d'annonces.
+  ADMIN: "ALL_BUT_OWNER_ONLY",
   CATALOG_MANAGER: ["admin.access", "categories.manage", "inventory.read", "products.archive", "products.create", "products.read", "products.update"],
   STOCK_MANAGER: ["admin.access", "inventory.adjust", "inventory.read", "products.read", "reports.read"],
   ORDER_MANAGER: ["admin.access", "customers.read", "deliveries.manage", "inventory.read", "orders.read", "orders.update", "payments.read", "products.read", "returns.decide"],
@@ -27,9 +27,12 @@ const EXPECTED: Record<string, readonly Permission[] | "ALL" | "ALL_BUT_SELF_REF
   COURIER: ["admin.access", "deliveries.update_own"],
 };
 
+// Liste propre à ce test (indépendante de SUPER_ADMIN_ONLY de roles.ts).
+const OWNER_ONLY: readonly Permission[] = ["returns.refund_own_decision", "announcements.manage"];
+
 const expectedPermissions = (expected: (typeof EXPECTED)[string]): Permission[] => {
   if (expected === "ALL") return [...PERMISSIONS].sort();
-  if (expected === "ALL_BUT_SELF_REFUND") return PERMISSIONS.filter((permission) => permission !== "returns.refund_own_decision").sort();
+  if (expected === "ALL_BUT_OWNER_ONLY") return PERMISSIONS.filter((permission) => !OWNER_ONLY.includes(permission)).sort();
   return [...expected].sort();
 };
 
@@ -69,6 +72,10 @@ describe("matrice des rôles (§14)", () => {
 
   it("réserve l'exception de remboursement par le décideur à l'administrateur principal (décision 1)", () => {
     expect(rolesWith("returns.refund_own_decision")).toEqual([SUPER_ADMIN]);
+  });
+
+  it("réserve la gestion du bandeau d'annonces à l'administrateur principal", () => {
+    expect(rolesWith("announcements.manage")).toEqual([SUPER_ADMIN]);
   });
 
   it("limite le livreur à ses propres livraisons : ni remboursement, ni comptabilité, ni administration (décision 5)", () => {

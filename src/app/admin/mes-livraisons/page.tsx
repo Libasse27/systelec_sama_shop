@@ -1,10 +1,11 @@
 import type { Metadata } from "next";
 import { randomUUID } from "node:crypto";
 import { PageHeader, Section } from "@/components/admin/admin-ui";
-import { ActionForm, SubmitButton, TextField } from "@/components/forms/form-controls";
+import { ActionForm, SelectField, SubmitButton, TextField } from "@/components/forms/form-controls";
 import { formatDateTime } from "@/lib/dates";
 import { DELIVERY_STATUS_LABELS } from "@/lib/labels";
 import { formatFcfa } from "@/lib/money";
+import { PAYMENT_METHOD_OPTIONS } from "@/lib/payment-methods";
 import { requirePermission } from "@/server/auth/session";
 import { db } from "@/server/db/client";
 import { listMyDeliveries, type MyDeliveryRow } from "@/server/modules/deliveries/queries";
@@ -54,8 +55,10 @@ function DeliveryCard({ row }: { row: MyDeliveryRow }) {
             <>
               <input type="hidden" name="idempotencyKey" value={randomUUID()} />
               <input type="hidden" name="amount" value={row.balance} />
+              <SelectField name="method" label="Moyen de paiement" options={PAYMENT_METHOD_OPTIONS} defaultValue="CASH" />
+              <TextField name="transactionReference" label="Référence de la transaction" required={false} hint="Obligatoire pour un paiement mobile." />
               <div>
-                <SubmitButton confirm={`Confirmer l'encaissement de ${formatFcfa(row.balance)} en espèces ?`}>Encaisser {formatFcfa(row.balance)} en espèces</SubmitButton>
+                <SubmitButton confirm={`Confirmer l'encaissement de ${formatFcfa(row.balance)} ?`}>Encaisser {formatFcfa(row.balance)}</SubmitButton>
               </div>
             </>
           )}

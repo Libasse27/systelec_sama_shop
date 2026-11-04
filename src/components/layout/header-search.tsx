@@ -1,7 +1,8 @@
 "use client";
 
-import { Search, X } from "lucide-react";
+import { X } from "lucide-react";
 import { useEffect, useRef, useState, type FocusEvent, type FormEvent, type KeyboardEvent } from "react";
+import { BrandIcon } from "@/components/brand/brand-icon";
 import { cn } from "@/lib/utils";
 
 /**
@@ -14,18 +15,18 @@ export function HeaderSearch() {
   const toggleRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
-    if (open) inputRef.current?.focus();
+    if (open) inputRef.current?.focus({ preventScroll: true });
   }, [open]);
 
   function close() {
     setOpen(false);
-    toggleRef.current?.focus();
+    toggleRef.current?.focus({ preventScroll: true });
   }
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     if (open && inputRef.current?.value.trim()) return;
     event.preventDefault();
-    if (open) inputRef.current?.focus();
+    if (open) inputRef.current?.focus({ preventScroll: true });
     else setOpen(true);
   }
 
@@ -89,7 +90,7 @@ export function HeaderSearch() {
           open ? "rounded-l-none bg-brand-accent text-brand-navy" : "text-white/90 hover:bg-white/10",
         )}
       >
-        <Search aria-hidden className="size-5" />
+        <BrandIcon name="recherche" className="size-6" />
       </button>
     </form>
   );

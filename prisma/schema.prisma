@@ -662,46 +662,51 @@ model OrderStatusHistory {
 /// Moyens de règlement PHYSIQUES uniquement : aucun moyen électronique n'existe.
 enum PaymentMethod {
   CASH
+  ORANGE_MONEY
+  WAVE
 }
 
-/// Encaissement en espèces, en AJOUT SEUL (trigger) : une erreur se corrige par une
+/// Encaissement (espèces, Orange Money ou Wave, saisi par le personnel), en AJOUT SEUL (trigger) : une erreur se corrige par une
 /// contre-écriture liée (montant opposé), jamais par modification ni suppression.
 /// Le statut de paiement de la commande est recalculé à chaque écriture. Le reçu est
 /// généré depuis cette ligne.
 model Payment {
-  id                String        @id @default(cuid())
-  receiptNumber     String        @unique
+  id                   String        @id @default(cuid())
+  receiptNumber        String        @unique
   /// Exactement l'un des deux : une commande ou une intervention (contrainte CHECK).
-  orderId           String?
-  order             Order?        @relation(fields: [orderId], references: [id], onDelete: Restrict)
-  interventionId    String?
-  intervention      Intervention? @relation(fields: [interventionId], references: [id], onDelete: Restrict)
+  orderId              String?
+  order                Order?        @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  interventionId       String?
+  intervention         Intervention? @relation(fields: [interventionId], references: [id], onDelete: Restrict)
   /// > 0 : encaissement ; < 0 : contre-écriture (annulation d'un encaissement) ou remboursement d'un retour.
-  amount            Int
-  method            PaymentMethod @default(CASH)
+  amount               Int
+  method               PaymentMethod @default(CASH)
+  /// Référence du transfert mobile (4 à 64 caractères, majuscules) : obligatoire hors espèces, nulle pour des espèces (contrainte CHECK).
+  transactionReference String?
   /// Reste à payer sur la commande juste après cette écriture (figé pour le reçu).
-  balanceAfter      Int
-  recordedById      String
-  recordedBy        User          @relation(fields: [recordedById], references: [id], onDelete: Restrict)
+  balanceAfter         Int
+  recordedById         String
+  recordedBy           User          @relation(fields: [recordedById], references: [id], onDelete: Restrict)
   /// Clé envoyée par le formulaire : un double envoi n'encaisse qu'une fois.
-  idempotencyKey    String?       @unique
+  idempotencyKey       String?       @unique
   /// Contre-écriture : l'encaissement annulé (au plus une annulation par encaissement).
-  reversesPaymentId String?       @unique
-  reverses          Payment?      @relation("PaymentReversal", fields: [reversesPaymentId], references: [id], onDelete: Restrict)
-  reversedBy        Payment?      @relation("PaymentReversal")
-  /// Remboursement en espèces d'un retour (montant < 0, au plus un par retour).
-  returnId          String?       @unique
-  return            Return?       @relation(fields: [returnId], references: [id], onDelete: Restrict)
+  reversesPaymentId    String?       @unique
+  reverses             Payment?      @relation("PaymentReversal", fields: [reversesPaymentId], references: [id], onDelete: Restrict)
+  reversedBy           Payment?      @relation("PaymentReversal")
+  /// Remboursement d'un retour (montant < 0, au plus un par retour).
+  returnId             String?       @unique
+  return               Return?       @relation(fields: [returnId], references: [id], onDelete: Restrict)
   /// Motif d'une contre-écriture ou d'un remboursement (obligatoire), imprimé sur son reçu.
-  reason            String?
+  reason               String?
   /// Note interne, jamais imprimée ni montrée au client.
-  note              String?
-  createdAt         DateTime      @default(now()) @db.Timestamptz(3)
+  note                 String?
+  createdAt            DateTime      @default(now()) @db.Timestamptz(3)
 
   @@index([orderId, createdAt])
   @@index([interventionId, createdAt])
   @@index([createdAt])
   @@index([recordedById, createdAt])
+  @@index([method, transactionReference])
   @@map("payments")
 }
 

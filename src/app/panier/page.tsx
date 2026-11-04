@@ -3,6 +3,7 @@ import Link from "next/link";
 import { ProductImage } from "@/components/catalog/product-card";
 import { ActionForm, IntegerField, SubmitButton } from "@/components/forms/form-controls";
 import { formatFcfa } from "@/lib/money";
+import { ACCEPTED_PAYMENT_METHODS } from "@/lib/payment-methods";
 import { db } from "@/server/db/client";
 import { getCartView, type CartLine } from "@/server/modules/cart/service";
 import { readCartOwner } from "@/server/modules/cart/session";
@@ -70,7 +71,7 @@ export default async function CartPage() {
             <p className="text-lg">
               Sous-total : <strong>{formatFcfa(cart.subtotal)}</strong>
             </p>
-            <p className="text-sm text-ink-muted">Frais de livraison calculés à l&apos;étape suivante. Paiement en espèces uniquement.</p>
+            <p className="text-sm text-ink-muted">Frais de livraison calculés à l&apos;étape suivante. Paiement {ACCEPTED_PAYMENT_METHODS}.</p>
             {cart.canCheckout ? (
               <Link href="/commande" className="rounded-lg bg-brand-blue px-5 py-2.5 font-semibold text-white hover:bg-brand-blue-dark">
                 Passer la commande

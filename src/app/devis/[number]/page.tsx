@@ -5,6 +5,7 @@ import { InterventionFollowUp } from "@/components/services/intervention-follow-
 import { formatDate } from "@/lib/dates";
 import { QUOTE_ITEM_KIND_LABELS, QUOTE_STATUS_LABELS } from "@/lib/labels";
 import { formatFcfa } from "@/lib/money";
+import { ACCEPTED_PAYMENT_METHODS } from "@/lib/payment-methods";
 import { getCurrentUser } from "@/server/auth/session";
 import { db } from "@/server/db/client";
 import { getQuoteForViewer } from "@/server/modules/quotes/queries";
@@ -79,7 +80,7 @@ export default async function QuotePage({ params, searchParams }: Props) {
           </tbody>
           <tfoot className="border-t border-line">
             <tr className="font-bold">
-              <td colSpan={3} className="px-3 py-2 text-right">Total TTC, à régler en espèces après la prestation</td>
+              <td colSpan={3} className="px-3 py-2 text-right">Total TTC, à régler {ACCEPTED_PAYMENT_METHODS}, après la prestation</td>
               <td className="whitespace-nowrap px-3 py-2 text-right">{formatFcfa(quote.total)}</td>
             </tr>
           </tfoot>

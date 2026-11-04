@@ -1,17 +1,25 @@
-import { Banknote, Clock, Mail, MapPin, MessageCircle, Phone } from "lucide-react";
+import { Clock } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { Logo } from "@/components/brand/logo";
+import { BrandIcon } from "@/components/brand/brand-icon";
+import { BrandLogo, Logo } from "@/components/brand/logo";
+import { PaymentMethodIcon } from "@/components/brand/payment-method-icons";
+import { SocialLinks } from "@/components/layout/social-links";
 import { BRAND, SHOP_PILLARS_LINE } from "@/lib/brand";
 import { telHref, whatsappHref } from "@/lib/contact-links";
-import { getCompanySettings } from "@/server/storefront";
+import { PAYMENT_METHOD_OPTIONS } from "@/lib/payment-methods";
 import { db } from "@/server/db/client";
 import { listPublishedPages } from "@/server/modules/content/queries";
+import type { SettingValue } from "@/server/modules/settings/schemas";
+import { getCompanySettings } from "@/server/storefront";
+
+type CompanySettings = SettingValue<"company">;
 
 const linkClass = "text-sm text-white/80 hover:text-white hover:underline";
 const contactLinkClass = "flex items-start gap-2 text-sm text-white/80 hover:text-white";
 const contactTextClass = "flex items-start gap-2 text-sm text-white/80";
 const contactIconClass = "mt-0.5 size-4 shrink-0 text-brand-accent";
+const contactPictoClass = "mt-0.5 size-5";
 
 interface FooterSectionProps {
   title: string;
@@ -31,19 +39,100 @@ function FooterSection({ title, navigation = true, children }: FooterSectionProp
   );
 }
 
-/**
- * Pied de page : marque, boutique, aide (seules les pages publiées), coordonnées.
- * Les coordonnées sont celles de la page Contact (mêmes champs, mêmes liens) ; sans aucune
- * coordonnée renseignée, la colonne l'indique au lieu de promettre un formulaire.
- */
-export async function SiteFooter() {
-  const [company, pages] = await Promise.all([getCompanySettings(), listPublishedPages(db)]);
+/** Coordonnées de la page Contact (mêmes champs, mêmes liens) ; sans aucune coordonnée, la colonne l'indique au lieu de promettre un formulaire. */
+function FooterContact({ company }: { company: CompanySettings }) {
   const whatsapp = company.whatsapp ? whatsappHref(company.whatsapp) : null;
   const hasContactDetails = Boolean(company.phone || whatsapp || company.email || company.address || company.openingHours);
   return (
-    <footer className="mt-12 bg-brand-navy text-white">
-      <div className="mx-auto grid max-w-6xl gap-8 px-4 py-10 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="flex flex-col gap-3">
+    <FooterSection title="Contact" navigation={false}>
+      {company.phone && (
+        <a href={telHref(company.phone)} className={contactLinkClass}>
+          <BrandIcon name="telephone" className={contactPictoClass} />
+          {company.phone}
+        </a>
+      )}
+      {company.whatsapp && whatsapp && (
+        <a href={whatsapp} className={contactLinkClass} target="_blank" rel="noopener noreferrer">
+          <BrandIcon name="whatsapp" className={contactPictoClass} />
+          WhatsApp : {company.whatsapp}
+        </a>
+      )}
+      {company.email && (
+        <a href={`mailto:${company.email}`} className={contactLinkClass}>
+          <BrandIcon name="email" className={contactPictoClass} />
+          {company.email}
+        </a>
+      )}
+      {company.address && (
+        <p className={contactTextClass}>
+          <BrandIcon name="localisation" className={contactPictoClass} />
+          <span className="whitespace-pre-line">{company.address}</span>
+        </p>
+      )}
+      {company.openingHours && (
+        <p className={contactTextClass}>
+          <Clock aria-hidden className={contactIconClass} />
+          <span className="whitespace-pre-line">{company.openingHours}</span>
+        </p>
+      )}
+      {!hasContactDetails && <p className="text-sm text-white/80">Nos coordonnées seront publiées très prochainement.</p>}
+    </FooterSection>
+  );
+}
+
+/** Moyens de paiement acceptés, un par ligne ; les pictogrammes de largeurs différentes gardent les libellés alignés. */
+function FooterPayment() {
+  return (
+    <FooterSection title="Paiement" navigation={false}>
+      <ul className="flex flex-col gap-2">
+        {PAYMENT_METHOD_OPTIONS.map(({ value, label }) => (
+          <li key={value} className="flex items-center gap-2 text-sm text-white/80">
+            <span className="flex w-10 shrink-0">
+              <PaymentMethodIcon method={value} />
+            </span>
+            {label}
+          </li>
+        ))}
+      </ul>
+      <p className="text-sm text-white/80">À la livraison ou au retrait.</p>
+    </FooterSection>
+  );
+}
+
+/** Copyright au nom du groupe, mentions légales de la société (saisies dans l'administration), signature du groupe. */
+function FooterBottomBar({ company }: { company: CompanySettings }) {
+  const legalMentions = [`Raison sociale : ${company.companyName}`, company.ninea && `NINEA : ${company.ninea}`, company.rccm && `RCCM : ${company.rccm}`].filter(Boolean).join(" · ");
+  return (
+    <div className="border-t border-white/10">
+      <div className="mx-auto flex max-w-6xl flex-col gap-3 px-4 py-4 text-center text-xs text-white/60 sm:flex-row sm:items-center sm:justify-between sm:gap-6 sm:text-left">
+        <div className="flex flex-col gap-1">
+          <p>
+            © {new Date().getFullYear()} {BRAND.group.name}. Tous droits réservés.
+          </p>
+          <p>{legalMentions}</p>
+        </div>
+        <p className="flex items-center justify-center gap-3 italic sm:shrink-0 sm:justify-start">
+          <BrandLogo variant="group" className="h-8" />
+          {BRAND.group.signature}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Pied de page : marque, boutique, aide (seules les pages publiées), coordonnées et paiement sur une
+ * même rangée (deux colonnes sur tablette, la marque occupant toute la largeur ; une seule sur mobile),
+ * puis une bande pleine largeur pour les réseaux sociaux (seulement les liens enregistrés et conformes,
+ * src/lib/social-links.ts) et une barre finale : copyright, mentions légales, signature du groupe.
+ * Les valeurs saisies dans l'administration sont du texte brut et peuvent couper n'importe où (wrap-anywhere).
+ */
+export async function SiteFooter() {
+  const [company, pages] = await Promise.all([getCompanySettings(), listPublishedPages(db)]);
+  return (
+    <footer className="mt-12 bg-brand-navy text-white wrap-anywhere">
+      <div className="mx-auto grid max-w-6xl grid-cols-1 gap-8 px-4 py-10 sm:grid-cols-2 lg:grid-cols-[1.4fr_1fr_1fr_1.3fr_1fr]">
+        <div className="flex flex-col gap-3 sm:col-span-2 lg:col-span-1">
           <Link href="/" aria-label={`${company.shopName}, accueil`} className="self-start">
             <Logo shopName={company.shopName} logoUrl={company.logoUrl} />
           </Link>
@@ -51,10 +140,6 @@ export async function SiteFooter() {
             {BRAND.shop.tagline}
             <br />
             {SHOP_PILLARS_LINE}
-          </p>
-          <p className="flex items-center gap-2 text-sm">
-            <Banknote aria-hidden className="size-4 shrink-0 text-brand-accent" />
-            Paiement en espèces uniquement.
           </p>
         </div>
         <FooterSection title="Boutique">
@@ -81,50 +166,12 @@ export async function SiteFooter() {
             </Link>
           ))}
         </FooterSection>
-        <FooterSection title="Contact" navigation={false}>
-          {company.phone && (
-            <a href={telHref(company.phone)} className={contactLinkClass}>
-              <Phone aria-hidden className={contactIconClass} />
-              {company.phone}
-            </a>
-          )}
-          {company.whatsapp && whatsapp && (
-            <a href={whatsapp} className={contactLinkClass} target="_blank" rel="noopener noreferrer">
-              <MessageCircle aria-hidden className={contactIconClass} />
-              WhatsApp : {company.whatsapp}
-            </a>
-          )}
-          {company.email && (
-            <a href={`mailto:${company.email}`} className={`${contactLinkClass} break-all`}>
-              <Mail aria-hidden className={contactIconClass} />
-              {company.email}
-            </a>
-          )}
-          {company.address && (
-            <p className={contactTextClass}>
-              <MapPin aria-hidden className={contactIconClass} />
-              <span className="whitespace-pre-line">{company.address}</span>
-            </p>
-          )}
-          {company.openingHours && (
-            <p className={contactTextClass}>
-              <Clock aria-hidden className={contactIconClass} />
-              <span className="whitespace-pre-line">{company.openingHours}</span>
-            </p>
-          )}
-          {!hasContactDetails && <p className="text-sm text-white/80">Nos coordonnées seront publiées très prochainement.</p>}
-        </FooterSection>
+        <FooterContact company={company} />
+        <FooterPayment />
+        {/* Sous toutes les colonnes : e2e/social-links.spec.ts vérifie cet emplacement. */}
+        <SocialLinks links={company.socialLinks} className="border-t border-white/10 pt-6 sm:col-span-2 sm:flex-row sm:items-center sm:gap-4 lg:col-span-5" />
       </div>
-      <div className="border-t border-white/10">
-        <div className="mx-auto flex max-w-6xl flex-col gap-1 px-4 py-4 text-center text-xs text-white/60 sm:flex-row sm:justify-between sm:text-left">
-          <p>
-            © {new Date().getFullYear()} {company.companyName}. Tous droits réservés.
-          </p>
-          <p className="italic">
-            {BRAND.group.name} — {BRAND.group.signature}
-          </p>
-        </div>
-      </div>
+      <FooterBottomBar company={company} />
     </footer>
   );
 }

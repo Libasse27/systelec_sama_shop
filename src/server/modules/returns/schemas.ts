@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { optionalText } from "@/lib/schema-text";
-import { MAX_PAYMENT_AMOUNT } from "@/server/modules/payments/schemas";
+import { MAX_PAYMENT_AMOUNT, paymentMethodFields, requireReferenceForMobile } from "@/server/modules/payments/schemas";
 
 export const createReturnSchema = z.object({
   idempotencyKey: z.uuid(),
@@ -37,11 +37,12 @@ export const decideReturnSchema = z.discriminatedUnion("decision", [
 ]);
 
 export const refundReturnSchema = z.object({
+  ...paymentMethodFields,
   idempotencyKey: z.uuid(),
   note: optionalText(300),
   // Décision 1 (phase 10) : exception motivée quand la personne qui a décidé verse elle-même le remboursement.
   selfApprovalNote: optionalText(500),
-});
+}).superRefine(requireReferenceForMobile);
 
 /** Demande de vérification avant la décision : nature et précisions (photos attendues, points à inspecter…). */
 export const requestVerificationSchema = z.object({

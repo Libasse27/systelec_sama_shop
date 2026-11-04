@@ -111,7 +111,7 @@ function customerMessage(template: ReturnTemplate, data: ReturnMessageData): { s
         text: [
           greeting,
           data.decision === "ACCEPTED"
-            ? `Votre demande de retour ${data.number} (commande ${data.orderNumber}) est acceptée.${data.refundAmount ? ` Remboursement prévu : ${data.refundAmount}, versé en espèces à la boutique.` : ""}`
+            ? `Votre demande de retour ${data.number} (commande ${data.orderNumber}) est acceptée.${data.refundAmount ? ` Remboursement prévu : ${data.refundAmount}.` : ""}`
             : `Votre demande de retour ${data.number} (commande ${data.orderNumber}) n'a pas été acceptée.`,
           data.decisionNote ? `Motif : ${data.decisionNote}` : "",
           CUSTOMER_FOOTER,

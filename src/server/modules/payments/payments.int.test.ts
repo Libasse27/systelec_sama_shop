@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { beforeEach, describe, expect, it } from "vitest";
+import { PAYMENT_METHOD_LABELS, PAYMENT_METHODS } from "@/lib/payment-methods";
 import type { Actor } from "@/server/authz/service";
 import { syncRolesAndPermissions } from "@/server/authz/sync";
 import { db } from "@/server/db/client";
@@ -185,6 +186,189 @@ describe("encaissements en espèces (§20 n° 15, 16 et 26, PostgreSQL)", () => 
     });
   });
 
+  describe("moyen de paiement", () => {
+    const record = (actor: Actor, id: string, amount: number, method?: string, idempotencyKey: string = randomUUID(), transactionReference?: string) =>
+      recordOrderPayment(db, actor, id, { amount, method, idempotencyKey, transactionReference: transactionReference ?? (method === "WAVE" ? `TX-${randomUUID().slice(0, 8)}` : undefined) });
+
+    it("enregistre le moyen choisi et le reprend sur le reçu et la vue client", async () => {
+      const { id, number } = await order();
+      const { receiptNumber } = await record(cashier, id, TOTAL, "WAVE");
+      expect(await db.payment.findUniqueOrThrow({ where: { receiptNumber } })).toMatchObject({ method: "WAVE" });
+      const receipt = await getReceipt(db, { user: cashier }, receiptNumber);
+      expect(receipt?.method).toBe("WAVE");
+      await expect(renderReceiptPdf(receipt!)).resolves.toBeInstanceOf(Buffer);
+      expect((await listOrderPayments(db, cashier, id))[0]?.method).toBe("WAVE");
+      const log = await db.auditLog.findFirstOrThrow({ where: { action: "payment.record" } });
+      expect(log.after).toMatchObject({ method: "WAVE" });
+      expect(number).toBeTruthy();
+    });
+
+    it("espèces par défaut ; moyen inconnu refusé", async () => {
+      const { id } = await order();
+      await expect(record(cashier, id, TOTAL, "VIREMENT")).rejects.toMatchObject({ code: "VALIDATION" });
+      const { receiptNumber } = await record(cashier, id, TOTAL);
+      expect(await db.payment.findUniqueOrThrow({ where: { receiptNumber } })).toMatchObject({ method: "CASH" });
+    });
+
+    it("la contre-écriture reprend le moyen de l'encaissement annulé", async () => {
+      const { id } = await order();
+      const payment = await record(cashier, id, TOTAL, "WAVE");
+      const { receiptNumber } = await voidPayment(db, cashier, payment.id, { reason: "Erreur de saisie" });
+      expect(await db.payment.findUniqueOrThrow({ where: { receiptNumber } })).toMatchObject({ method: "WAVE", amount: -TOTAL });
+    });
+
+    it("un double envoi avec un autre moyen est refusé", async () => {
+      const { id } = await order();
+      const key = randomUUID();
+      await record(cashier, id, TOTAL, "CASH", key);
+      await expect(record(cashier, id, TOTAL, "WAVE", key)).rejects.toThrow(/déjà été envoyé/);
+    });
+
+    it("journal : total par moyen, et seules les espèces sont à remettre par l'agent", async () => {
+      const first = await order();
+      const second = await order();
+      await record(cashier, first.id, TOTAL, "WAVE");
+      await record(cashier, second.id, TOTAL, "CASH");
+      const journal = await getPaymentJournal(db, cashier, { from: new Date(Date.now() - 3600_000), to: new Date(Date.now() + 3600_000) });
+      expect(journal.totals.net).toBe(2 * TOTAL);
+      expect(journal.byMethod).toEqual(PAYMENT_METHODS.map((method) => ({ method, label: PAYMENT_METHOD_LABELS[method], net: method === "CASH" || method === "WAVE" ? TOTAL : 0 })));
+      expect(journal.byRecorder).toEqual([{ name: "FINANCE_MANAGER", net: TOTAL, count: 1 }]);
+    });
+  });
+
+  describe("référence de transaction", () => {
+    const REF = "WV-2026-ABC123";
+    const record = (actor: Actor, id: string, input: Record<string, unknown>) =>
+      recordOrderPayment(db, actor, id, { amount: TOTAL, idempotencyKey: randomUUID(), ...input });
+
+    it("refuse un paiement mobile sans référence, sans rien enregistrer", async () => {
+      const { id } = await order();
+      await expect(record(cashier, id, { method: "WAVE" })).rejects.toMatchObject({
+        code: "VALIDATION",
+        details: { fieldErrors: { transactionReference: ["Indiquez la référence de la transaction"] } },
+      });
+      expect(await db.payment.count()).toBe(0);
+    });
+
+    it("refuse une référence sur des espèces au lieu de l'ignorer", async () => {
+      const { id } = await order();
+      await expect(record(cashier, id, { method: "CASH", transactionReference: REF })).rejects.toMatchObject({ code: "VALIDATION" });
+      expect(await db.payment.count()).toBe(0);
+    });
+
+    it("enregistre la référence normalisée, l'audite et la reprend sur le reçu et l'historique", async () => {
+      const { id } = await order();
+      const { receiptNumber } = await record(cashier, id, { method: "WAVE", transactionReference: " wv-2026 abc123 " });
+      expect(await db.payment.findUniqueOrThrow({ where: { receiptNumber } })).toMatchObject({ transactionReference: "WV-2026ABC123" });
+      expect((await getReceipt(db, { user: cashier }, receiptNumber))?.transactionReference).toBe("WV-2026ABC123");
+      expect((await listOrderPayments(db, cashier, id))[0]?.transactionReference).toBe("WV-2026ABC123");
+      const log = await db.auditLog.findFirstOrThrow({ where: { action: "payment.record" } });
+      expect(log.after).toMatchObject({ method: "WAVE", transactionReference: "WV-2026ABC123" });
+    });
+
+    it("les espèces gardent une référence nulle", async () => {
+      const { id } = await order();
+      const { receiptNumber } = await record(cashier, id, {});
+      expect((await db.payment.findUniqueOrThrow({ where: { receiptNumber } })).transactionReference).toBeNull();
+    });
+
+    it("refuse la même référence sur une autre commande, sans nommer d'autre client", async () => {
+      const first = await order();
+      const second = await order();
+      await record(cashier, first.id, { method: "WAVE", transactionReference: REF });
+      const error = await record(cashier, second.id, { method: "WAVE", transactionReference: REF.toLowerCase() }).catch((caught: unknown) => caught);
+      expect(error).toMatchObject({ code: "CONFLICT", message: "Cette référence de transaction a déjà été enregistrée pour un autre encaissement." });
+      expect((error as Error).message).not.toMatch(new RegExp(`${first.number}|Awa`));
+      expect(await db.payment.count()).toBe(1);
+    });
+
+    it("deux envois simultanés de la même référence n'en laissent passer qu'un", async () => {
+      const first = await order();
+      const second = await order();
+      const results = await Promise.allSettled([
+        record(cashier, first.id, { method: "WAVE", transactionReference: REF }),
+        record(cashier, second.id, { method: "WAVE", transactionReference: REF }),
+      ]);
+      expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+      expect(await db.payment.count()).toBe(1);
+    });
+
+    it("refuse TX-123, TX.123 et TX123 comme une même référence, sur trois commandes", async () => {
+      const [first, second, third] = [await order(), await order(), await order()];
+      await record(cashier, first!.id, { method: "WAVE", transactionReference: "TX-123" });
+      for (const [target, reference] of [[second!, "TX.123"], [third!, "tx123"]] as const) {
+        await expect(record(cashier, target.id, { method: "WAVE", transactionReference: reference })).rejects.toMatchObject({
+          code: "CONFLICT",
+          message: "Cette référence de transaction a déjà été enregistrée pour un autre encaissement.",
+        });
+      }
+      expect(await db.payment.count()).toBe(1);
+    });
+
+    it("garde et affiche la référence telle que saisie, pas sa clé canonique", async () => {
+      const { id } = await order();
+      const { receiptNumber } = await record(cashier, id, { method: "WAVE", transactionReference: " tx.12-3 " });
+      expect((await db.payment.findUniqueOrThrow({ where: { receiptNumber } })).transactionReference).toBe("TX.12-3");
+      expect((await getReceipt(db, { user: cashier }, receiptNumber))?.transactionReference).toBe("TX.12-3");
+      expect((await listOrderPayments(db, cashier, id))[0]?.transactionReference).toBe("TX.12-3");
+    });
+
+    it("accepte une référence de forme voisine après annulation, puis la refuse de nouveau", async () => {
+      const [first, second, third] = [await order(), await order(), await order()];
+      const payment = await record(cashier, first!.id, { method: "WAVE", transactionReference: "TX-123" });
+      await voidPayment(db, cashier, payment.id, { reason: "Montant mal saisi" });
+      await expect(record(cashier, second!.id, { method: "WAVE", transactionReference: "TX.123" })).resolves.toMatchObject({ replayed: false });
+      await expect(record(cashier, third!.id, { method: "WAVE", transactionReference: "TX_123" })).rejects.toMatchObject({ code: "CONFLICT" });
+    });
+
+    it("deux envois simultanés de formes différentes n'en laissent passer qu'un", async () => {
+      const first = await order();
+      const second = await order();
+      const results = await Promise.allSettled([
+        record(cashier, first.id, { method: "WAVE", transactionReference: "TX-123" }),
+        record(cashier, second.id, { method: "WAVE", transactionReference: "TX.123" }),
+      ]);
+      expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+      expect(await db.payment.count()).toBe(1);
+    });
+
+    it("refuse une référence faite uniquement de séparateurs, sans rien enregistrer", async () => {
+      const { id } = await order();
+      await expect(record(cashier, id, { method: "WAVE", transactionReference: "----" })).rejects.toMatchObject({ code: "VALIDATION" });
+      expect(await db.payment.count()).toBe(0);
+    });
+
+    it("accepte de nouveau une référence dont l'encaissement a été annulé", async () => {
+      const first = await order();
+      const second = await order();
+      const payment = await record(cashier, first.id, { method: "WAVE", transactionReference: REF });
+      await voidPayment(db, cashier, payment.id, { reason: "Montant mal saisi" });
+      await expect(record(cashier, second.id, { method: "WAVE", transactionReference: REF })).resolves.toMatchObject({ replayed: false });
+    });
+
+    it("la contre-écriture reprend la référence de l'encaissement annulé", async () => {
+      const { id } = await order();
+      const payment = await record(cashier, id, { method: "WAVE", transactionReference: REF });
+      const { receiptNumber } = await voidPayment(db, cashier, payment.id, { reason: "Montant mal saisi" });
+      expect(await db.payment.findUniqueOrThrow({ where: { receiptNumber } })).toMatchObject({ method: "WAVE", amount: -TOTAL, transactionReference: REF });
+    });
+
+    it("un rejeu avec une autre référence est un conflit ; avec la même, un rejeu", async () => {
+      const { id } = await order();
+      const idempotencyKey = randomUUID();
+      const first = await record(cashier, id, { method: "WAVE", transactionReference: REF, idempotencyKey });
+      await expect(record(cashier, id, { method: "WAVE", transactionReference: "AUTRE-9999", idempotencyKey })).rejects.toMatchObject({ code: "CONFLICT" });
+      await expect(record(cashier, id, { method: "WAVE", transactionReference: REF, idempotencyKey })).resolves.toMatchObject({ receiptNumber: first.receiptNumber, replayed: true });
+    });
+
+    it("la base refuse une ligne mobile sans référence et des espèces avec référence", async () => {
+      const { id } = await order();
+      const base = { orderId: id, amount: 1000, balanceAfter: 0, recordedById: cashier.id };
+      await expect(db.payment.create({ data: { ...base, receiptNumber: "REC-RAW-1", method: "WAVE" } })).rejects.toThrow(/payments_transaction_reference_check/);
+      await expect(db.payment.create({ data: { ...base, receiptNumber: "REC-RAW-2", method: "CASH", transactionReference: REF } })).rejects.toThrow(/payments_transaction_reference_check/);
+    });
+  });
+
   describe("intégrité en base", () => {
     it("journal en ajout seul, contre-écriture cohérente, jamais au-delà du total", async () => {
       const { id } = await order();
@@ -287,7 +471,7 @@ describe("encaissements en espèces (§20 n° 15, 16 et 26, PostgreSQL)", () => 
       await recordOrderPayment(db, cashier, id, { amount: 20_000, idempotencyKey: randomUUID(), note: "Remis au livreur" });
       const view = await getCustomerOrder(db, userId, number);
       expect(view).toMatchObject({ amountPaid: 20_000, paymentStatus: "PARTIALLY_PAID" });
-      expect(view!.payments).toEqual([{ receiptNumber: expect.stringMatching(/^REC-/), amount: 20_000, createdAt: expect.any(Date), isRefund: false }]);
+      expect(view!.payments).toEqual([{ receiptNumber: expect.stringMatching(/^REC-/), amount: 20_000, method: "CASH", createdAt: expect.any(Date), isRefund: false }]);
       expect(JSON.stringify(view)).not.toContain("Remis au livreur");
     });
 

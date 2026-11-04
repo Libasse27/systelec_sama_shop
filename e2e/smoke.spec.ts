@@ -6,11 +6,11 @@ test("la sonde de santé répond sans détail interne", async ({ request }) => {
   expect(await response.json()).toEqual({ status: "ok" });
 });
 
-test("l'accueil affiche la boutique et le paiement en espèces uniquement", async ({ page }) => {
+test("l'accueil affiche la boutique et les moyens de paiement", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("FUTANI SHOP");
   await expect(page.getByText("La boutique officielle de FUTANI GROUP.").first()).toBeVisible();
-  await expect(page.getByText("Paiement exclusivement en espèces")).toBeVisible();
+  await expect(page.getByText("Paiement en espèces, par Orange Money ou par Wave, à la livraison ou au retrait.")).toBeVisible();
   await expect(page.getByRole("heading", { name: "Nos univers" })).toBeVisible();
 });
 

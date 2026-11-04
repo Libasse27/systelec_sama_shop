@@ -131,7 +131,7 @@ export async function saveReport(client: PrismaClient, actor: Actor, interventio
 
 /**
  * Fin des travaux : rapport obligatoire, nom de la personne présente chez le client.
- * L'intervention devient encaissable (règlement en espèces après la prestation).
+ * L'intervention devient encaissable (règlement après la prestation).
  */
 export async function completeIntervention(client: PrismaClient, actor: Actor, interventionId: string, input: unknown): Promise<void> {
   await authorizeWork(client, actor, interventionId);

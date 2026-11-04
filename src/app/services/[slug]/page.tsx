@@ -1,12 +1,13 @@
-import { Banknote } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { cache } from "react";
+import { PaymentMethodIcons } from "@/components/brand/payment-method-icons";
 import { Breadcrumbs } from "@/components/layout/breadcrumbs";
 import { JsonLd } from "@/components/seo/json-ld";
 import { BRAND } from "@/lib/brand";
 import { servicePriceLabel } from "@/lib/labels";
+import { ACCEPTED_PAYMENT_METHODS } from "@/lib/payment-methods";
 import { db } from "@/server/db/client";
 import { toParagraphs } from "@/server/modules/content/queries";
 import { getServiceDetail } from "@/server/modules/services/queries";
@@ -80,8 +81,8 @@ export default async function ServicePage({ params }: Props) {
       </section>
 
       <p className="flex items-center gap-2 text-sm text-ink-muted">
-        <Banknote aria-hidden className="size-4 text-brand-accent" />
-        Règlement en espèces, après la prestation.
+        <PaymentMethodIcons />
+        Règlement {ACCEPTED_PAYMENT_METHODS}, après la prestation.
       </p>
       <JsonLd
         data={{

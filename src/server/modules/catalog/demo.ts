@@ -1,5 +1,6 @@
 import "server-only";
 import type { PrismaClient, ProductCondition, ProductStatus } from "@/generated/prisma/client";
+import { ACCEPTED_PAYMENT_METHODS } from "@/lib/payment-methods";
 import { slugify } from "@/lib/slug";
 
 /**
@@ -155,7 +156,7 @@ const DEMO_PRODUCTS: DemoProduct[] = [
 ];
 
 const DEMO_FAQ = [
-  { question: "Comment payer ma commande ?", answer: "Uniquement en espèces, à la livraison ou au retrait en boutique." },
+  { question: "Comment payer ma commande ?", answer: `Vous payez ${ACCEPTED_PAYMENT_METHODS}, à la livraison ou au retrait en boutique.` },
   { question: "Livrez-vous à domicile ?", answer: "Oui, selon les zones et frais de livraison affichés au moment de la commande." },
 ];
 

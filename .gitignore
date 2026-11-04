@@ -30,6 +30,7 @@ test-results/
 # fichiers téléversés en local (à la racine seulement : src/server/storage/ est du code versionné)
 /storage/
 /storage-e2e/
+/futani-icones/
 
 # sauvegardes (bases et fichiers : données personnelles, jamais versionnées)
 /sauvegardes/

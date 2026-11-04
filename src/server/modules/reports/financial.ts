@@ -1,5 +1,6 @@
 import "server-only";
 import { Prisma } from "@/generated/prisma/client";
+import { PAYMENT_METHOD_LABELS, PAYMENT_METHODS, type PaymentMethod } from "@/lib/payment-methods";
 import { assertPermission, type Actor } from "@/server/authz/service";
 import type { Db } from "@/server/db/client";
 import type { ReportPeriod } from "./period";
@@ -21,6 +22,10 @@ export interface ReportEntry {
   createdAt: Date;
   receiptNumber: string;
   kind: EntryKind;
+  /** Libellé du moyen de paiement. */
+  method: string;
+  /** Référence du transfert mobile (null pour des espèces). */
+  transactionReference: string | null;
   /** « Commande CMD-… » ou « Intervention INT-… ». */
   document: string;
   amount: number;
@@ -31,8 +36,8 @@ export interface ReportEntry {
 export interface FinancialReport {
   period: ReportPeriod;
   cash: CashTotals;
-  /** Seul moyen existant : les espèces (aucun paiement électronique). */
-  byMethod: { method: "CASH"; label: string; net: number }[];
+  /** Net par moyen de paiement (tous les moyens, y compris à zéro). */
+  byMethod: { method: PaymentMethod; label: string; net: number }[];
   byCashier: (CashTotals & { name: string })[];
   byDay: (Omit<CashTotals, "count"> & { day: string })[];
   byDocument: { orders: number; interventions: number };
@@ -90,8 +95,9 @@ export async function assertFinancialAccess(client: Db, actor: Actor): Promise<v
 export async function getFinancialReport(client: Db, actor: Actor, period: ReportPeriod): Promise<FinancialReport> {
   await assertFinancialAccess(client, actor);
   const range = { gte: period.from, lt: period.to };
-  const [all, byDay, byRecorder, byDocument, sales, itemsSold, refunds, invoices, invoiceTotals, payments] = await Promise.all([
+  const [all, byMethod, byDay, byRecorder, byDocument, sales, itemsSold, refunds, invoices, invoiceTotals, payments] = await Promise.all([
     groupedTotals(client, period, Prisma.sql`'all'`),
+    groupedTotals(client, period, Prisma.sql`"method"::text`),
     groupedTotals(client, period, Prisma.sql`to_char("createdAt" AT TIME ZONE 'Africa/Dakar', 'YYYY-MM-DD')`),
     groupedTotals(client, period, Prisma.sql`"recordedById"`),
     groupedTotals(client, period, Prisma.sql`CASE WHEN "orderId" IS NOT NULL THEN 'orders' ELSE 'interventions' END`),
@@ -117,6 +123,8 @@ export async function getFinancialReport(client: Db, actor: Actor, period: Repor
       select: {
         receiptNumber: true,
         amount: true,
+        method: true,
+        transactionReference: true,
         createdAt: true,
         reason: true,
         returnId: true,
@@ -137,7 +145,10 @@ export async function getFinancialReport(client: Db, actor: Actor, period: Repor
   return {
     period,
     cash,
-    byMethod: [{ method: "CASH", label: "Espèces", net: cash.net }],
+    byMethod: PAYMENT_METHODS.map((method) => {
+      const row = byMethod.find((entry) => entry.key === method);
+      return { method, label: PAYMENT_METHOD_LABELS[method], net: row ? toTotals(row).net : 0 };
+    }),
     byCashier: byRecorder
       .map(({ key, ...row }) => ({ name: names.get(key) ?? "Inconnu", ...toTotals(row) }))
       .sort((a, b) => a.name.localeCompare(b.name, "fr")),
@@ -170,6 +181,8 @@ export async function getFinancialReport(client: Db, actor: Actor, period: Repor
       createdAt: payment.createdAt,
       receiptNumber: payment.receiptNumber,
       kind: kindOf(payment),
+      method: PAYMENT_METHOD_LABELS[payment.method],
+      transactionReference: payment.transactionReference,
       document: payment.order ? `Commande ${payment.order.number}` : `Intervention ${payment.intervention?.number ?? ""}`,
       amount: payment.amount,
       recordedBy: payment.recordedBy.name,

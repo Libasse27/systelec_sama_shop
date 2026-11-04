@@ -1,4 +1,5 @@
 import { formatFcfa } from "@/lib/money";
+import { ACCEPTED_PAYMENT_METHODS, paymentMethodPhrase, type PaymentMethod } from "@/lib/payment-methods";
 
 /** Textes des notifications des services techniques (texte brut : e-mail et SMS). */
 export type ServiceTemplate =
@@ -22,7 +23,7 @@ export interface ServiceMessageData {
   /** Intervention : créneau déjà formaté et technicien. */
   schedule?: string;
   technician?: string;
-  payment?: { amount: number; balance: number; receiptNumber: string };
+  payment?: { amount: number; balance: number; receiptNumber: string; method?: PaymentMethod };
 }
 
 export const SERVICE_TEMPLATES: readonly ServiceTemplate[] = [
@@ -35,7 +36,7 @@ export const SERVICE_TEMPLATES: readonly ServiceTemplate[] = [
   "intervention.payment",
 ];
 
-const CASH_ONLY = "Règlement en espèces après la prestation : aucun paiement en ligne ne vous sera demandé.";
+const PAYMENT_TERMS = `Règlement ${ACCEPTED_PAYMENT_METHODS}, après la prestation : aucun paiement sur le site ne vous sera demandé.`;
 
 export function renderServiceMessage(template: ServiceTemplate, data: ServiceMessageData): { subject: string; text: string } {
   const hello = `Bonjour ${data.customerName},`;
@@ -43,7 +44,7 @@ export function renderServiceMessage(template: ServiceTemplate, data: ServiceMes
     case "quote_request.received":
       return {
         subject: `Demande ${data.number} reçue`,
-        text: [hello, `Nous avons bien reçu votre demande ${data.number}. Nous l'étudions et revenons vers vous rapidement.`, CASH_ONLY].join("\n\n"),
+        text: [hello, `Nous avons bien reçu votre demande ${data.number}. Nous l'étudions et revenons vers vous rapidement.`, PAYMENT_TERMS].join("\n\n"),
       };
     case "quote_request.new_staff":
       return { subject: `Nouvelle demande ${data.number}`, text: `Nouvelle demande de devis ${data.number} de ${data.customerName}, à étudier dans l'administration.` };
@@ -54,7 +55,7 @@ export function renderServiceMessage(template: ServiceTemplate, data: ServiceMes
           hello,
           `Votre devis ${data.number} est prêt : ${formatFcfa(required(data.total, "total"))}, valable jusqu'au ${required(data.validUntil, "validité")}.`,
           "Vous pouvez l'accepter ou le refuser depuis votre lien de suivi ou votre compte, ou en nous appelant.",
-          CASH_ONLY,
+          PAYMENT_TERMS,
         ].join("\n\n"),
       };
     case "quote.decided_staff":
@@ -65,7 +66,7 @@ export function renderServiceMessage(template: ServiceTemplate, data: ServiceMes
     case "intervention.scheduled":
       return {
         subject: `Intervention ${data.number} planifiée`,
-        text: [hello, `Votre intervention ${data.number} est planifiée le ${required(data.schedule, "créneau")}${data.technician ? ` avec ${data.technician}` : ""}.`, CASH_ONLY].join("\n\n"),
+        text: [hello, `Votre intervention ${data.number} est planifiée le ${required(data.schedule, "créneau")}${data.technician ? ` avec ${data.technician}` : ""}.`, PAYMENT_TERMS].join("\n\n"),
       };
     case "intervention.done":
       return {
@@ -78,7 +79,7 @@ export function renderServiceMessage(template: ServiceTemplate, data: ServiceMes
         subject: `Intervention ${data.number} : paiement reçu`,
         text: [
           hello,
-          `Nous avons reçu ${formatFcfa(payment.amount)} en espèces pour l'intervention ${data.number} (reçu ${payment.receiptNumber}).`,
+          `Nous avons reçu ${formatFcfa(payment.amount)} ${paymentMethodPhrase(payment.method)} pour l'intervention ${data.number} (reçu ${payment.receiptNumber}).`,
           payment.balance > 0 ? `Reste à payer : ${formatFcfa(payment.balance)}.` : "L'intervention est entièrement payée. Merci !",
         ].join("\n\n"),
       };
@@ -86,7 +87,7 @@ export function renderServiceMessage(template: ServiceTemplate, data: ServiceMes
   }
 }
 
-const dueText = (amount: number) => (amount > 0 ? `Montant à régler en espèces : ${formatFcfa(amount)}.` : "Aucun montant ne reste à régler. Merci !");
+const dueText = (amount: number) => (amount > 0 ? `Montant à régler ${ACCEPTED_PAYMENT_METHODS} : ${formatFcfa(amount)}.` : "Aucun montant ne reste à régler. Merci !");
 
 function required<T>(value: T | undefined, label: string): T {
   if (value === undefined) throw new Error(`Donnée de notification absente : ${label}`);

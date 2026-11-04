@@ -1,5 +1,6 @@
 import "server-only";
 import type { Prisma } from "@/generated/prisma/client";
+import { PAYMENT_METHOD_LABELS, PAYMENT_METHODS, type PaymentMethod } from "@/lib/payment-methods";
 import type { Permission } from "@/server/authz/permissions";
 import { assertPermission, type Actor } from "@/server/authz/service";
 import type { Db } from "@/server/db/client";
@@ -14,6 +15,9 @@ export interface AdminPaymentRow {
   id: string;
   receiptNumber: string;
   amount: number;
+  method: PaymentMethod;
+  /** Référence du transfert mobile (null pour des espèces). */
+  transactionReference: string | null;
   balanceAfter: number;
   createdAt: Date;
   recordedBy: string;
@@ -31,6 +35,8 @@ const ADMIN_PAYMENT_SELECT = {
   id: true,
   receiptNumber: true,
   amount: true,
+  method: true,
+  transactionReference: true,
   balanceAfter: true,
   createdAt: true,
   note: true,
@@ -90,7 +96,9 @@ export interface PaymentJournal {
   truncated: boolean;
   /** Encaissé, annulé (contre-écritures), remboursé (retours) et net en caisse. */
   totals: { received: number; voided: number; refunded: number; net: number; count: number };
-  /** Net encaissé par agent : ce que chacun doit remettre en caisse. */
+  /** Net par moyen de paiement (tous les moyens, y compris à zéro). */
+  byMethod: { method: PaymentMethod; label: string; net: number }[];
+  /** Net en ESPÈCES par agent : ce que chacun doit remettre en caisse (il ne détient pas l'argent mobile). */
   byRecorder: { name: string; net: number; count: number }[];
 }
 
@@ -98,7 +106,7 @@ export interface PaymentJournal {
 export async function getPaymentJournal(client: Db, actor: Actor, range: { from: Date; to: Date }): Promise<PaymentJournal> {
   await assertPermission(client, actor, "payments.read");
   const where: Prisma.PaymentWhereInput = { createdAt: { gte: range.from, lt: range.to } };
-  const [payments, received, voided, refunded, perRecorder] = await Promise.all([
+  const [payments, received, voided, refunded, perRecorder, perMethod] = await Promise.all([
     client.payment.findMany({
       where,
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
@@ -108,7 +116,8 @@ export async function getPaymentJournal(client: Db, actor: Actor, range: { from:
     client.payment.aggregate({ where: { ...where, amount: { gt: 0 } }, _sum: { amount: true }, _count: true }),
     client.payment.aggregate({ where: { ...where, amount: { lt: 0 }, returnId: null }, _sum: { amount: true }, _count: true }),
     client.payment.aggregate({ where: { ...where, returnId: { not: null } }, _sum: { amount: true }, _count: true }),
-    client.payment.groupBy({ by: ["recordedById"], where, _sum: { amount: true }, _count: true }),
+    client.payment.groupBy({ by: ["recordedById"], where: { ...where, method: "CASH" }, _sum: { amount: true }, _count: true }),
+    client.payment.groupBy({ by: ["method"], where, _sum: { amount: true } }),
   ]);
   const recorders = await client.user.findMany({ where: { id: { in: perRecorder.map((row) => row.recordedById) } }, select: { id: true, name: true } });
   const names = new Map(recorders.map((user) => [user.id, user.name]));
@@ -126,6 +135,11 @@ export async function getPaymentJournal(client: Db, actor: Actor, range: { from:
       net: receivedTotal - voidedTotal - refundedTotal,
       count: received._count + voided._count + refunded._count,
     },
+    byMethod: PAYMENT_METHODS.map((method) => ({
+      method,
+      label: PAYMENT_METHOD_LABELS[method],
+      net: perMethod.find((row) => row.method === method)?._sum.amount ?? 0,
+    })),
     byRecorder: perRecorder
       .map((row) => ({ name: names.get(row.recordedById) ?? "Inconnu", net: row._sum.amount ?? 0, count: row._count }))
       .sort((a, b) => a.name.localeCompare(b.name, "fr")),
@@ -138,6 +152,9 @@ export interface ReceiptData {
   receiptNumber: string;
   createdAt: Date;
   amount: number;
+  method: PaymentMethod;
+  /** Référence du transfert mobile, imprimée sur le reçu quand elle existe. */
+  transactionReference: string | null;
   balanceAfter: number;
   /** Document réglé : « Commande » ou « Intervention », son numéro et son montant total. */
   document: { label: string; number: string; total: number };
@@ -228,6 +245,8 @@ export async function getReceipt(client: Db, viewer: DocumentViewer, receiptNumb
       receiptNumber: true,
       createdAt: true,
       amount: true,
+      method: true,
+      transactionReference: true,
       balanceAfter: true,
       reason: true,
       recordedBy: { select: { name: true } },
@@ -257,6 +276,8 @@ export async function getReceipt(client: Db, viewer: DocumentViewer, receiptNumb
     receiptNumber: payment.receiptNumber,
     createdAt: payment.createdAt,
     amount: payment.amount,
+    method: payment.method,
+    transactionReference: payment.transactionReference,
     balanceAfter: payment.balanceAfter,
     document: { label: document.label, number: document.number, total: document.total },
     customer: { name: contact.name, phone: contact.phone },

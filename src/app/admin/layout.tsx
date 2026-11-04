@@ -22,6 +22,7 @@ const NAVIGATION: { href: string; label: string; permission: Permission | readon
   { href: "/admin/import-export", label: "Import / export", permission: "products.read" },
   { href: "/admin/livraison", label: "Livraison et retrait", permission: "deliveries.manage" },
   { href: "/admin/contenu", label: "Contenu", permission: "content.manage" },
+  { href: "/admin/annonces", label: "Annonces", permission: "announcements.manage" },
   { href: "/admin/utilisateurs", label: "Utilisateurs", permission: "users.manage" },
   { href: "/admin/parametres", label: "Paramètres", permission: "settings.manage" },
   { href: "/admin/audit", label: "Journal d'audit", permission: "audit.read" },

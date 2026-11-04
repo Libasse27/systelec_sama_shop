@@ -207,7 +207,7 @@ export async function startDelivery(client: PrismaClient, actor: Actor, orderId:
 /**
  * Livraison effectuée, avec sa preuve (nom de la personne qui a reçu, observations) : la commande
  * est remise au client dans la même transaction (stock sorti). Elle doit être soldée : le livreur
- * encaisse d'abord les espèces (payments.record, ou le livreur interne sur sa livraison en cours).
+ * encaisse d'abord le paiement (payments.record, ou le livreur interne sur sa livraison en cours).
  */
 export async function completeDelivery(client: PrismaClient, actor: Actor, orderId: string, input: unknown): Promise<void> {
   const { recipientName, proofNote } = parseInput(completeSchema, input, "Preuve de livraison");

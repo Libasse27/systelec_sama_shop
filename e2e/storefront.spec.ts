@@ -15,7 +15,7 @@ test.describe("boutique publique", () => {
     await expect(page).toHaveURL(new RegExp(`${LAPTOP}$`));
     await expect(page.getByRole("heading", { level: 1 })).toHaveText("[DÉMO] Ordinateur portable 15 pouces Pro");
     await expect(page.getByText("Versions disponibles")).toBeVisible();
-    await expect(page.getByText("Paiement en espèces uniquement, à la livraison ou au retrait.")).toBeVisible();
+    await expect(page.getByText("Paiement en espèces, par Orange Money ou par Wave, à la livraison ou au retrait.")).toBeVisible();
   });
 
   test("la fiche produit n'expose ni prix d'achat ni avis inventé, et publie des données structurées", async ({ page }) => {

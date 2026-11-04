@@ -1,15 +1,17 @@
 import { describe, expect, it } from "vitest";
 import { formatFcfa } from "@/lib/money";
+import { ACCEPTED_PAYMENT_METHODS } from "@/lib/payment-methods";
 import { renderOrderMessage } from "./templates";
 
 const data = { number: "CMD-2026-000001", customerName: "Awa", total: 30_000, fulfillment: "PICKUP" as const };
 
 describe("messages de commande", () => {
-  it("rappelle le paiement en espèces, sans lien de paiement", () => {
+  it("rappelle les moyens de paiement acceptés, sans lien de paiement", () => {
     const { subject, text } = renderOrderMessage("order.placed", data);
     expect(subject).toBe("Commande CMD-2026-000001 reçue");
     expect(text).toContain(formatFcfa(30_000));
-    expect(text).toContain("espèces au retrait");
+    expect(text).toContain("au retrait");
+    expect(text).toContain(ACCEPTED_PAYMENT_METHODS);
     expect(text).not.toMatch(/https?:|carte|mobile money/i);
   });
 
@@ -26,6 +28,19 @@ describe("messages de commande", () => {
     const full = renderOrderMessage("order.payment", { ...data, payment: { amount: 30_000, balance: 0, receiptNumber: "REC-2026-000005" } });
     expect(full.text).toContain("entièrement payée");
     expect(() => renderOrderMessage("order.payment", data)).toThrow(/absentes/);
+  });
+
+  it("nomme le moyen de paiement réellement utilisé", () => {
+    const wave = renderOrderMessage("order.payment", { ...data, payment: { amount: 30_000, balance: 0, receiptNumber: "REC-2026-000006", method: "WAVE" } });
+    expect(wave.text).toContain("par Wave");
+    expect(wave.text).not.toContain("espèces");
+    const refund = renderOrderMessage("order.refund", { ...data, refund: { amount: 5_000, returnNumber: "RET-2026-000002", receiptNumber: "REC-2026-000007", method: "WAVE" } });
+    expect(refund.text).toContain("par Wave");
+  });
+
+  it("garde « en espèces » pour un message en file sans moyen de paiement", () => {
+    const { text } = renderOrderMessage("order.payment", { ...data, payment: { amount: 30_000, balance: 0, receiptNumber: "REC-2026-000008" } });
+    expect(text).toContain("en espèces");
   });
 
   it("annonce un remboursement avec le retour et le reçu", () => {

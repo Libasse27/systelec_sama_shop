@@ -1,33 +1,24 @@
-import {
-  Banknote,
-  Cctv,
-  Cpu,
-  Headphones,
-  Network,
-  Package,
-  PlugZap,
-  Usb,
-  Wrench,
-  type LucideIcon,
-} from "lucide-react";
 import Link from "next/link";
+import { BrandIcon, type BrandIconName } from "@/components/brand/brand-icon";
+import { PaymentMethodIcons } from "@/components/brand/payment-method-icons";
 import { ProductGrid } from "@/components/catalog/product-card";
 import { JsonLd } from "@/components/seo/json-ld";
 import { BRAND, SHOP_PILLARS_LINE } from "@/lib/brand";
 import { servicePriceLabel } from "@/lib/labels";
+import { PAYMENT_NOTICE, SCHEMA_ORG_PAYMENT_ACCEPTED } from "@/lib/payment-methods";
 import { db } from "@/server/db/client";
 import { featuredProducts } from "@/server/modules/catalog/queries";
 import { listActivePartners } from "@/server/modules/partners/queries";
 import { featuredServices } from "@/server/modules/services/queries";
 import { absoluteUrl, getCategoryIndex, getCompanySettings } from "@/server/storefront";
 
-const FAMILY_ICONS: Record<string, LucideIcon> = {
-  informatique: Cpu,
-  "reseaux-et-telecommunications": Network,
-  "electronique-grand-public": Headphones,
-  "videosurveillance-et-securite": Cctv,
-  "electricite-et-energie": PlugZap,
-  "accessoires-et-consommables": Usb,
+const FAMILY_ICONS: Record<string, BrandIconName> = {
+  informatique: "ordinateur",
+  "reseaux-et-telecommunications": "reseau",
+  "electronique-grand-public": "casque",
+  "videosurveillance-et-securite": "video-surveillance",
+  "electricite-et-energie": "innovation",
+  "accessoires-et-consommables": "cle-usb",
 };
 
 const FEATURED_PRODUCTS = 8;
@@ -62,8 +53,8 @@ export default async function HomePage() {
           </Link>
         </div>
         <p className="mt-6 inline-flex items-center gap-2 rounded-lg bg-white/10 px-3 py-2 text-sm">
-          <Banknote aria-hidden className="size-4 text-brand-accent" />
-          Paiement exclusivement en espèces, à la livraison ou au retrait.
+          <PaymentMethodIcons />
+          {PAYMENT_NOTICE}
         </p>
       </section>
 
@@ -73,14 +64,14 @@ export default async function HomePage() {
         </h2>
         <ul className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
           {families.map((family) => {
-            const Icon = FAMILY_ICONS[family.slug] ?? Package;
+            const icon = FAMILY_ICONS[family.slug] ?? "boutique";
             return (
               <li key={family.id}>
                 <Link
                   href={`/categories/${family.slug}`}
                   className="flex h-full flex-col items-start gap-3 rounded-xl border border-line bg-surface p-4 hover:border-brand-blue"
                 >
-                  <Icon aria-hidden className="size-6 text-brand-blue" />
+                  <BrandIcon name={icon} className="size-10" />
                   <span className="text-sm font-medium">{family.name}</span>
                 </Link>
               </li>
@@ -122,7 +113,7 @@ export default async function HomePage() {
                   href={`/services/${service.slug}`}
                   className="flex h-full flex-col gap-2 rounded-xl border border-line bg-surface p-4 hover:border-brand-blue"
                 >
-                  <Wrench aria-hidden className="size-5 text-brand-blue" />
+                  <BrandIcon name="maintenance" className="size-6" />
                   <span className="font-medium">{service.name}</span>
                   <span className="text-sm text-ink-muted">{servicePriceLabel(service.pricingMode, service.price)}</span>
                 </Link>
@@ -165,7 +156,7 @@ export default async function HomePage() {
           slogan: BRAND.shop.tagline,
           parentOrganization: { "@type": "Organization", name: BRAND.group.name, slogan: BRAND.group.signature },
           url: absoluteUrl("/"),
-          paymentAccepted: "Cash",
+          paymentAccepted: SCHEMA_ORG_PAYMENT_ACCEPTED,
           currenciesAccepted: "XOF",
           ...(company.phone && { telephone: company.phone }),
           ...(company.address && { address: company.address }),

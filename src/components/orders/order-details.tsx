@@ -2,6 +2,7 @@ import { formatDateTime } from "@/lib/dates";
 import { DELIVERY_STATUS_LABELS, FULFILLMENT_LABELS, ORDER_STATUS_LABELS, PAYMENT_STATUS_LABELS } from "@/lib/labels";
 import { formatFcfa } from "@/lib/money";
 import type { OrderView } from "@/server/modules/orders/queries";
+import { ACCEPTED_PAYMENT_METHODS, paymentMethodPhrase } from "@/lib/payment-methods";
 
 interface OrderDetailsProps {
   order: Omit<OrderView, "history"> & { history?: OrderView["history"] };
@@ -23,7 +24,7 @@ export function OrderDetails({ order, receiptHref, invoiceHref }: OrderDetailsPr
         <dd className="font-semibold">{ORDER_STATUS_LABELS[order.status]}</dd>
         <dt className="text-ink-muted">Paiement</dt>
         <dd>
-          {PAYMENT_STATUS_LABELS[order.paymentStatus]} — en espèces {order.fulfillmentMethod === "DELIVERY" ? "à la livraison" : "au retrait"}
+          {PAYMENT_STATUS_LABELS[order.paymentStatus]} — {ACCEPTED_PAYMENT_METHODS}, {order.fulfillmentMethod === "DELIVERY" ? "à la livraison" : "au retrait"}
         </dd>
         {order.deliveryStatus && (
           <>
@@ -102,7 +103,7 @@ export function OrderDetails({ order, receiptHref, invoiceHref }: OrderDetailsPr
               <td className="whitespace-nowrap px-3 py-1 text-right">{order.deliveryFee === 0 ? "Offerte" : formatFcfa(order.deliveryFee)}</td>
             </tr>
             <tr className="font-bold">
-              <td colSpan={3} className="px-3 py-2 text-right">Total à payer en espèces</td>
+              <td colSpan={3} className="px-3 py-2 text-right">Total à payer</td>
               <td className="whitespace-nowrap px-3 py-2 text-right">{formatFcfa(order.total)}</td>
             </tr>
             {settled > 0 && (
@@ -147,9 +148,9 @@ export function OrderDetails({ order, receiptHref, invoiceHref }: OrderDetailsPr
                 </a>{" "}
                 — {formatDateTime(payment.createdAt)} ·{" "}
                 {payment.amount > 0
-                  ? `${formatFcfa(payment.amount)} reçus en espèces`
+                  ? `${formatFcfa(payment.amount)} reçus ${paymentMethodPhrase(payment.method)}`
                   : payment.isRefund
-                    ? `remboursement de ${formatFcfa(-payment.amount)} en espèces`
+                    ? `remboursement de ${formatFcfa(-payment.amount)} ${paymentMethodPhrase(payment.method)}`
                     : `annulation de ${formatFcfa(-payment.amount)}`}
               </li>
             ))}
