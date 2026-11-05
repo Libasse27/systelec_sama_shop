@@ -3,6 +3,15 @@ import { expect, test } from "@playwright/test";
 const LAPTOP = "/produits/demo-ordinateur-portable-15-pouces-pro";
 
 test.describe("boutique publique", () => {
+  test("le bandeau d'accueil n'a plus de boutons, et produits et services restent accessibles", async ({ page }) => {
+    await page.goto("/");
+    await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Voir les produits" })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: "Demander un service" })).toHaveCount(0);
+    await expect(page.locator('main a[href="/recherche"]')).not.toHaveCount(0);
+    await expect(page.getByRole("banner").getByRole("link", { name: "Services", exact: true })).toHaveAttribute("href", "/services");
+  });
+
   test("de l'accueil à une fiche produit, via une catégorie", async ({ page }) => {
     await page.goto("/");
     await expect(page.getByRole("heading", { name: "Nos univers" })).toBeVisible();
