@@ -17,6 +17,8 @@ export default async function AdminMessagePage({ params }: { params: Promise<{ i
   const user = await requirePermission("messages.manage", `/admin/messages/${id}`);
   const message = await getContactMessage(db, user, id);
   if (!message) notFound();
+  // Numéro saisi par le visiteur : lien seulement s'il est composable.
+  const tel = message.phone ? telHref(message.phone) : null;
 
   return (
     <div className="flex flex-col gap-6">
@@ -48,9 +50,13 @@ export default async function AdminMessagePage({ params }: { params: Promise<{ i
             <>
               <dt className="text-ink-muted">Téléphone</dt>
               <dd>
-                <a href={telHref(message.phone)} className="text-brand-blue underline">
-                  {message.phone}
-                </a>
+                {tel ? (
+                  <a href={tel} className="text-brand-blue underline">
+                    {message.phone}
+                  </a>
+                ) : (
+                  message.phone
+                )}
               </dd>
             </>
           )}

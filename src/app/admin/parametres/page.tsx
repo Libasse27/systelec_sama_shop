@@ -79,7 +79,7 @@ export default async function SettingsPage() {
             <TextField name="ninea" label="NINEA" defaultValue={company.ninea} required={false} />
             <TextField name="rccm" label="RCCM" defaultValue={company.rccm} required={false} />
             <TextField name="phone" label="Téléphone" type="tel" defaultValue={company.phone} required={false} />
-            <TextField name="whatsapp" label="WhatsApp" type="tel" defaultValue={company.whatsapp} required={false} />
+            <TextField name="whatsapp" label="WhatsApp" type="tel" defaultValue={company.whatsapp} required={false} hint="Avec l'indicatif (+221…) : sans lui, le lien WhatsApp n'est pas publié." />
             <TextField name="email" label="E-mail" type="email" defaultValue={company.email} required={false} />
             <TextField name="openingHours" label="Horaires" defaultValue={company.openingHours} required={false} />
             <TextField name="address" label="Adresse" defaultValue={company.address} required={false} className="sm:col-span-2" />

@@ -5,7 +5,7 @@ import { BrandIcon } from "@/components/brand/brand-icon";
 import { BrandLogo, Logo } from "@/components/brand/logo";
 import { FOOTER_ICON_TILE, SocialLinks } from "@/components/layout/social-links";
 import { BRAND, SHOP_PILLARS_LINE } from "@/lib/brand";
-import { telHref, whatsappHref } from "@/lib/contact-links";
+import { mailtoHref, telHref, whatsappHref } from "@/lib/contact-links";
 import { PAYMENT_METHOD_ICONS, PAYMENT_METHOD_OPTIONS } from "@/lib/payment-methods";
 import { socialButtons } from "@/lib/social-links";
 import { cn } from "@/lib/utils";
@@ -42,14 +42,16 @@ function FooterSection({ title, navigation = true, className, children }: Footer
   );
 }
 
-/** Coordonnées de la page Contact (mêmes champs, mêmes liens) ; sans aucune coordonnée, la colonne l'indique au lieu de promettre un formulaire. */
+/** Mêmes champs et mêmes validations que la page Contact ; une valeur inutilisable n'est pas affichée ici. Sans aucune coordonnée, la colonne l'indique au lieu de promettre un formulaire. */
 function FooterContact({ company }: { company: CompanySettings }) {
   const whatsapp = company.whatsapp ? whatsappHref(company.whatsapp) : null;
-  const hasContactDetails = Boolean(company.phone || whatsapp || company.email || company.address || company.openingHours);
+  const tel = company.phone ? telHref(company.phone) : null;
+  const mailto = company.email ? mailtoHref(company.email) : null;
+  const hasContactDetails = Boolean(tel || whatsapp || mailto || company.address || company.openingHours);
   return (
     <FooterSection title="Contact" navigation={false}>
-      {company.phone && (
-        <a href={telHref(company.phone)} className={contactLinkClass}>
+      {company.phone && tel && (
+        <a href={tel} className={contactLinkClass}>
           <BrandIcon name="telephone" className={contactPictoClass} />
           {company.phone}
         </a>
@@ -60,8 +62,8 @@ function FooterContact({ company }: { company: CompanySettings }) {
           WhatsApp : {company.whatsapp}
         </a>
       )}
-      {company.email && (
-        <a href={`mailto:${company.email}`} className={contactLinkClass}>
+      {company.email && mailto && (
+        <a href={mailto} className={contactLinkClass}>
           <BrandIcon name="email" className={contactPictoClass} />
           {company.email}
         </a>
