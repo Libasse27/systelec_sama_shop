@@ -118,3 +118,22 @@ test.describe("services techniques (§20 n° 19, 20 et 21)", () => {
     }
   });
 });
+
+test.describe("service de développement web", () => {
+  test("la famille et sa fiche sont publiées sur devis, avec demande de devis", async ({ page }) => {
+    await page.goto("/services");
+    await expect(page.getByRole("heading", { level: 2, name: "Développement web" })).toBeVisible();
+    const lien = page.getByRole("link", { name: /Développement web fullstack/ });
+    await expect(lien).toBeVisible();
+    await expect(lien).toContainText("Sur devis");
+    await expect(lien).toHaveAttribute("href", "/services/developpement-web-fullstack");
+
+    await lien.click();
+    await expect(page).toHaveURL(/\/services\/developpement-web-fullstack$/);
+    await expect(page.getByRole("heading", { level: 1, name: "Développement web fullstack" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Demander un devis ou une intervention" })).toHaveAttribute(
+      "href",
+      "/devis/demande?service=developpement-web-fullstack",
+    );
+  });
+});

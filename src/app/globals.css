@@ -7,6 +7,8 @@
 @theme {
   --color-brand-navy: #0b1f3a;
   --color-brand-navy-soft: #16305a;
+  /* Fond du navbar et du footer : blanc, choisi pour que les logos et les icônes gardent leurs couleurs d'origine. */
+  --color-brand-bar: #ffffff;
   --color-brand-blue: #1f6feb;
   --color-brand-blue-dark: #1558c0;
   --color-brand-accent: #f59e0b;

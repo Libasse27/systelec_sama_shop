@@ -15,11 +15,12 @@ export type SocialNetwork = (typeof SOCIAL_NETWORKS)[number]["network"];
 /** Liens enregistrés par réseau (null : non renseigné). */
 export type SocialLinks = Record<SocialNetwork, string | null>;
 
-export interface SocialProfile {
+/** Un réseau affiché dans le pied de page : href renseigné seulement si l'adresse est valide (sinon icône sans lien). */
+export interface SocialButton {
   network: SocialNetwork;
   label: string;
   icon: BrandIconName;
-  href: string;
+  href: string | null;
 }
 
 interface NetworkRules {
@@ -112,11 +113,14 @@ export function socialUrlMessage(network: SocialNetwork, issue: SocialUrlIssue):
   }
 }
 
-/** Profils à afficher : seulement les réseaux dont l'adresse est saisie et acceptée (une ancienne valeur non conforme est écartée). */
-export function socialProfiles(links: Readonly<SocialLinks>): SocialProfile[] {
-  return SOCIAL_NETWORKS.flatMap(({ network, label, icon }) => {
-    const href = links[network];
-    return href && checkSocialUrl(network, href) === null ? [{ network, label, icon, href }] : [];
+/**
+ * Les six réseaux, toujours, dans l'ordre fixe. href = l'adresse enregistrée si checkSocialUrl l'accepte,
+ * sinon null (vide, ancienne valeur non conforme, domaine imité, lien raccourci : jamais publiée).
+ */
+export function socialButtons(links: Readonly<SocialLinks>): SocialButton[] {
+  return SOCIAL_NETWORKS.map(({ network, label, icon }) => {
+    const value = links[network];
+    return { network, label, icon, href: value && checkSocialUrl(network, value) === null ? value : null };
   });
 }
 

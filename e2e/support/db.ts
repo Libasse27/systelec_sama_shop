@@ -1,3 +1,4 @@
+import { test } from "@playwright/test";
 import { Client } from "pg";
 import { resolveE2eDatabaseUrl } from "./database-guard";
 
@@ -98,8 +99,8 @@ export async function writeCompanySetting(value: unknown): Promise<void> {
 
 /** Clé du verrou E2E (distincte de celle de l'application, « settings:company », qui ne doit jamais attendre). */
 const COMPANY_SETTING_E2E_LOCK = "e2e:site_settings:company";
-/** Attente maximale du verrou : inférieure au délai par défaut d'un test (30 s), l'échec reste explicite. */
-const LOCK_WAIT_MS = 20_000;
+/** Attente maximale du verrou ; ce temps est ajouté au délai du test (un `test.setTimeout` ultérieur l'annulerait). */
+const LOCK_WAIT_MS = 60_000;
 const LOCK_POLL_MS = 100;
 /**
  * Filet de sécurité côté serveur : une connexion de verrou restée inactive plus longtemps que le plus long
@@ -155,6 +156,7 @@ async function restoreExactly(original: unknown): Promise<void> {
  * cas : restauration réussie ou non, erreur pendant l'initialisation, connexion coupée, fin du processus.
  */
 export async function guardCompanySetting(): Promise<CompanySettingGuard> {
+  test.setTimeout(test.info().timeout + LOCK_WAIT_MS);
   const lock = new Client({ connectionString: DATABASE_URL, application_name: "e2e-company-setting-lock" });
   // Connexion coupée par le serveur : erreur absorbée (sinon le processus de test s'arrête), le verrou
   // disparaît avec la session.

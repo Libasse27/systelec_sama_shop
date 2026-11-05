@@ -44,14 +44,6 @@ export default async function HomePage() {
           Équipements informatiques, réseaux, électronique, électricité et sécurité, ainsi que des services de
           maintenance, d&apos;installation réseau, de vidéosurveillance et d&apos;électricité.
         </p>
-        <div className="mt-6 flex flex-wrap gap-3">
-          <Link href="/recherche" className="rounded-lg bg-brand-accent px-4 py-2.5 font-semibold text-brand-navy">
-            Voir les produits
-          </Link>
-          <Link href="/services" className="rounded-lg border border-white/40 px-4 py-2.5 font-semibold">
-            Demander un service
-          </Link>
-        </div>
         <p className="mt-6 inline-flex items-center gap-2 rounded-lg bg-white/10 px-3 py-2 text-sm">
           <PaymentMethodIcons />
           {PAYMENT_NOTICE}

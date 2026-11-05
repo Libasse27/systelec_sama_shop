@@ -49,9 +49,11 @@ export function HeaderSearch() {
       onBlur={handleBlur}
       className={cn(
         "flex items-center",
-        // Ancrée en bas : la loupe est sur la dernière ligne de l'en-tête (la seule sur grand écran).
+        // Ancrée en bas : la loupe est sur la dernière ligne de l'en-tête. Sur grand écran (une seule ligne),
+        // centrée : elle recouvre les icônes du panier et du compte, centrées elles aussi. Plus étroite entre « lg » et
+        // « xl » pour ne pas toucher les liens centrés du navbar (y compris « Contact », le plus à droite).
         open &&
-          "absolute bottom-3 right-4 z-30 h-9 w-[min(24rem,calc(100%-2rem))] rounded-lg bg-white shadow-lg focus-within:ring-2 focus-within:ring-brand-accent",
+          "absolute bottom-3 right-4 z-30 h-9 w-[min(24rem,calc(100%-2rem))] rounded-lg bg-white shadow-lg focus-within:ring-2 focus-within:ring-brand-blue lg:bottom-auto lg:top-1/2 lg:w-84 lg:-translate-y-1/2 xl:w-96",
       )}
     >
       <label htmlFor="recherche-site" className="sr-only">
@@ -87,10 +89,10 @@ export function HeaderSearch() {
         title={open ? "Lancer la recherche" : "Rechercher"}
         className={cn(
           "grid size-9 shrink-0 place-items-center rounded-md",
-          open ? "rounded-l-none bg-brand-accent text-brand-navy" : "text-white/90 hover:bg-white/10",
+          open ? "rounded-l-none bg-brand-accent text-brand-navy" : "text-ink/90 hover:bg-brand-navy/5",
         )}
       >
-        <BrandIcon name="recherche" className="size-6" />
+        <BrandIcon name="recherche" className="size-8" />
       </button>
     </form>
   );
