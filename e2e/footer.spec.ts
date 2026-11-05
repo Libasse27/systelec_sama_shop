@@ -367,7 +367,7 @@ test.describe("navbar : logo FUTANI SHOP à emblème débordant", () => {
     const emblemBox = (await emblem.boundingBox())!;
     const textBox = (await text.boundingBox())!;
     const bannerBottom = bannerBox.y + bannerBox.height;
-    expect(emblemBox.height).toBeGreaterThanOrEqual(88);
+    expect(emblemBox.height).toBeGreaterThanOrEqual(96);
     const overhang = emblemBox.y + emblemBox.height - bannerBottom;
     expect(overhang).toBeGreaterThanOrEqual(16);
     expect(overhang).toBeLessThanOrEqual(28);

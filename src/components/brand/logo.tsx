@@ -64,8 +64,8 @@ export function Logo({ shopName, logoUrl, priority = false }: LogoProps) {
 
 /**
  * Logo du navbar, sans pastille ni fond ajouté (PNG détouré, couleurs d'origine). Logo téléversé : celui de `Logo`.
- * Sinon, sous « lg », le logo complet ; à partir de « lg », l'emblème (88 px de haut, haut à 6 px du haut du navbar,
- * donc 20 px sous le navbar) et le texte à côté. Le texte est descendu comme dans le logo d'origine (où il occupe le
+ * Sinon, sous « lg », le logo complet ; à partir de « lg », l'emblème (96 px de haut, haut à 6 px du haut du navbar,
+ * donc 28 px sous le navbar) et le texte à côté. Le texte est descendu comme dans le logo d'origine (où il occupe le
  * bas de l'emblème), mais gardé dans le navbar avec 4 px de marge : son bas est à 70 px du haut du navbar de 74 px.
  * Les images sont décoratives : le lien parent porte le nom accessible.
  * Largeurs serrées sous « xl » (texte réduit, marge négative à gauche) : à 1024 px, connecté avec le rôle ADMIN,
@@ -81,23 +81,23 @@ export function HeaderLogo({ shopName, logoUrl }: Omit<LogoProps, "priority">) {
     <>
       {/* Hauteur minimale 50 px : le navbar garde ses deux lignes (126 px) malgré la disparition de la pastille. */}
       <span className="flex min-h-[50px] items-center lg:hidden">
-        <BrandLogo variant="shop" bare />
+        <BrandLogo variant="shop" bare className="h-12" />
       </span>
       {/* Hauteur minimale 50 px : le navbar garde ses 74 px (2 × 12 px de marge + 50 px). */}
       <span className="hidden min-h-[50px] items-center gap-0.5 lg:-ml-3 lg:flex xl:ml-0">
-        {/* Réserve dans le flux la largeur de l'emblème (88 px × 179/149). */}
-        <span aria-hidden className="block h-1 w-[106px] shrink-0" />
+        {/* Réserve dans le flux la largeur de l'emblème (96 px × 179/149). */}
+        <span aria-hidden className="block h-1 w-[116px] shrink-0" />
         {/* Sans « left » : l'emblème reste à sa position naturelle, au début du lien. z-10 : au-dessus du contenu
             de la page, sous le menu Catalogue (z-20) et la recherche déployée (z-30). */}
-        <Image src={emblem.src} alt="" width={emblem.width} height={emblem.height} className="absolute top-1.5 z-10 block h-[88px] w-auto" />
+        <Image src={emblem.src} alt="" width={emblem.width} height={emblem.height} className="absolute top-1.5 z-10 block h-24 w-auto" />
         {/* Texte centré dans la ligne (centre à 37 px) puis descendu : bas à 70 px, soit 32 px de haut (lg, décalage
-            17 px) ou 44 px de haut (xl, décalage 11 px). */}
+            17 px) ou 48 px de haut (xl, décalage 9 px). */}
         <Image
           src={text.src}
           alt=""
           width={text.width}
           height={text.height}
-          className="relative top-[17px] block h-8 w-auto xl:top-[11px] xl:h-11"
+          className="relative top-[17px] block h-8 w-auto xl:top-[9px] xl:h-12"
         />
       </span>
     </>
