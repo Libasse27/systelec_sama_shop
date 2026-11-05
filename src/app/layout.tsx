@@ -29,7 +29,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="fr" className="scroll-pt-36 lg:scroll-pt-24">
+    <html lang="fr" className="scroll-pt-36 lg:scroll-pt-28">
       <body className="flex min-h-dvh flex-col antialiased">
         <a href="#contenu" className="sr-only focus:not-sr-only focus:fixed focus:left-2 focus:top-2 focus:z-50 focus:rounded focus:bg-white focus:px-3 focus:py-2">
           Aller au contenu

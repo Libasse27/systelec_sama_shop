@@ -27,7 +27,8 @@ export async function SiteHeader() {
   const cartCount = cartOwner ? await countCartItems(db, cartOwner) : 0;
   return (
     // Collé en haut pendant le défilement ; le bandeau d'annonces, au-dessus, défile avec la page.
-    <header className="sticky top-0 z-40 bg-brand-bar shadow-md">
+    // « lg:mb-5 » : à partir de « lg », l'emblème dépasse de 28 px sous le navbar ; le contenu commence donc plus bas.
+    <header className="sticky top-0 z-40 bg-brand-bar shadow-md lg:mb-5">
       {/* Sous « lg » : marque et compte en haut, navigation et loupe dessous (flex, retour à la ligne, « order-* »).
           À partir de « lg » : une seule ligne en grille [1fr auto 1fr], la navigation principale est au centre exact
           du conteneur (colonnes latérales égales) ; si le groupe de droite est trop large, la colonne centrale se décale

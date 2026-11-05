@@ -83,13 +83,15 @@ export function HeaderLogo({ shopName, logoUrl }: Omit<LogoProps, "priority">) {
       <span className="flex min-h-[50px] items-center lg:hidden">
         <BrandLogo variant="shop" bare className="h-12" />
       </span>
-      {/* Hauteur minimale 50 px : le navbar garde ses 74 px (2 × 12 px de marge + 50 px). */}
-      <span className="hidden min-h-[50px] items-center gap-0.5 lg:-ml-3 lg:flex xl:ml-0">
+      {/* Zone cliquable sur toute la hauteur du navbar (74 px) ; « -my-3 » la ramène à 50 px dans le flux : le navbar
+          garde ses 74 px (2 × 12 px de marge + 50 px). */}
+      <span className="-my-3 hidden min-h-[74px] items-center gap-0.5 lg:-ml-3 lg:flex xl:ml-0">
         {/* Réserve dans le flux la largeur de l'emblème (96 px × 179/149). */}
         <span aria-hidden className="block h-1 w-[116px] shrink-0" />
         {/* Sans « left » : l'emblème reste à sa position naturelle, au début du lien. z-10 : au-dessus du contenu
-            de la page, sous le menu Catalogue (z-20) et la recherche déployée (z-30). */}
-        <Image src={emblem.src} alt="" width={emblem.width} height={emblem.height} className="absolute top-1.5 z-10 block h-24 w-auto" />
+            de la page, sous le menu Catalogue (z-20) et la recherche déployée (z-30). « pointer-events-none » : sous le
+            navbar, les clics atteignent le contenu ; dans le navbar, ils atteignent la zone cliquable du lien, dessous. */}
+        <Image src={emblem.src} alt="" width={emblem.width} height={emblem.height} className="pointer-events-none absolute top-1.5 z-10 block h-24 w-auto" />
         {/* Texte centré dans la ligne (centre à 37 px) puis descendu : bas à 70 px, soit 32 px de haut (lg, décalage
             17 px) ou 48 px de haut (xl, décalage 9 px). */}
         <Image

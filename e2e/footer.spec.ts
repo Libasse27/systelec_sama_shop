@@ -400,19 +400,68 @@ test.describe("navbar : logo FUTANI SHOP à emblème débordant", () => {
     await expectNoBackground(link);
   });
 
+  for (const path of ["/", "/services", "/contact", "/recherche"]) {
+    test(`bureau 1280 px, ${path} : le début du contenu reste sous l'emblème, avec un espace`, async ({ page }) => {
+      const MIN_GAP_BELOW_EMBLEM = 12;
+      await page.setViewportSize({ width: 1280, height: 800 });
+      await page.goto(path);
+      const { emblem } = await measure(page);
+      const emblemBox = (await emblem.boundingBox())!;
+      const contentBox = (await page.locator("main > *").first().boundingBox())!;
+      expect(contentBox.y - (emblemBox.y + emblemBox.height)).toBeGreaterThanOrEqual(MIN_GAP_BELOW_EMBLEM);
+    });
+  }
+
+  test("bureau 1280 px, administration : le menu latéral reste sous l'emblème, avec un espace", async ({ page }) => {
+    const MIN_GAP_BELOW_EMBLEM = 12;
+    await page.setViewportSize({ width: 1280, height: 800 });
+    const email = uniqueEmail("e2e-logo-admin");
+    await signUp(page, email);
+    await grantRole(email, "ADMIN");
+    await page.goto("/admin");
+    const { emblem } = await measure(page);
+    const emblemBox = (await emblem.boundingBox())!;
+    const adminNavBox = (await page.getByRole("navigation", { name: "Administration", exact: true }).boundingBox())!;
+    expect(adminNavBox.y - (emblemBox.y + emblemBox.height)).toBeGreaterThanOrEqual(MIN_GAP_BELOW_EMBLEM);
+  });
+
+  test("bureau 1280 px : un saut vers une ancre laisse la cible sous l'emblème", async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    // Page plus haute que la fenêtre : la deuxième famille peut remonter jusqu'au décalage de défilement.
+    const MAX_TOP_AFTER_JUMP = 200;
+    await page.goto("/services");
+    const target = page.locator('h2[id^="famille-"]').nth(1);
+    const targetId = await target.getAttribute("id");
+    expect(targetId).not.toBeNull();
+    await page.evaluate((hash) => {
+      window.location.hash = hash;
+    }, targetId!);
+    await expect.poll(async () => (await target.boundingBox())!.y).toBeLessThan(MAX_TOP_AFTER_JUMP);
+    const { emblem } = await measure(page);
+    const emblemBox = (await emblem.boundingBox())!;
+    expect((await target.boundingBox())!.y).toBeGreaterThanOrEqual(emblemBox.y + emblemBox.height);
+  });
+
   test("bureau 1280 px : la partie qui dépasse reste au-dessus du contenu, même après défilement", async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.goto("/");
-    const { banner, link, pill } = await measure(page);
+    const { banner, pill } = await measure(page);
     for (const scroll of [0, 600]) {
       await page.evaluate((y) => window.scrollTo(0, y), scroll);
       // Boîtes relevées après chaque défilement : le navbar est collé en haut, un bandeau d'annonces peut le décaler au départ.
       const bannerBox = (await banner.boundingBox())!;
       const pillBox = (await pill.boundingBox())!;
-      // Point de la pastille situé sous le navbar : l'élément visible à cet endroit appartient au lien du logo.
+      // Point de l'emblème situé sous le navbar. Il laisse passer les clics (e2e/header-click-through.spec.ts) : il est
+      // rendu un instant sensible au pointeur, l'élément trouvé à cet endroit étant alors celui affiché au premier plan.
       const point = { x: pillBox.x + pillBox.width / 2, y: bannerBox.y + bannerBox.height + 6 };
-      const insideLink = await link.evaluate((el, { x, y }) => el.contains(document.elementFromPoint(x, y)), point);
-      expect(insideLink).toBe(true);
+      const paintedAbove = await pill.evaluate((image, { x, y }) => {
+        const element = image as HTMLElement;
+        element.style.pointerEvents = "auto";
+        const isOnTop = document.elementFromPoint(x, y) === element;
+        element.style.pointerEvents = "";
+        return isOnTop;
+      }, point);
+      expect(paintedAbove).toBe(true);
     }
   });
 
