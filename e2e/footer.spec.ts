@@ -133,6 +133,19 @@ test("navbar : icônes panier, compte et loupe de 32 px, libellés inchangés, a
   expect(overflow).toBeLessThanOrEqual(0);
 });
 
+test("navbar : la recherche ouverte ne touche pas les liens centrés, de 1024 à 1280 px", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop", "Sur mobile, la recherche est sur sa propre ligne.");
+  for (const width of [1024, 1100, 1279, 1280]) {
+    await page.setViewportSize({ width, height: 800 });
+    await page.goto("/");
+    const banner = page.getByRole("banner");
+    const contactBox = (await banner.getByRole("navigation", { name: "Navigation principale" }).getByRole("link", { name: "Contact" }).boundingBox())!;
+    await banner.getByRole("button", { name: "Rechercher" }).click();
+    const formBox = (await banner.getByRole("search").boundingBox())!;
+    expect(contactBox.x + contactBox.width, `largeur ${width}`).toBeLessThanOrEqual(formBox.x);
+  }
+});
+
 test("navbar : la recherche ouverte recouvre entièrement les icônes panier et compte sur grand écran", async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== "desktop", "Sur mobile, la recherche est sur sa propre ligne.");
   await page.goto("/");
@@ -466,6 +479,156 @@ test.describe("navbar : logo FUTANI SHOP à emblème débordant", () => {
     }
     expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
   });
+
+  /**
+   * Police plus large que celle du poste de développement (Noto Sans ici). L'application utilise la pile système
+   * (aucune police chargée) : la largeur dépend donc de la police que le système résout pour « system-ui » ;
+   * sur le serveur CI elle est plus large. DejaVu Sans, la plus large des polices locales courantes, ne
+   * donne que +6,7 % : on applique un espacement de lettres de 0,1 em (1,4 px par lettre à 14 px),
+   * au moins +12 % de largeur de texte, vérifié ci-dessous. Taille de police inchangée (14 px).
+   */
+  const WIDE_TEXT_MIN_GROWTH = 1.12;
+  const WIDE_TEXT_STYLE = "header nav, header nav * { letter-spacing: 0.1em !important; }";
+
+  /** Largeur cumulée du texte visible du navbar (icônes et libellés masqués exclus). */
+  async function navTextWidth(banner: Locator): Promise<number> {
+    return banner.evaluate((header) => {
+      let sum = 0;
+      for (const nav of header.querySelectorAll("nav")) {
+        const walker = document.createTreeWalker(nav, NodeFilter.SHOW_TEXT);
+        for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+          // Liste du menu Catalogue (fermée) exclue : elle n'est pas sur la ligne du navbar.
+          if (!(node.textContent ?? "").trim() || (node.parentElement?.offsetWidth ?? 0) <= 1 || node.parentElement?.closest("ul")) continue;
+          const range = document.createRange();
+          range.selectNodeContents(node);
+          sum += range.getBoundingClientRect().width;
+        }
+      }
+      return sum;
+    });
+  }
+
+  /** Élargit le texte du navbar et vérifie que l'élargissement est bien d'au moins 12 %. */
+  async function widenNavbarText(page: Page): Promise<void> {
+    const banner = page.getByRole("banner");
+    const before = await navTextWidth(banner);
+    await page.addStyleTag({ content: WIDE_TEXT_STYLE });
+    const after = await navTextWidth(banner);
+    expect(after / before).toBeGreaterThanOrEqual(WIDE_TEXT_MIN_GROWTH);
+    // Le texte reste en 14 px : on réduit l'espace, jamais le texte.
+    expect(await banner.getByText("Catalogue", { exact: true }).evaluate((el) => getComputedStyle(el).fontSize)).toBe("14px");
+  }
+
+  /** Une seule ligne de 74 px, aucun contrôle sous l'emblème, aucun débordement horizontal. */
+  async function expectSingleLineWithoutOverlap(page: Page, label: string): Promise<void> {
+    const { banner, bannerBox, pill } = await measure(page);
+    expect(bannerBox.height, `hauteur du navbar (${label})`).toBeCloseTo(NAVBAR_HEIGHT, 0);
+    const pillBox = (await pill.boundingBox())!;
+    for (const control of await banner.locator("nav a, nav summary, nav button").all()) {
+      expect(overlaps(pillBox, (await control.boundingBox())!), `chevauchement de l'emblème (${label})`).toBe(false);
+    }
+    expect(await banner.evaluate((el) => el.scrollWidth - el.clientWidth), `débordement du navbar (${label})`).toBeLessThanOrEqual(0);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth), `débordement horizontal (${label})`).toBeLessThanOrEqual(0);
+  }
+
+  test("tablette et petit bureau, connecté avec le rôle ADMIN, police élargie de 12 % : une seule ligne de 74 px à 1024, 1100 et 1279 px", async ({ page }) => {
+    await page.setViewportSize({ width: 1024, height: 768 });
+    const email = uniqueEmail("e2e-logo-large");
+    await signUp(page, email);
+    await grantRole(email, "ADMIN");
+    await page.goto("/");
+    await expect(page.getByRole("banner").getByRole("link", { name: "Administration", exact: true })).toBeVisible();
+    await widenNavbarText(page);
+    for (const width of [1024, 1100, 1279]) {
+      await page.setViewportSize({ width, height: 768 });
+      await expectSingleLineWithoutOverlap(page, `ADMIN, ${width} px, police large`);
+    }
+  });
+
+  test("tablette 1024 px, visiteur, police élargie de 12 % : une seule ligne de 74 px, emblème sans recouvrement", async ({ page }) => {
+    await page.setViewportSize({ width: 1024, height: 768 });
+    await page.goto("/");
+    await widenNavbarText(page);
+    await expectSingleLineWithoutOverlap(page, "visiteur, 1024 px, police large");
+  });
+
+  /** Boîtes du conteneur du navbar (première div de l'en-tête), du logo, de la navigation principale, de la loupe et du compte. */
+  async function layoutBoxes(page: Page) {
+    const banner = page.getByRole("banner");
+    const box = async (locator: Locator) => (await locator.boundingBox())!;
+    return {
+      container: await box(banner.locator("xpath=./div")),
+      logo: await box(banner.getByRole("link", { name: LOGO_NAME, exact: true })),
+      nav: await box(banner.getByRole("navigation", { name: "Navigation principale", exact: true })),
+      search: await box(banner.getByRole("button", { name: "Rechercher", exact: true })),
+      account: await box(banner.getByRole("navigation", { name: "Compte", exact: true })),
+    };
+  }
+
+  const centerX = (b: { x: number; width: number }) => b.x + b.width / 2;
+  const CENTER_TOLERANCE = 1;
+
+  for (const width of [1280, 1920]) {
+    test(`bureau ${width} px, visiteur : la navigation principale est centrée sur le conteneur du navbar`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto("/");
+      const { container, nav } = await layoutBoxes(page);
+      expect(Math.abs(centerX(nav) - centerX(container))).toBeLessThanOrEqual(CENTER_TOLERANCE);
+    });
+  }
+
+  test("tablette 1024 px, visiteur : la navigation principale est centrée sur le conteneur du navbar", async ({ page }) => {
+    await page.setViewportSize({ width: 1024, height: 768 });
+    await page.goto("/");
+    const { container, nav } = await layoutBoxes(page);
+    expect(Math.abs(centerX(nav) - centerX(container))).toBeLessThanOrEqual(CENTER_TOLERANCE);
+  });
+
+  for (const width of [1024, 1280]) {
+    test(`bureau ${width} px, connecté avec le rôle ADMIN : logo, navigation et groupe de droite sans chevauchement`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 800 });
+      const email = uniqueEmail(`e2e-centre-${width}`);
+      await signUp(page, email);
+      await grantRole(email, "ADMIN");
+      await page.goto("/");
+      await expect(page.getByRole("banner").getByRole("link", { name: "Administration", exact: true })).toBeVisible();
+      const { container, logo, nav, search, account } = await layoutBoxes(page);
+      // Marge d'un pixel : les boîtes se touchent sans se recouvrir (écarts de 8 à 12 px entre colonnes).
+      expect(logo.x + logo.width, "logo / navigation").toBeLessThanOrEqual(nav.x);
+      expect(nav.x + nav.width, "navigation / loupe").toBeLessThanOrEqual(search.x);
+      expect(search.x + search.width, "loupe / compte").toBeLessThanOrEqual(account.x + 1);
+      expect(account.x + account.width, "compte / bord du conteneur").toBeLessThanOrEqual(container.x + container.width);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
+    });
+  }
+
+  test("bureau 1280 px : l'ordre de tabulation suit l'ordre visuel (logo, navigation, loupe, compte)", async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.goto("/");
+    const banner = page.getByRole("banner");
+    const xs = await banner.evaluate((header) => {
+      const focusable = [...header.querySelectorAll<HTMLElement>("a[href], summary, button")].filter((el) => el.getClientRects().length > 0);
+      // Ordre du DOM = ordre de tabulation (aucun tabindex positif) ; abscisses relevées dans cet ordre.
+      return focusable.map((el) => Math.round(el.getBoundingClientRect().x));
+    });
+    expect(xs.length).toBeGreaterThan(5);
+    expect(xs).toEqual([...xs].sort((a, b) => a - b));
+  });
+
+  for (const width of [820, 390]) {
+    test(`sous lg (${width} px) : navigation à gauche du conteneur, loupe à droite, disposition inchangée`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 800 });
+      await page.goto("/");
+      const { container, logo, nav, search, account } = await layoutBoxes(page);
+      const padding = 16;
+      expect(Math.abs(nav.x - (container.x + padding))).toBeLessThanOrEqual(1);
+      expect(Math.abs(search.x + search.width - (container.x + container.width - padding))).toBeLessThanOrEqual(padding);
+      expect(search.x).toBeGreaterThan(nav.x + nav.width - 1);
+      // Deux lignes : marque et compte en haut, navigation et loupe dessous.
+      expect(nav.y).toBeGreaterThanOrEqual(logo.y + logo.height - 1);
+      expect(Math.abs(account.y + account.height / 2 - (logo.y + logo.height / 2))).toBeLessThan(logo.height);
+    });
+  }
 
   test("mobile : logo complet visible, sans dépassement sous le navbar ni débordement horizontal", async ({ page }) => {
     await page.goto("/");
