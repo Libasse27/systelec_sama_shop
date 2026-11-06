@@ -2,7 +2,13 @@
 
 **Branche :** `feat/services-phase-1-familles` · **Date :** 2026-11-06 · **Référence :** `docs/05-cahier-des-charges-services.md`, §5
 
-**État :** développé et testé ; commit autorisé par le propriétaire le 2026-11-06 (§14, point 5), sans push.
+**État :** développé et testé ; commit autorisé par le propriétaire le 2026-11-06, sans push. Validation de la phase (§14, point 5) : `/services` et les 5 pages de famille validées visuellement par le propriétaire, confirmation du 2026-11-06.
+
+## État de publication
+
+- Commits non poussés (aucun push).
+- Aucune exécution de CI sur ces commits.
+- Tests E2E exécutés avec 1 worker seulement ; le passage en parallèle n'est pas validé.
 
 ## Livré
 
@@ -14,7 +20,7 @@
 | Sitemap : ajout des pages de famille | `src/app/sitemap.ts` |
 | Adresses et styles de boutons partagés | `src/lib/service-paths.ts`, `src/components/services/service-action-styles.ts` |
 
-Icônes : table slug → icône dans le code, sans colonne en base. Électricité utilise l'icône par défaut `innovation`.
+Icônes : les 5 familles utilisent les images fournies par le propriétaire (`services-futani/icone-*`), en copies allégées dans `public/icones/services/<slug>.png`, sans colonne en base. Une famille sans icône propre utilise le pictogramme par défaut `innovation`.
 
 ## Tests réellement exécutés (code final)
 
@@ -35,6 +41,8 @@ Les 40 tests supplémentaires : 38 dans `e2e/service-families.spec.ts` et 2 pour
 
 Sur le même code, le test a ensuite réussi 4 fois sur 4 seul, puis dans une suite complète. La trace de l'échec a été écrasée par le rejeu : **la cause n'est pas établie**. Le bandeau n'a pas été modifié, mais le test navigue vers `/services`. Un lien avec cette phase n'est donc pas formellement exclu.
 
+Hypothèse d'analyse statique, non démontrée : `src/components/layout/announcement-refresh.tsx` appelle `router.refresh()` une seule fois, sans nouvelle tentative. Un rafraîchissement perdu ou échoué pendant une navigation pourrait laisser affichée l'annonce expirée. Le fuseau horaire et le cache serveur sont écartés. Un lien avec cette phase est jugé peu probable, sans être exclu.
+
 ## Tests adaptés
 
 | Fichier | Adaptation |
@@ -49,11 +57,14 @@ Revue indépendante : aucun problème critique ou élevé. Points mineurs trait�
 
 Non traités : le lien de fiche d'une prestation n'a pas de hauteur minimale imposée ; le slug réservé `categorie` n'est protégé que par un test, à garder aussi côté serveur quand l'administration du catalogue existera.
 
+## Revue avant push
+
+Deux revues en lecture seule : Git/CI et sécurité. La revue sécurité n'a relevé aucun problème bloquant. La revue Git/CI conclut « prêt avec réserves », sans point bloquant.
+
 ## Laissé de côté
 
 - Phases suivantes du cahier des charges, dont l'administration du catalogue.
 - Image de présentation : aucune image réelle disponible, aucune image fictive ajoutée.
-- Icône dédiée à Électricité.
 
 ## Décisions du propriétaire
 

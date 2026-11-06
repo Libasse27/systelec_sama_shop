@@ -97,3 +97,11 @@ Questions restées ouvertes après les correctifs de la phase 9 (« Reste à dé
 Déploiement : relancer `pnpm db:seed` (rôle `COURIER`, permissions `deliveries.update_own` et `returns.refund_own_decision`), puis relier les livreurs existants (repris comme transporteurs externes) à leur compte.
 
 **Moyens de paiement (2026-11-04) :** décision du propriétaire, Orange Money et Wave s'ajoutent aux espèces. Le client règle depuis son téléphone et le personnel choisit le moyen à l'encaissement ; rien n'est demandé à la commande et aucune passerelle n'est ajoutée. Une contre-écriture reprend le moyen de l'encaissement annulé, un remboursement choisit le sien, et « Espèces à remettre par agent » ne compte que les espèces. Une référence de transaction est obligatoire pour Orange Money et Wave (encaissement comme remboursement), refusée pour des espèces, et contrôlée par une contrainte `CHECK` : sans elle, un livreur pourrait encaisser des espèces, les déclarer par Wave et les retirer de ce qu'il doit remettre, sans rien à rapprocher. Une même référence ne peut justifier qu'un seul encaissement non annulé (verrou consultatif pour les saisies simultanées) ; elle redevient utilisable après l'annulation de cet encaissement (montant mal saisi). La référence figure sur le reçu, l'historique, le journal de caisse et les exports. Les livreurs gardent les trois moyens.
+
+## 5. Décisions du propriétaire (services FUTANI TECH, phases 1 et 2)
+
+Décision du cahier `docs/05-cahier-des-charges-services.md` (§ 2, R3), confirmée le 2026-11-06.
+
+| # | Question | Décision finale | Mise en œuvre |
+|---|---|---|---|
+| R3 | Les 42 prestations sont-elles listées directement sur `/services` ? | **Non.** `/services` affiche les 5 familles ; les 42 prestations sont listées sur les pages de famille (`/services/categorie/[slug]`) | `src/app/services/page.tsx`, `src/app/services/categorie/[slug]/page.tsx` |

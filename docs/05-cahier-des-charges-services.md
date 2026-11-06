@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Version** | 1.0, 5 novembre 2026 |
-| **Statut** | À valider ; aucune phase n'est commencée |
+| **Statut** | Phases 1 et 2 développées et testées en local, non publiées (voir `docs/rapports/services-phases-1-2.md`) ; phases suivantes non commencées |
 | **Sources** | Proposition du propriétaire, analyse de cinq agents, vérification dans le code |
 
 ## 1. Objectif
@@ -85,13 +85,13 @@ Une famille inactive ou sans prestation active n'est pas affichée. Chaque carte
 
 | Famille | Icône |
 |---|---|
-| Maintenance informatique | `maintenance` |
-| Réseaux informatiques | `reseau` |
-| Vidéosurveillance | `video-surveillance` |
-| Électricité | **Aucune adaptée : à fournir** (question Q2) |
-| Développement web | `ordinateur` |
+| Maintenance informatique | `public/icones/services/maintenance-informatique.png` |
+| Réseaux informatiques | `public/icones/services/reseaux-informatiques.png` |
+| Vidéosurveillance | `public/icones/services/videosurveillance.png` |
+| Électricité | `public/icones/services/electricite.png` |
+| Développement web | `public/icones/services/developpement-web.png` |
 
-Une table slug vers icône, avec une icône par défaut, suffit : aucune colonne en base.
+Une icône par slug, avec une icône par défaut pour une famille sans icône propre, suffit : aucune colonne en base.
 
 ### 5.2 `/services/categorie/[slug]`
 
@@ -121,14 +121,16 @@ Comportement :
 
 ### 5.4 Critères d'acceptation
 
-- [ ] Les 5 familles s'affichent, avec Développement web.
-- [ ] Chaque page de famille répond 200 et liste exactement ses prestations actives.
-- [ ] Les 42 fiches sont liées dans le HTML serveur des pages de famille, sans JavaScript.
-- [ ] Une prestation reste accessible et son devis se préremplit.
-- [ ] Un slug de famille inconnu renvoie 404.
-- [ ] Le sitemap contient `/services`, les 5 familles et les 42 fiches.
-- [ ] Aucun débordement horizontal de 320 à 1920 px ; l'emblème ne recouvre pas le contenu au repos.
+- [x] Les 5 familles s'affichent, avec Développement web.
+- [x] Chaque page de famille répond 200 et liste exactement ses prestations actives.
+- [x] Les 42 fiches sont liées dans le HTML serveur des pages de famille, sans JavaScript.
+- [x] Une prestation reste accessible et son devis se préremplit.
+- [x] Un slug de famille inconnu renvoie 404.
+- [x] Le sitemap contient `/services`, les 5 familles et les 42 fiches.
+- [x] Aucun débordement horizontal de 320 à 1920 px ; l'emblème ne recouvre pas le contenu au repos.
 - [ ] Navigation au clavier complète et focus visible.
+
+Vérification locale uniquement : CI en attente ; navigation au clavier partiellement couverte (seuls quelques liens sont testés).
 
 ## 6. Phase 3 : administration du catalogue
 
@@ -326,7 +328,7 @@ Ils seront **réécrits sur le nouveau parcours, sans perdre leur intention** : 
 | N° | Question | Bloque | Recommandation |
 |---|---|---|---|
 | Q1 | Le nom affiché est-il « Électricité » (base) ou « Installations électriques » (proposition) ? | Phase 1 | Garder « Électricité », plus large : il inclut aussi le dépannage et la maintenance |
-| Q2 | Qui fournit l'icône Électricité, dans le style des pictogrammes `public/icones` ? | Phase 1 | Vous, ou icône par défaut en attendant |
+| Q2 | Qui fournit l'icône Électricité, dans le style des pictogrammes `public/icones` ? | Phase 1 | **Résolue :** icônes des 5 familles fournies par le propriétaire le 2026-11-06 |
 | Q3 | Une image réelle est-elle disponible pour l'introduction ? | Non | Introduction sans image tant qu'il n'y en a pas |
 | Q4 | Des photos réelles publiables existent-elles, avec l'accord des clients ? | Phase 6 | Sinon, faire les phases 1 à 3 et attendre pour la suite |
 | Q5 | YouTube est-il acceptable pour les vidéos ? | Phase 8 | Oui, sauf pour les chantiers de clients sensibles |

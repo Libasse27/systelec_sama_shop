@@ -9,6 +9,8 @@ const FAMILIES = [
   { slug: "developpement-web", name: "Développement web", services: 1 },
 ];
 const TOTAL_SERVICES = 42;
+/** Hauteur minimale d'une icône de famille : ces images détaillées sont illisibles en petit. */
+const MIN_FAMILY_ICON_HEIGHT = 80;
 
 const familyPath = (slug: string): string => `/services/categorie/${slug}`;
 
@@ -31,7 +33,14 @@ test.describe("page Services FUTANI TECH", () => {
       await expect(card).toHaveAttribute("href", familyPath(family.slug));
       await expect(card.getByRole("heading", { level: 2, name: family.name, exact: true })).toBeVisible();
       await expect(card).toContainText("Découvrir les prestations");
-      await expect(card.locator("img")).toBeVisible();
+      const icon = card.locator("img");
+      await expect(icon).toBeVisible();
+      expect(decodeURIComponent((await icon.getAttribute("src")) ?? "")).toContain(`/icones/services/${family.slug}.png`);
+      // Image bien chargée (un fichier absent laisserait une largeur naturelle nulle), assez grande pour rester lisible.
+      // next/image charge en différé : l'image doit d'abord entrer dans la fenêtre.
+      await icon.scrollIntoViewIfNeeded();
+      await expect.poll(() => icon.evaluate((image: HTMLImageElement) => image.naturalWidth)).toBeGreaterThan(0);
+      expect((await icon.boundingBox())!.height).toBeGreaterThanOrEqual(MIN_FAMILY_ICON_HEIGHT);
     }
   });
 
@@ -131,8 +140,9 @@ test.describe("référencement et absence de JavaScript", () => {
     for (const slug of slugs) expect((await request.get(`/services/${slug}`)).status(), slug).toBe(200);
   });
 
-  test("le sitemap contient les 5 familles et les 42 fiches", async ({ request }) => {
+  test("le sitemap contient /services, les 5 familles et les 42 fiches", async ({ request }) => {
     const sitemap = await (await request.get("/sitemap.xml")).text();
+    expect(sitemap).toContain("/services</loc>");
     for (const family of FAMILIES) expect(sitemap).toContain(`${familyPath(family.slug)}</loc>`);
     const serviceEntries = sitemap.match(/\/services\/(?!categorie\/)[a-z0-9-]+<\/loc>/g) ?? [];
     expect(serviceEntries).toHaveLength(TOTAL_SERVICES);
