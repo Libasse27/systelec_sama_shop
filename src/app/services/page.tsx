@@ -2,14 +2,16 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { BrandLogo } from "@/components/brand/logo";
 import { Breadcrumbs } from "@/components/layout/breadcrumbs";
+import { primaryActionClass, secondaryActionClass } from "@/components/services/service-action-styles";
+import { ServiceCallToAction } from "@/components/services/service-call-to-action";
+import { ServiceFamilyCard } from "@/components/services/service-family-card";
 import { BRAND } from "@/lib/brand";
-import { servicePriceLabel } from "@/lib/labels";
 import { ACCEPTED_PAYMENT_METHODS } from "@/lib/payment-methods";
 import { db } from "@/server/db/client";
 import { listServiceGroups } from "@/server/modules/services/queries";
 
 export const metadata: Metadata = {
-  title: "Services techniques",
+  title: { absolute: `Services techniques | ${BRAND.tech.name}` },
   description: `Maintenance informatique, réseaux, vidéosurveillance, électricité et développement web : demandez un devis à ${BRAND.tech.name}, ${BRAND.tech.description}.`,
   alternates: { canonical: "/services" },
 };
@@ -22,36 +24,31 @@ export default async function ServicesPage() {
       <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:gap-6">
         <BrandLogo variant="tech" className="h-20" priority />
         <div>
-          <h1 className="text-2xl font-bold">Services techniques</h1>
+          <h1 className="text-2xl font-bold">{BRAND.tech.name} — Nos solutions informatiques et techniques</h1>
           <p className="mt-2 max-w-2xl text-ink-muted">
             Des interventions réalisées par du personnel qualifié. Chaque prestation fait l&apos;objet d&apos;un devis
             adapté à votre besoin ; le règlement se fait {ACCEPTED_PAYMENT_METHODS}, après la prestation.
           </p>
+          <div className="mt-4 flex flex-col gap-3 sm:flex-row">
+            <Link href="/devis/demande" className={primaryActionClass}>
+              Demander un devis
+            </Link>
+            <a href="#familles" className={secondaryActionClass}>
+              Découvrir nos services
+            </a>
+          </div>
         </div>
       </header>
-      {groups.map((group) => (
-        <section key={group.slug} aria-labelledby={`famille-${group.slug}`} className="flex flex-col gap-3">
-          <div>
-            <h2 id={`famille-${group.slug}`} className="text-xl font-semibold">
-              {group.name}
-            </h2>
-            {group.description && <p className="text-sm text-ink-muted">{group.description}</p>}
-          </div>
-          <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {group.services.map((service) => (
-              <li key={service.slug}>
-                <Link
-                  href={`/services/${service.slug}`}
-                  className="flex h-full flex-col gap-1 rounded-xl border border-line bg-surface p-4 hover:border-brand-blue"
-                >
-                  <span className="font-medium">{service.name}</span>
-                  <span className="text-sm text-brand-blue">{servicePriceLabel(service.pricingMode, service.price)}</span>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </section>
-      ))}
+      <section id="familles" aria-label="Familles de services">
+        <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {groups.map((group) => (
+            <li key={group.slug}>
+              <ServiceFamilyCard slug={group.slug} name={group.name} description={group.description} />
+            </li>
+          ))}
+        </ul>
+      </section>
+      <ServiceCallToAction />
     </main>
   );
 }

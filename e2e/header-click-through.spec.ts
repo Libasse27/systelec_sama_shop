@@ -139,12 +139,13 @@ test.describe("emblème du navbar : zone cliquable", () => {
 
   test("bureau 1280 px, clavier : en remontant avec Maj+Tab, la carte focalisée n'est pas sous l'emblème", async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 800 });
-    await page.goto("/services");
+    // Page de famille assez longue : chaque prestation a 2 liens (fiche et devis), soit 2 tabulations par carte.
+    await page.goto("/services/categorie/maintenance-informatique");
     const cards = serviceCards(page);
     // Deuxième ligne de la grille (3 colonnes) placée sous l'emblème ; le focus part de la ligne suivante, déjà visible.
     await scrollUnderOverhang(cards.nth(3));
     await cards.nth(6).focus();
-    for (let step = 0; step < 3; step += 1) await page.keyboard.press("Shift+Tab");
+    for (let step = 0; step < 6; step += 1) await page.keyboard.press("Shift+Tab");
     await expect(cards.nth(3)).toBeFocused();
     const emblem = await boxOf(emblemOf(page));
     await expect.poll(async () => (await boxOf(cards.nth(3))).y).toBeGreaterThanOrEqual(emblem.y + emblem.height);

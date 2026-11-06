@@ -426,16 +426,14 @@ test.describe("navbar : logo FUTANI SHOP à emblème débordant", () => {
   });
 
   test("bureau 1280 px : un saut vers une ancre laisse la cible sous l'emblème", async ({ page }) => {
-    await page.setViewportSize({ width: 1280, height: 800 });
-    // Page plus haute que la fenêtre : la deuxième famille peut remonter jusqu'au décalage de défilement.
+    // Fenêtre basse, plus petite que la page : les familles peuvent remonter jusqu'au décalage de défilement.
     const MAX_TOP_AFTER_JUMP = 200;
+    await page.setViewportSize({ width: 1280, height: 500 });
     await page.goto("/services");
-    const target = page.locator('h2[id^="famille-"]').nth(1);
-    const targetId = await target.getAttribute("id");
-    expect(targetId).not.toBeNull();
-    await page.evaluate((hash) => {
-      window.location.hash = hash;
-    }, targetId!);
+    const target = page.locator("#familles");
+    await page.evaluate(() => {
+      window.location.hash = "familles";
+    });
     await expect.poll(async () => (await target.boundingBox())!.y).toBeLessThan(MAX_TOP_AFTER_JUMP);
     const { emblem } = await measure(page);
     const emblemBox = (await emblem.boundingBox())!;

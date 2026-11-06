@@ -123,7 +123,9 @@ test.describe("service de développement web", () => {
   test("la famille et sa fiche sont publiées sur devis, avec demande de devis", async ({ page }) => {
     await page.goto("/services");
     await expect(page.getByRole("heading", { level: 2, name: "Développement web" })).toBeVisible();
-    const lien = page.getByRole("link", { name: /Développement web fullstack/ });
+    await page.getByRole("link", { name: /^Développement web/ }).click();
+    await expect(page).toHaveURL(/\/services\/categorie\/developpement-web$/);
+    const lien = page.getByRole("link", { name: /^Développement web fullstack/ });
     await expect(lien).toBeVisible();
     await expect(lien).toContainText("Sur devis");
     await expect(lien).toHaveAttribute("href", "/services/developpement-web-fullstack");

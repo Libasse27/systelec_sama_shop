@@ -1,8 +1,9 @@
 import type { MetadataRoute } from "next";
+import { serviceFamilyPath } from "@/lib/service-paths";
 import { db } from "@/server/db/client";
 import { listProductsForSitemap } from "@/server/modules/catalog/queries";
 import { listPublishedPages } from "@/server/modules/content/queries";
-import { listServicesForSitemap } from "@/server/modules/services/queries";
+import { listServiceGroups, listServicesForSitemap } from "@/server/modules/services/queries";
 import { absoluteUrl, getCategoryIndex } from "@/server/storefront";
 
 export const dynamic = "force-dynamic";
@@ -10,9 +11,10 @@ export const dynamic = "force-dynamic";
 /** Sitemap : uniquement le contenu public visible (aucun brouillon, aucune page privée). */
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const index = await getCategoryIndex();
-  const [products, services, pages] = await Promise.all([
+  const [products, services, serviceGroups, pages] = await Promise.all([
     listProductsForSitemap(db, index),
     listServicesForSitemap(db),
+    listServiceGroups(db),
     listPublishedPages(db),
   ]);
   return [
@@ -30,6 +32,11 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       url: absoluteUrl(`/produits/${product.slug}`),
       lastModified: product.updatedAt,
       priority: 0.8,
+    })),
+    ...serviceGroups.map((group) => ({
+      url: absoluteUrl(serviceFamilyPath(group.slug)),
+      changeFrequency: "weekly" as const,
+      priority: 0.7,
     })),
     ...services.map((service) => ({
       url: absoluteUrl(`/services/${service.slug}`),
