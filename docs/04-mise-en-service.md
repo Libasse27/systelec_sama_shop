@@ -194,22 +194,34 @@ scripts/ops/restore.sh /srv/sauvegardes/<date> futani_exercice /srv/exercice/sto
 scripts/ops/verify-restore.sh futani futani_exercice   # contenu identique table par table (lignes + MD5)
 ```
 
-`restore.sh` exige le service `db` démarré, une sauvegarde complète (`SHA256SUMS`, dump, archive et manifeste), et un accès en écriture à la base et au parent du dossier cible. Il vérifie les empreintes et restaure dans une **base neuve** et un **dossier absent ou vide**. Il refuse d'écraser une base existante, la base en service ou un dossier non vide. Il contrôle aussi le nombre de migrations restaurées.
+`restore.sh` exige le service `db` démarré, une sauvegarde complète (`SHA256SUMS`, dump, archive et manifeste), et un accès en écriture à la base et au parent du dossier cible. Il vérifie les empreintes et restaure dans une **base neuve** et un **dossier absent ou vide**. Il refuse d'écraser une base existante, la base en service ou un dossier non vide. Il contrôle aussi le nombre de migrations restaurées. Il ne restaure pas les droits du dump (`--no-privileges`), car le rôle applicatif peut ne pas encore exister : `app-role.sql` les recrée (étape 3 ci-dessous). Après un échec en cours de restauration, la base partielle et les fichiers déjà extraits restent en place : relancer avec un autre nom de base et un autre dossier.
 
 `verify-restore.sh` exige le service `db` démarré et les deux bases accessibles au rôle propriétaire ; il compare les bases et échoue à la première différence. Ne lancer la comparaison que juste après la restauration : la base en service continue d'évoluer.
 
 **Incident (bascule sur une sauvegarde)** :
+
+Sur un **serveur neuf**, préparer d'abord le dépôt, les images et le `.env.production` conservé au coffre, puis lancer `$C up -d --wait db`. Si `restore.sh` s'arrête aussitôt sur `the database system is shutting down`, PostgreSQL termine sa première initialisation : attendre quelques secondes et relancer, rien n'a encore été créé. Sur ce serveur, il n'y a rien à arrêter à l'étape 1.
+
 1. `$C stop app` (et suspendre la tâche planifiée).
 2. `scripts/ops/restore.sh <sauvegarde> futani_restaure_<date> /srv/restaure/storage`.
-3. Relancer `scripts/ops/app-role.sql` sur la base restaurée.
-4. Recopier les fichiers dans le volume :
+3. Recréer le rôle applicatif et ses droits sur la base restaurée :
    ```bash
-   docker run --rm -v futani-sama-shop_storage:/dst -v /srv/restaure/storage:/src:ro alpine sh -c 'cp -a /src/. /dst/'
+   (
+     set -a
+     . ./.env.production
+     set +a
+     $C exec -T db psql -U "${POSTGRES_USER:-futani_owner}" -d futani_restaure_<date> \
+       -v app_role="${APP_DB_USER:-futani_app}" -v app_password="$APP_DB_PASSWORD" < scripts/ops/app-role.sql
+   )
+   ```
+4. Recopier les fichiers dans le volume et les rendre au compte de l'application (uid 1001), car l'extraction par un opérateur non root leur donne son propre compte. Sur un volume déjà rempli, la copie écrase les fichiers de même nom et conserve les autres :
+   ```bash
+   docker run --rm -v futani-sama-shop_storage:/dst -v /srv/restaure/storage:/src:ro alpine sh -c 'cp -a /src/. /dst/ && chown -R 1001:1001 /dst'
    ```
 5. Mettre `POSTGRES_DB=futani_restaure_<date>` dans `.env.production`, puis `$C up -d app` et vérifier la santé et quelques écrans.
 6. L'ancienne base est conservée pour l'enquête ; ne la supprimer qu'après décision écrite.
 
-Non exécuté pendant la stabilisation : les étapes 4 et 5. L'application a été démarrée directement sur la base restaurée, avec succès.
+Exercé le 2026-11-07 sur un poste, avec des données synthétiques et une seconde pile vierge simulant un serveur neuf : étapes 2 à 5, avec un opérateur non root. Base restaurée et droits du rôle applicatif conformes, application en bonne santé, fichiers lus et écrits par l'application. Reste à refaire sur le serveur cible, avec une vraie sauvegarde.
 
 ## 9. Mise à jour
 
