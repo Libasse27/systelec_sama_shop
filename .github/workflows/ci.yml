@@ -56,13 +56,14 @@ jobs:
           path: test-results/
           retention-days: 7
 
-  # Image de production (phase 10) : les deux cibles se construisent, et l'image servie ne contient aucune
-  # vulnérabilité connue de gravité élevée ou critique (sinon l'intégration échoue).
+  # Image de production (phase 10) : les deux cibles se construisent, l'image servie démarre et sert public/,
+  # et elle ne contient aucune vulnérabilité connue de gravité élevée ou critique (sinon l'intégration échoue).
   image:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - run: docker build --target app -t futani-sama-shop:ci .
+      - run: scripts/ops/smoke-image.sh futani-sama-shop:ci
       - run: docker build --target tools -t futani-sama-shop-tools:ci .
       - run: >-
           docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:0.67.2

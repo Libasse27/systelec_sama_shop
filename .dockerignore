@@ -4,12 +4,15 @@
 .claude
 node_modules
 .next
+.next-e2e
 .env
 .env.*
 !.env.example
 storage
 storage-e2e
 sauvegardes
+futani-icones
+services-futani
 *.dump
 coverage
 test-results
