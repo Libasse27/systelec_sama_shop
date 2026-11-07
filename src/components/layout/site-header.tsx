@@ -16,8 +16,11 @@ import { getCategoryIndex, getCompanySettings, getServiceFamilyLinks } from "@/s
 // Entre « lg » et « xl » (une seule ligne), l'espace est réduit, jamais le texte (14 px) : marges des liens à 8 px, libellés sur une ligne (sous « lg », le retour à la ligne reste permis).
 const linkClass = "rounded-md px-3 py-2 text-sm font-medium text-ink/90 hover:bg-brand-navy/5 lg:whitespace-nowrap lg:px-2 xl:px-3";
 
+/** Liens de la navigation FUTANI TECH (quatre entrées) : marges de 8 px sous « sm », pour tenir sur une ligne à 320 px. */
+const techLinkClass = `${linkClass} max-sm:px-2`;
+
 /** Retour à FUTANI SHOP depuis l'espace FUTANI TECH : lien encadré, distinct des liens de la rubrique. */
-const shopReturnClass = `${linkClass} flex items-center gap-1 border border-brand-navy/20`;
+const shopReturnClass = `${techLinkClass} flex items-center gap-1 border border-brand-navy/20`;
 
 /** Menu des familles de produits (FUTANI SHOP) : données lues côté serveur, affichage et survol dans le composant client. */
 async function CatalogMenu() {
@@ -31,7 +34,7 @@ async function CatalogMenu() {
 async function ServicesMenu() {
   const families = await getServiceFamilyLinks();
   const items = families.map(({ slug, name }) => ({ key: slug, href: serviceFamilyPath(slug), name }));
-  return <CatalogMenuView label="Services" items={items} allLink={{ href: "/services", label: "Tous les services" }} linkClass={linkClass} />;
+  return <CatalogMenuView label="Services" items={items} allLink={{ href: "/services", label: "Tous les services" }} linkClass={techLinkClass} />;
 }
 
 /**
@@ -64,8 +67,10 @@ export async function SiteHeader() {
             </Link>
           }
         />
-        {/* Avant la loupe et le compte dans le DOM : à partir de « lg », l'ordre de tabulation suit l'ordre visuel. */}
-        <nav aria-label="Navigation principale" className="order-4 flex items-center gap-1 lg:order-none">
+        {/* Avant la loupe et le compte dans le DOM : à partir de « lg », l'ordre de tabulation suit l'ordre visuel.
+            « max-lg:flex-wrap » : sous « lg », si une police plus large ne laisse pas tenir les liens sur une ligne, ils passent
+            à la ligne au lieu de déborder (sans effet tant qu'ils tiennent) ; à partir de « lg », la ligne unique est inchangée. */}
+        <nav aria-label="Navigation principale" className="order-4 flex items-center gap-1 max-lg:flex-wrap lg:order-none">
           <SiteSpaceSwitch
             shop={
               <>
@@ -81,12 +86,12 @@ export async function SiteHeader() {
             tech={
               <>
                 <ServicesMenu />
-                {/* Libellé court sous « sm » (la ligne de navigation tient avec la loupe) ; nom accessible toujours complet. */}
-                <Link href="/devis/demande" aria-label="Demander un devis" className={linkClass}>
+                {/* Libellé court sous « sm » (les quatre liens tiennent sur une ligne à 320 px) ; nom accessible toujours complet. */}
+                <Link href="/devis/demande" aria-label="Demander un devis" className={techLinkClass}>
                   <span className="sm:hidden">Devis</span>
                   <span className="hidden sm:inline">Demander un devis</span>
                 </Link>
-                <Link href="/contact" className={linkClass}>
+                <Link href="/contact" className={techLinkClass}>
                   Contact
                 </Link>
                 <Link href="/" className={shopReturnClass}>
