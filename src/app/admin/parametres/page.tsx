@@ -44,10 +44,10 @@ export default async function SettingsPage() {
   const { company, commerce, payments, tax, features, businessHours, returnReminders } = settings;
   const [morning, afternoon] = businessHours.ranges;
   const hiddenLinks = hiddenSocialLinks(company.socialLinks);
-  // Sous le champ concerné : pourquoi le lien enregistré n'est pas affiché (rien sinon).
+  // Sous le champ concerné : pourquoi le lien enregistré n'est pas publié (rien sinon).
   const socialHint = (network: SocialNetwork) => {
     const message = hiddenSocialLinkMessage(network, company.socialLinks[network]);
-    return message ? `Non affiché sur le site. ${message}` : undefined;
+    return message ? `Lien non publié. ${message}` : undefined;
   };
 
   return (
@@ -64,7 +64,7 @@ export default async function SettingsPage() {
       <Section title="Identité et mentions légales (D7)">
         {hiddenLinks.length > 0 && (
           <div role="alert" className="mb-4 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
-            <p className="font-medium">Lien(s) enregistré(s) mais non affiché(s) sur le site : non conforme(s) aux règles actuelles. Ils sont conservés et n&apos;empêchent pas d&apos;enregistrer les autres informations ; corrigez ou videz chaque champ concerné pour le(s) remplacer.</p>
+            <p className="font-medium">Lien(s) enregistré(s) mais non publié(s) : non conforme(s) aux règles actuelles. Ils sont conservés et n&apos;empêchent pas d&apos;enregistrer les autres informations ; corrigez ou videz chaque champ concerné pour le(s) remplacer.</p>
             <ul className="mt-1 list-disc pl-5">
               {hiddenLinks.map(({ network, message }) => (
                 <li key={network}>{message}</li>
@@ -79,7 +79,7 @@ export default async function SettingsPage() {
             <TextField name="ninea" label="NINEA" defaultValue={company.ninea} required={false} />
             <TextField name="rccm" label="RCCM" defaultValue={company.rccm} required={false} />
             <TextField name="phone" label="Téléphone" type="tel" defaultValue={company.phone} required={false} />
-            <TextField name="whatsapp" label="WhatsApp" type="tel" defaultValue={company.whatsapp} required={false} />
+            <TextField name="whatsapp" label="WhatsApp" type="tel" defaultValue={company.whatsapp} required={false} hint="Avec l'indicatif (+221…) : sans lui, le lien WhatsApp n'est pas publié." />
             <TextField name="email" label="E-mail" type="email" defaultValue={company.email} required={false} />
             <TextField name="openingHours" label="Horaires" defaultValue={company.openingHours} required={false} />
             <TextField name="address" label="Adresse" defaultValue={company.address} required={false} className="sm:col-span-2" />

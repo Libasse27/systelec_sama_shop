@@ -1,22 +1,31 @@
 import { describe, expect, it } from "vitest";
-import { checkSocialUrl, hiddenSocialLinkMessage, hiddenSocialLinks, reviewSocialLinksInput, socialProfiles, socialUrlMessage, type SocialNetwork, type SocialUrlIssue } from "./social-links";
+import { checkSocialUrl, hiddenSocialLinkMessage, hiddenSocialLinks, reviewSocialLinksInput, socialButtons, socialUrlMessage, type SocialNetwork, type SocialUrlIssue } from "./social-links";
 
 const none = { facebook: null, instagram: null, linkedin: null, tiktok: null, youtube: null, x: null };
 
 describe("liens vers les réseaux sociaux (pied de page)", () => {
-  it("ne retient aucun réseau tant qu'aucune adresse n'est saisie", () => {
-    expect(socialProfiles(none)).toEqual([]);
+  const ORDER = ["facebook", "instagram", "linkedin", "tiktok", "youtube", "x"];
+  const hrefs = (links: Parameters<typeof socialButtons>[0]) => socialButtons(links).map((button) => button.href);
+
+  it("renvoie toujours les six réseaux, sans lien (href null), tant qu'aucune adresse n'est saisie", () => {
+    const buttons = socialButtons(none);
+    expect(buttons.map((button) => button.network)).toEqual(ORDER);
+    expect(buttons.every((button) => button.href === null)).toBe(true);
   });
 
-  it("ne retient que les réseaux renseignés, dans un ordre fixe, avec leur libellé et leur icône", () => {
-    const profiles = socialProfiles({ ...none, x: "https://x.com/futani", facebook: "https://facebook.com/futani" });
-    expect(profiles).toEqual([
+  it("garde les six réseaux dans un ordre fixe, avec libellé et icône ; href seulement pour les adresses valides", () => {
+    const buttons = socialButtons({ ...none, x: "https://x.com/futani", facebook: "https://facebook.com/futani" });
+    expect(buttons).toEqual([
       { network: "facebook", label: "Facebook", icon: "facebook", href: "https://facebook.com/futani" },
+      { network: "instagram", label: "Instagram", icon: "instagram", href: null },
+      { network: "linkedin", label: "LinkedIn", icon: "linkedin", href: null },
+      { network: "tiktok", label: "TikTok", icon: "tiktok", href: null },
+      { network: "youtube", label: "YouTube", icon: "youtube", href: null },
       { network: "x", label: "X (Twitter)", icon: "x", href: "https://x.com/futani" },
     ]);
   });
 
-  it("couvre les six réseaux administrables", () => {
+  it("couvre les six réseaux administrables avec leur adresse", () => {
     const all = {
       facebook: "https://www.facebook.com/futani",
       instagram: "https://www.instagram.com/futani",
@@ -25,12 +34,27 @@ describe("liens vers les réseaux sociaux (pied de page)", () => {
       youtube: "https://www.youtube.com/@futani",
       x: "https://x.com/futani",
     };
-    expect(socialProfiles(all).map((profile) => profile.network)).toEqual(["facebook", "instagram", "linkedin", "tiktok", "youtube", "x"]);
+    expect(socialButtons(all).map((button) => button.network)).toEqual(ORDER);
+    expect(hrefs(all)).toEqual(Object.values(all));
   });
 
-  it("n'affiche jamais une ancienne valeur non conforme restée en base (http, identifiants, autre domaine)", () => {
-    const profiles = socialProfiles({ ...none, youtube: "http://youtube.com/futani", x: "https://user:pw@x.com/futani", facebook: "https://example.com/futani", tiktok: "https://tiktok.com/@futani" });
-    expect(profiles.map((profile) => profile.network)).toEqual(["tiktok"]);
+  it("une valeur nulle, vide, dangereuse, imitant un domaine ou raccourcie donne href null, jamais l'adresse", () => {
+    const buttons = socialButtons({
+      facebook: null,
+      instagram: "",
+      linkedin: "javascript:alert(1)",
+      tiktok: "https://tiktok.com.evil.example/@futani",
+      youtube: "https://youtu.be.evil.example/futani",
+      x: "https://t.co/abc",
+    });
+    expect(buttons.map((button) => button.network)).toEqual(ORDER);
+    expect(buttons.map((button) => button.href)).toEqual([null, null, null, null, null, null]);
+    expect(hrefs({ ...none, facebook: "https://fb.me/futani", instagram: "https://evilinstagram.com/futani" })).toEqual([null, null, null, null, null, null]);
+  });
+
+  it("n'expose jamais une ancienne valeur non conforme restée en base (http, identifiants, autre domaine)", () => {
+    const buttons = socialButtons({ ...none, youtube: "http://youtube.com/futani", x: "https://user:pw@x.com/futani", facebook: "https://example.com/futani", tiktok: "https://tiktok.com/@futani" });
+    expect(buttons.map((button) => button.href)).toEqual([null, null, null, "https://tiktok.com/@futani", null, null]);
   });
 
   it("signale les liens enregistrés mais non affichés, avec un message explicite", () => {
@@ -162,8 +186,8 @@ describe("socialUrlMessage", () => {
   });
 });
 
-describe("liens enregistrés non conformes : masqués un par un", () => {
-  it("une valeur nulle, vide, mal formée ou suspecte n'est jamais publiée ; les autres réseaux restent affichés", () => {
+describe("liens enregistrés non conformes : sans lien, un par un", () => {
+  it("une valeur nulle, vide, mal formée ou suspecte n'est jamais publiée ; les autres réseaux gardent leur lien", () => {
     const links = {
       facebook: "javascript:alert(1)",
       instagram: "https://www.instagram.com/futani",
@@ -172,7 +196,7 @@ describe("liens enregistrés non conformes : masqués un par un", () => {
       youtube: null,
       x: "https://x.com/futani",
     };
-    expect(socialProfiles(links).map((profile) => profile.network)).toEqual(["instagram", "x"]);
+    expect(socialButtons(links).map((button) => button.href)).toEqual([null, "https://www.instagram.com/futani", null, null, null, "https://x.com/futani"]);
     expect(hiddenSocialLinks(links).map((link) => link.network)).toEqual(["facebook", "tiktok"]);
   });
 
