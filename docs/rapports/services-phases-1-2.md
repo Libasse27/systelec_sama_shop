@@ -2,7 +2,7 @@
 
 **Branche :** `feat/services-phase-1-familles` · **Date :** 2026-11-06 · **Référence :** `docs/05-cahier-des-charges-services.md`, §5
 
-**État :** développé et testé ; commit autorisé par le propriétaire le 2026-11-06, sans push. Validation de la phase (§14, point 5) : `/services` et les 5 pages de famille validées visuellement par le propriétaire, confirmation du 2026-11-06.
+**État :** développé et testé ; commit autorisé par le propriétaire le 2026-11-06, sans push. Validation de la phase (§14, point 5) : `/services` et les 5 pages de famille validées visuellement par le propriétaire, confirmation du 2026-11-06. Cette validation ne couvre pas le rendu des nouvelles icônes, à vérifier séparément par le propriétaire.
 
 ## État de publication
 
@@ -22,7 +22,7 @@
 
 Icônes : les 5 familles utilisent les images fournies par le propriétaire (`services-futani/icone-*`), en copies allégées dans `public/icones/services/<slug>.png`, sans colonne en base. Une famille sans icône propre utilise le pictogramme par défaut `innovation`.
 
-## Tests réellement exécutés (code final)
+## Tests exécutés sur le code de `c7c7ac0` (avant les icônes)
 
 | Contrôle | Résultat |
 |---|---|
@@ -31,13 +31,15 @@ Icônes : les 5 familles utilisent les images fournies par le propriétaire (`se
 | Vitest, projets `unit` et `integration` | 840 réussis sur 840 (84 fichiers) |
 | Playwright complet, 1 worker | 241 réussis, 0 échec, 81 ignorés (référence : 201 / 0 / 81) |
 
+Après `c7c7ac0`, seules des vérifications ciblées ont été faites : le test du sitemap (2 réussis, bureau et mobile) puis, après l'ajout des icônes, les 38 tests de `e2e/service-families.spec.ts` (bureau et mobile, tous réussis), `tsc --noEmit` sur tout le projet et ESLint sur les fichiers modifiés seulement. La suite Playwright complète, Vitest et `eslint .` n'ont pas été relancés après les icônes.
+
 Le projet Vitest `migration` n'a pas été exécuté : aucune migration n'a été ajoutée.
 
 Les 40 tests supplémentaires : 38 dans `e2e/service-families.spec.ts` et 2 pour la nouvelle adresse du contrôle responsive de `e2e/storefront.spec.ts`.
 
 ### Échec intermittent à surveiller
 
-`e2e/announcements-display.spec.ts:317` (« une annonce qui expire disparaît sans rechargement de la page ») a échoué une fois sur le code final : l'annonce était toujours présente après le délai. Les 2 tests suivants du fichier, exécuté en série, n'ont donc pas tourné (238 réussis, 1 échec, 2 non exécutés, 81 ignorés).
+`e2e/announcements-display.spec.ts:317` (« une annonce qui expire disparaît sans rechargement de la page ») a échoué une fois lors d'une exécution complète sur le code de `c7c7ac0` : l'annonce était toujours présente après le délai. Les 2 tests suivants du fichier, exécuté en série, n'ont donc pas tourné (238 réussis, 1 échec, 2 non exécutés, 81 ignorés).
 
 Sur le même code, le test a ensuite réussi 4 fois sur 4 seul, puis dans une suite complète. La trace de l'échec a été écrasée par le rejeu : **la cause n'est pas établie**. Le bandeau n'a pas été modifié, mais le test navigue vers `/services`. Un lien avec cette phase n'est donc pas formellement exclu.
 
