@@ -1,27 +1,44 @@
 import Link from "next/link";
 import { signOutAction } from "@/app/(auth)/actions";
 import { BrandIcon } from "@/components/brand/brand-icon";
-import { HeaderLogo } from "@/components/brand/logo";
+import { HeaderLogo, TechHeaderLogo } from "@/components/brand/logo";
 import { CatalogMenuView } from "@/components/layout/catalog-menu";
 import { HeaderSearch } from "@/components/layout/header-search";
+import { SiteSpaceSwitch } from "@/components/layout/site-space-switch";
+import { BRAND } from "@/lib/brand";
+import { serviceFamilyPath } from "@/lib/service-paths";
 import { getCurrentUser } from "@/server/auth/session";
 import { db } from "@/server/db/client";
 import { countCartItems } from "@/server/modules/cart/service";
 import { readCartOwner } from "@/server/modules/cart/session";
-import { getCategoryIndex, getCompanySettings } from "@/server/storefront";
+import { getCategoryIndex, getCompanySettings, getServiceFamilyLinks } from "@/server/storefront";
 
 // Entre « lg » et « xl » (une seule ligne), l'espace est réduit, jamais le texte (14 px) : marges des liens à 8 px, libellés sur une ligne (sous « lg », le retour à la ligne reste permis).
 const linkClass = "rounded-md px-3 py-2 text-sm font-medium text-ink/90 hover:bg-brand-navy/5 lg:whitespace-nowrap lg:px-2 xl:px-3";
 
-/** Menu des familles de produits : données lues côté serveur, affichage et survol dans le composant client. */
+/** Retour à FUTANI SHOP depuis l'espace FUTANI TECH : lien encadré, distinct des liens de la rubrique. */
+const shopReturnClass = `${linkClass} flex items-center gap-1 border border-brand-navy/20`;
+
+/** Menu des familles de produits (FUTANI SHOP) : données lues côté serveur, affichage et survol dans le composant client. */
 async function CatalogMenu() {
   const index = await getCategoryIndex();
   // Seules des valeurs sérialisables traversent la frontière serveur/client.
-  const families = (index.children.get(null) ?? []).map(({ id, slug, name }) => ({ id, slug, name }));
-  return <CatalogMenuView families={families} linkClass={linkClass} />;
+  const items = (index.children.get(null) ?? []).map(({ id, slug, name }) => ({ key: id, href: `/categories/${slug}`, name }));
+  return <CatalogMenuView label="Catalogue" items={items} allLink={{ href: "/recherche", label: "Tous les produits" }} linkClass={linkClass} />;
 }
 
-/** En-tête du site : marque, recherche, catalogue, services et accès au compte. */
+/** Menu « Services » des familles de services (FUTANI TECH), même composant que le catalogue. */
+async function ServicesMenu() {
+  const families = await getServiceFamilyLinks();
+  const items = families.map(({ slug, name }) => ({ key: slug, href: serviceFamilyPath(slug), name }));
+  return <CatalogMenuView label="Services" items={items} allLink={{ href: "/services", label: "Tous les services" }} linkClass={linkClass} />;
+}
+
+/**
+ * En-tête du site : marque, navigation principale, recherche et accès au compte. La marque et la navigation
+ * principale dépendent de l'espace (FUTANI SHOP ou FUTANI TECH, voir isTechPath) ; recherche, panier et compte
+ * sont communs. Les deux variantes sont rendues côté serveur, SiteSpaceSwitch affiche celle de la page courante.
+ */
 export async function SiteHeader() {
   const [company, user, cartOwner] = await Promise.all([getCompanySettings(), getCurrentUser(), readCartOwner()]);
   const cartCount = cartOwner ? await countCartItems(db, cartOwner) : 0;
@@ -35,18 +52,51 @@ export async function SiteHeader() {
           au lieu de chevaucher (un « 1fr » ne descend pas sous son contenu).
           « relative » : la recherche déployée se place par-dessus la ligne de la loupe. */}
       <div className="relative mx-auto flex max-w-6xl flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3 lg:grid lg:grid-cols-[1fr_auto_1fr] lg:gap-x-2 xl:gap-x-3">
-        <Link href="/" aria-label={`${company.shopName}, accueil`} className="order-1 shrink-0 lg:order-none lg:justify-self-start">
-          <HeaderLogo shopName={company.shopName} logoUrl={company.logoUrl} />
-        </Link>
+        <SiteSpaceSwitch
+          shop={
+            <Link href="/" aria-label={`${company.shopName}, accueil`} className="order-1 shrink-0 lg:order-none lg:justify-self-start">
+              <HeaderLogo shopName={company.shopName} logoUrl={company.logoUrl} />
+            </Link>
+          }
+          tech={
+            <Link href="/services" aria-label={`${BRAND.tech.name}, accueil des services`} className="order-1 shrink-0 lg:order-none lg:justify-self-start">
+              <TechHeaderLogo />
+            </Link>
+          }
+        />
         {/* Avant la loupe et le compte dans le DOM : à partir de « lg », l'ordre de tabulation suit l'ordre visuel. */}
         <nav aria-label="Navigation principale" className="order-4 flex items-center gap-1 lg:order-none">
-          <CatalogMenu />
-          <Link href="/services" className={linkClass}>
-            Services
-          </Link>
-          <Link href="/contact" className={linkClass}>
-            Contact
-          </Link>
+          <SiteSpaceSwitch
+            shop={
+              <>
+                <CatalogMenu />
+                <Link href="/services" className={linkClass}>
+                  Services
+                </Link>
+                <Link href="/contact" className={linkClass}>
+                  Contact
+                </Link>
+              </>
+            }
+            tech={
+              <>
+                <ServicesMenu />
+                {/* Libellé court sous « sm » (la ligne de navigation tient avec la loupe) ; nom accessible toujours complet. */}
+                <Link href="/devis/demande" aria-label="Demander un devis" className={linkClass}>
+                  <span className="sm:hidden">Devis</span>
+                  <span className="hidden sm:inline">Demander un devis</span>
+                </Link>
+                <Link href="/contact" className={linkClass}>
+                  Contact
+                </Link>
+                <Link href="/" className={shopReturnClass}>
+                  <BrandIcon name="boutique" className="size-6" />
+                  {/* Comme « Panier » : icône seule sous « sm », libellé masqué mais lu. */}
+                  <span className="sr-only sm:not-sr-only">Boutique</span>
+                </Link>
+              </>
+            }
+          />
         </nav>
         {/* Saut de ligne forcé sous la marque et le compte, sauf sur grand écran. Ordres sous « lg » : marque 1, compte 2,
             saut 3, navigation 4, loupe 5 (tous distincts : l'ordre du DOM ne départage rien). */}

@@ -316,6 +316,10 @@ test.describe("navbar : logo FUTANI SHOP à emblème débordant", () => {
     await current?.restore();
   });
 
+  /** Logo qui dépasse sous le navbar : emblème FUTANI SHOP, ou grand logo FUTANI TECH dans la rubrique Services. */
+  const overhangingLogo = (page: Page): Locator =>
+    page.getByRole("banner").locator('img[src*="embleme"], img[src*="futani-tech"].absolute');
+
   /** Boîtes (x, y, largeur, hauteur) de l'en-tête et de ses éléments de logo. */
   async function measure(page: Page) {
     const banner = page.getByRole("banner");
@@ -405,8 +409,7 @@ test.describe("navbar : logo FUTANI SHOP à emblème débordant", () => {
       const MIN_GAP_BELOW_EMBLEM = 12;
       await page.setViewportSize({ width: 1280, height: 800 });
       await page.goto(path);
-      const { emblem } = await measure(page);
-      const emblemBox = (await emblem.boundingBox())!;
+      const emblemBox = (await overhangingLogo(page).boundingBox())!;
       const contentBox = (await page.locator("main > *").first().boundingBox())!;
       expect(contentBox.y - (emblemBox.y + emblemBox.height)).toBeGreaterThanOrEqual(MIN_GAP_BELOW_EMBLEM);
     });
@@ -435,8 +438,7 @@ test.describe("navbar : logo FUTANI SHOP à emblème débordant", () => {
       window.location.hash = "familles";
     });
     await expect.poll(async () => (await target.boundingBox())!.y).toBeLessThan(MAX_TOP_AFTER_JUMP);
-    const { emblem } = await measure(page);
-    const emblemBox = (await emblem.boundingBox())!;
+    const emblemBox = (await overhangingLogo(page).boundingBox())!;
     expect((await target.boundingBox())!.y).toBeGreaterThanOrEqual(emblemBox.y + emblemBox.height);
   });
 

@@ -4,12 +4,10 @@ import { PaymentMethodIcons } from "@/components/brand/payment-method-icons";
 import { ProductGrid } from "@/components/catalog/product-card";
 import { JsonLd } from "@/components/seo/json-ld";
 import { BRAND, SHOP_PILLARS_LINE } from "@/lib/brand";
-import { servicePriceLabel } from "@/lib/labels";
 import { PAYMENT_NOTICE, SCHEMA_ORG_PAYMENT_ACCEPTED } from "@/lib/payment-methods";
 import { db } from "@/server/db/client";
 import { featuredProducts } from "@/server/modules/catalog/queries";
 import { listActivePartners } from "@/server/modules/partners/queries";
-import { featuredServices } from "@/server/modules/services/queries";
 import { absoluteUrl, getCategoryIndex, getCompanySettings } from "@/server/storefront";
 
 const FAMILY_ICONS: Record<string, BrandIconName> = {
@@ -22,14 +20,12 @@ const FAMILY_ICONS: Record<string, BrandIconName> = {
 };
 
 const FEATURED_PRODUCTS = 8;
-const FEATURED_SERVICES = 4;
 
 export default async function HomePage() {
   const index = await getCategoryIndex();
-  const [company, products, services, partners] = await Promise.all([
+  const [company, products, partners] = await Promise.all([
     getCompanySettings(),
     featuredProducts(db, [...index.byId.keys()], FEATURED_PRODUCTS),
-    featuredServices(db, FEATURED_SERVICES),
     listActivePartners(db),
   ]);
   const families = index.children.get(null) ?? [];
@@ -88,32 +84,6 @@ export default async function HomePage() {
         </section>
       )}
 
-      {services.length > 0 && (
-        <section aria-labelledby="services">
-          <div className="flex items-baseline justify-between gap-2">
-            <h2 id="services" className="text-xl font-semibold">
-              Services techniques
-            </h2>
-            <Link href="/services" className="text-sm text-brand-blue underline">
-              Tous les services
-            </Link>
-          </div>
-          <ul className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            {services.map((service) => (
-              <li key={service.slug}>
-                <Link
-                  href={`/services/${service.slug}`}
-                  className="flex h-full flex-col gap-2 rounded-xl border border-line bg-surface p-4 hover:border-brand-blue"
-                >
-                  <BrandIcon name="maintenance" className="size-6" />
-                  <span className="font-medium">{service.name}</span>
-                  <span className="text-sm text-ink-muted">{servicePriceLabel(service.pricingMode, service.price)}</span>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
       {partners.length > 0 && (
         <section aria-labelledby="partenaires">
           <h2 id="partenaires" className="text-xl font-semibold">

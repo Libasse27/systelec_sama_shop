@@ -105,3 +105,26 @@ export function HeaderLogo({ shopName, logoUrl }: Omit<LogoProps, "priority">) {
     </>
   );
 }
+
+/**
+ * Logo du navbar dans l'espace FUTANI TECH (logo officiel, sans pastille ; décoratif : le lien parent porte le nom).
+ * Même gabarit que HeaderLogo : sous « lg », 48 px de haut dans une ligne d'au moins 50 px ; à partir de « lg »,
+ * 96 px de haut, haut à 6 px du haut du navbar, donc 28 px sous le navbar (place réservée par « lg:mb-5 » sur l'en-tête).
+ * Le logo TECH contient déjà son texte : pas de second élément à côté.
+ */
+export function TechHeaderLogo() {
+  const { src, width, height } = BRAND_LOGOS.tech;
+  return (
+    <>
+      <span className="flex min-h-[50px] items-center lg:hidden">
+        <BrandLogo variant="tech" bare className="h-12" />
+      </span>
+      <span className="-my-3 hidden min-h-[74px] items-center lg:flex">
+        {/* Réserve dans le flux la largeur du logo (96 px × 142/159). */}
+        <span aria-hidden className="block h-1 w-[86px] shrink-0" />
+        {/* Mêmes règles d'empilement et de clic que l'emblème de HeaderLogo. */}
+        <Image src={src} alt="" width={width} height={height} className="pointer-events-none absolute top-1.5 z-10 block h-24 w-auto" />
+      </span>
+    </>
+  );
+}

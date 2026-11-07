@@ -51,6 +51,7 @@ La proposition reste non contractuelle sur ces points tant qu'ils ne sont pas co
 | Relations | `QuoteRequest` et les interventions référencent `Service` (`onDelete: SetNull`) | Aucune rupture |
 | Sitemap | `/services` et chaque fiche | Conservés et complétés |
 | Accueil | Section services avec `featuredServices` | Inchangée |
+| Accueil (révision du 2026-11-07) | Section « Services techniques » retirée de l'accueil de FUTANI SHOP à la demande du propriétaire ; fonction `featuredServices` supprimée | Accès aux services par le navbar FUTANI TECH (lien « Services » de la boutique) et le lien « Services techniques » du pied de page |
 | Emblème du navbar | Dépasse de 28 px, clics traversants, marge sous le header | Aucun retour en arrière |
 
 | Slug en base | Nom affiché | Prestations |

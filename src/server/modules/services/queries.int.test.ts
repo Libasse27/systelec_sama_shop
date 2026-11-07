@@ -3,7 +3,7 @@ import { db } from "@/server/db/client";
 import { resetDatabase } from "../../../../tests/setup/db";
 import { seedBaseCatalog } from "../catalog/seed";
 import { getPublishedPage, listPublishedPages, toParagraphs } from "../content/queries";
-import { featuredServices, getServiceDetail, getServiceGroup, listServiceGroups } from "./queries";
+import { getServiceDetail, getServiceGroup, listServiceGroups } from "./queries";
 
 describe("services et contenu publics (PostgreSQL)", () => {
   beforeAll(async () => {
@@ -54,7 +54,6 @@ describe("services et contenu publics (PostgreSQL)", () => {
     expect(await getServiceDetail(db, "installation-electrique")).toBeNull();
     expect(await getServiceGroup(db, "electricite")).toBeNull();
     expect((await listServiceGroups(db)).map((group) => group.slug)).not.toContain("electricite");
-    expect((await featuredServices(db, 10)).map((service) => service.slug)).not.toContain("installation-electrique");
   });
 
   it("refuse un tarif manquant pour une prestation à prix fixe (contrainte en base)", async () => {
