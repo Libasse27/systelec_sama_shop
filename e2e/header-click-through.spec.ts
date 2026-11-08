@@ -2,7 +2,7 @@ import { expect, test, type Locator, type Page } from "@playwright/test";
 import { guardCompanySetting, writeCompanySetting, type CompanySettingGuard } from "./support/db";
 
 /**
- * Logo du navbar qui dépasse sous le navbar (emblème FUTANI SHOP, logo FUTANI TECH) : la partie qui dépasse laisse
+ * Logo du navbar qui dépasse sous le navbar (emblème FUTANI SHOP, emblème FUTANI TECH) : la partie qui dépasse laisse
  * passer les clics vers le contenu, alors que toute sa partie située dans le navbar reste le lien d'accueil de l'espace.
  * Clics réels à la souris, aux coordonnées du logo, y compris sur ses zones transparentes.
  * Le paramètre « company » est partagé : verrou commun et aucun logo téléversé, sinon l'emblème SHOP n'existe pas.
@@ -44,8 +44,8 @@ const TECH: SiteSpace = {
   path: "/services",
   logoName: "FUTANI TECH, accueil des services",
   home: /\/services$/,
-  // Le logo TECH existe en deux tailles ; seule la grande (à partir de « lg ») dépasse.
-  overhang: (page) => page.getByRole("banner").locator('img[src*="futani-tech"].absolute'),
+  // Seul l'emblème du grand écran (à partir de « lg ») dépasse ; le logo complet, sous « lg », reste dans le navbar.
+  overhang: (page) => page.getByRole("banner").locator('img[src*="futani-tech-embleme"]'),
   cards: (page) => page.locator('main ul a[href^="/services/"]'),
   menu: { label: "Services", link: "Électricité", url: /\/services\/categorie\/electricite$/ },
 };

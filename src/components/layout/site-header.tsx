@@ -86,18 +86,24 @@ export async function SiteHeader() {
             tech={
               <>
                 <ServicesMenu />
-                {/* Libellé court sous « sm » (les quatre liens tiennent sur une ligne à 320 px) ; nom accessible toujours complet. */}
+                {/* Libellé court à toute largeur : les quatre liens tiennent sur une ligne à 320 px et, à partir de « lg », le navbar
+                    reste sur une ligne à 1024 et 1280 px avec l'emblème et le texte du logo, connecté avec le rôle ADMIN.
+                    Nom accessible complet ; il contient le libellé visible. */}
                 <Link href="/devis/demande" aria-label="Demander un devis" className={techLinkClass}>
-                  <span className="sm:hidden">Devis</span>
-                  <span className="hidden sm:inline">Demander un devis</span>
+                  Devis
                 </Link>
                 <Link href="/contact" className={techLinkClass}>
                   Contact
                 </Link>
-                <Link href="/" className={shopReturnClass}>
+                {/* Nom accessible fixé par « aria-label » à toute largeur, info-bulle par « title ». Libellé visible seulement entre
+                    « sm » et « lg » (identique au nom, donc sans écart entre libellé visible et nom) : icône seule sous « sm » (320 px)
+                    et à partir de « lg », où la place revient au logo (au moins 16 px entre son texte et la navigation, connecté avec
+                    le rôle ADMIN, vérifié par e2e/footer.spec.ts). Icône seule : boîte encadrée de 42 × 42 px. */}
+                <Link href="/" aria-label="Boutique" title="Boutique" className={shopReturnClass}>
                   <BrandIcon name="boutique" className="size-6" />
-                  {/* Comme « Panier » : icône seule sous « sm », libellé masqué mais lu. */}
-                  <span className="sr-only sm:not-sr-only">Boutique</span>
+                  <span aria-hidden className="hidden sm:inline lg:hidden">
+                    Boutique
+                  </span>
                 </Link>
               </>
             }

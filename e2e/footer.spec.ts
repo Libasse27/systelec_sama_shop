@@ -316,9 +316,8 @@ test.describe("navbar : logo FUTANI SHOP à emblème débordant", () => {
     await current?.restore();
   });
 
-  /** Logo qui dépasse sous le navbar : emblème FUTANI SHOP, ou grand logo FUTANI TECH dans la rubrique Services. */
-  const overhangingLogo = (page: Page): Locator =>
-    page.getByRole("banner").locator('img[src*="embleme"], img[src*="futani-tech"].absolute');
+  /** Logo qui dépasse sous le navbar : emblème FUTANI SHOP, ou emblème FUTANI TECH dans la rubrique Services. */
+  const overhangingLogo = (page: Page): Locator => page.getByRole("banner").locator('img[src*="embleme"]');
 
   /** Boîtes (x, y, largeur, hauteur) de l'en-tête et de ses éléments de logo. */
   async function measure(page: Page) {
@@ -601,13 +600,16 @@ test.describe("navbar : logo FUTANI SHOP à emblème débordant", () => {
     await expectSingleLineWithoutOverlap(page, "visiteur, 1024 px, police large");
   });
 
-  /** Boîtes du conteneur du navbar (première div de l'en-tête), du logo, de la navigation principale, de la loupe et du compte. */
-  async function layoutBoxes(page: Page) {
+  /**
+   * Boîtes du conteneur du navbar (première div de l'en-tête), du logo, de la navigation principale, de la loupe et du compte.
+   * « logoName » : nom du lien du logo, FUTANI SHOP par défaut.
+   */
+  async function layoutBoxes(page: Page, logoName = LOGO_NAME) {
     const banner = page.getByRole("banner");
     const box = async (locator: Locator) => (await locator.boundingBox())!;
     return {
       container: await box(banner.locator("xpath=./div")),
-      logo: await box(banner.getByRole("link", { name: LOGO_NAME, exact: true })),
+      logo: await box(banner.getByRole("link", { name: logoName, exact: true })),
       nav: await box(banner.getByRole("navigation", { name: "Navigation principale", exact: true })),
       search: await box(banner.getByRole("button", { name: "Rechercher", exact: true })),
       account: await box(banner.getByRole("navigation", { name: "Compte", exact: true })),
@@ -647,6 +649,36 @@ test.describe("navbar : logo FUTANI SHOP à emblème débordant", () => {
       expect(nav.x + nav.width, "navigation / loupe").toBeLessThanOrEqual(search.x);
       expect(search.x + search.width, "loupe / compte").toBeLessThanOrEqual(account.x + 1);
       expect(account.x + account.width, "compte / bord du conteneur").toBeLessThanOrEqual(container.x + container.width);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
+    });
+  }
+
+  // Espace FUTANI TECH : navigation plus large (quatre entrées) ; le texte du logo, à côté de l'emblème, ne doit pas déborder
+  // de son lien sur la navigation (comparaison faite aussi sur l'image du texte, pas seulement sur la boîte du lien).
+  /** Espace minimal entre le bord droit de l'image du texte du logo FUTANI TECH et le début de la navigation principale. */
+  const MIN_LOGO_NAV_GAP = 16;
+
+  for (const width of [1024, 1280]) {
+    test(`bureau ${width} px, connecté avec le rôle ADMIN, FUTANI TECH : logo, navigation et groupe de droite sans chevauchement`, async ({ page }) => {
+      const TECH_LOGO_NAME = "FUTANI TECH, accueil des services";
+      await page.setViewportSize({ width, height: 800 });
+      const email = uniqueEmail(`e2e-centre-tech-${width}`);
+      await signUp(page, email);
+      await grantRole(email, "ADMIN");
+      await page.goto("/services");
+      const banner = page.getByRole("banner");
+      await expect(banner.getByRole("link", { name: "Administration", exact: true })).toBeVisible();
+      const { container, logo, nav, search, account } = await layoutBoxes(page, TECH_LOGO_NAME);
+      const text = (await banner.getByRole("link", { name: TECH_LOGO_NAME, exact: true }).locator('img[src*="futani-tech-texte"]').boundingBox())!;
+      const bannerBox = (await banner.boundingBox())!;
+      expect(bannerBox.height, "navbar sur une ligne").toBeCloseTo(NAVBAR_HEIGHT, 0);
+      expect(logo.x + logo.width, "logo / navigation").toBeLessThanOrEqual(nav.x);
+      expect(text.x + text.width, "texte du logo / navigation").toBeLessThanOrEqual(nav.x);
+      expect(nav.x - (text.x + text.width), "espace entre le texte du logo et la navigation").toBeGreaterThanOrEqual(MIN_LOGO_NAV_GAP);
+      expect(nav.x + nav.width, "navigation / loupe").toBeLessThanOrEqual(search.x);
+      expect(search.x + search.width, "loupe / compte").toBeLessThanOrEqual(account.x + 1);
+      expect(account.x + account.width, "compte / bord du conteneur").toBeLessThanOrEqual(container.x + container.width);
+      expect(await banner.evaluate((el) => el.scrollWidth - el.clientWidth)).toBeLessThanOrEqual(0);
       expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
     });
   }

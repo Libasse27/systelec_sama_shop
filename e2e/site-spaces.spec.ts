@@ -22,7 +22,10 @@ async function expectTechNavbar(page: Page): Promise<void> {
   await expect(banner(page).getByRole("link", { name: TECH_LOGO, exact: true })).toHaveAttribute("href", "/services");
   await expect(banner(page).getByRole("link", { name: SHOP_LOGO, exact: true })).toHaveCount(0);
   await expect(mainNav(page).locator("summary")).toHaveText("Services");
-  await expect(mainNav(page).getByRole("link", { name: "Demander un devis", exact: true })).toHaveAttribute("href", "/devis/demande");
+  const quote = mainNav(page).getByRole("link", { name: "Demander un devis", exact: true });
+  await expect(quote).toHaveAttribute("href", "/devis/demande");
+  // Libellé visible court à toute largeur ; le nom accessible, complet, le contient.
+  await expect(quote).toHaveText("Devis");
   await expect(mainNav(page).getByRole("link", { name: "Contact", exact: true })).toHaveAttribute("href", "/contact");
   await expect(mainNav(page).getByRole("link", { name: "Boutique", exact: true })).toHaveAttribute("href", "/");
 }
@@ -63,6 +66,22 @@ test.describe("navbar par espace", () => {
     await expectShopNavbar(page);
     expect(await page.evaluate(() => (window as unknown as { __sansRechargement?: boolean }).__sansRechargement)).toBe(true);
   });
+
+  for (const width of [1024, 1280]) {
+    test(`bureau ${width} px : le retour à la boutique de FUTANI TECH est une icône seule, nommée « Boutique », avec info-bulle`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 800 });
+      await page.goto("/services");
+      const boutique = mainNav(page).getByRole("link", { name: "Boutique", exact: true });
+      await expect(boutique).toBeVisible();
+      await expect(boutique).toHaveAttribute("title", "Boutique");
+      // Aucun texte visible : le libellé est masqué (display: none) à partir de « lg ».
+      expect(await boutique.evaluate((el) => (el as HTMLElement).innerText.trim())).toBe("");
+      // Zone cliquable d'au moins 40 × 40 px.
+      const box = (await boutique.boundingBox())!;
+      expect(box.width).toBeGreaterThanOrEqual(40);
+      expect(box.height).toBeGreaterThanOrEqual(40);
+    });
+  }
 
   test("mobile 390 px : la navigation FUTANI TECH tient dans la largeur, sans défilement horizontal", async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 800 });
