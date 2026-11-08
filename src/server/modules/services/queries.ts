@@ -1,5 +1,5 @@
 import "server-only";
-import type { ServicePricingMode } from "@/generated/prisma/client";
+import type { Prisma, ServicePricingMode } from "@/generated/prisma/client";
 import { isValidSlug } from "@/lib/slug";
 import type { Db } from "@/server/db/client";
 
@@ -30,37 +30,37 @@ export interface ServiceDetail extends ServiceSummary {
 
 const summarySelect = { slug: true, name: true, shortDescription: true, pricingMode: true, price: true } as const;
 
+const groupSelect = {
+  slug: true,
+  name: true,
+  description: true,
+  services: { where: { isActive: true }, orderBy: [{ position: "asc" }, { name: "asc" }], select: summarySelect },
+} satisfies Prisma.ServiceCategorySelect;
+
 /** Familles de services actives et leurs prestations actives (page « Services »). */
 export async function listServiceGroups(client: Db): Promise<ServiceGroup[]> {
   const groups = await client.serviceCategory.findMany({
     where: { isActive: true },
     orderBy: [{ position: "asc" }, { name: "asc" }],
-    select: {
-      slug: true,
-      name: true,
-      description: true,
-      services: { where: { isActive: true }, orderBy: [{ position: "asc" }, { name: "asc" }], select: summarySelect },
-    },
+    select: groupSelect,
   });
   return groups.filter((group) => group.services.length > 0);
 }
 
-/** Prestations mises en avant, sinon les premières de chaque famille (accueil). */
-export async function featuredServices(client: Db, limit: number): Promise<ServiceSummary[]> {
-  const where = { isActive: true, category: { isActive: true } };
-  const featured = await client.service.findMany({
-    where: { ...where, isFeatured: true },
-    orderBy: { position: "asc" },
-    take: limit,
-    select: summarySelect,
+/** Familles actives ayant au moins une prestation active, nom et slug seulement (menu du navbar FUTANI TECH). */
+export async function listServiceFamilyLinks(client: Db): Promise<{ slug: string; name: string }[]> {
+  return client.serviceCategory.findMany({
+    where: { isActive: true, services: { some: { isActive: true } } },
+    orderBy: [{ position: "asc" }, { name: "asc" }],
+    select: { slug: true, name: true },
   });
-  if (featured.length > 0) return featured;
-  return client.service.findMany({
-    where: { ...where, position: 0 },
-    orderBy: [{ category: { position: "asc" } }, { name: "asc" }],
-    take: limit,
-    select: summarySelect,
-  });
+}
+
+/** Famille active et ses prestations actives (page de famille) ; null si elle n'est pas présentable au public. */
+export async function getServiceGroup(client: Db, slug: string): Promise<ServiceGroup | null> {
+  if (!isValidSlug(slug)) return null;
+  const group = await client.serviceCategory.findFirst({ where: { slug, isActive: true }, select: groupSelect });
+  return group && group.services.length > 0 ? group : null;
 }
 
 export async function getServiceDetail(client: Db, slug: string): Promise<ServiceDetail | null> {

@@ -56,6 +56,8 @@ RUN apk upgrade --no-cache \
 # Code en lecture seule pour l'utilisateur du service ; seuls les fichiers téléversés et le cache sont modifiables.
 COPY --from=build /app/.next/standalone ./
 COPY --from=build /app/.next/static ./.next/static
+# Le mode standalone ne copie pas public/ (logos, icônes) : sans cette ligne, ces ressources ne sont pas servies.
+COPY --from=build /app/public ./public
 USER nextjs
 EXPOSE 3000
 VOLUME ["/app/storage"]

@@ -36,7 +36,8 @@ fi
 
 echo "Création de la base $TARGET_DB et restauration…"
 $COMPOSE exec -T db psql -U "$DB_USER" -d postgres -v ON_ERROR_STOP=1 -qc "CREATE DATABASE \"$TARGET_DB\""
-$COMPOSE exec -T db pg_restore -U "$DB_USER" -d "$TARGET_DB" --exit-on-error --no-owner < "$SOURCE/base.dump"
+# Sans les droits du dump : le rôle applicatif peut ne pas exister (serveur neuf). app-role.sql les recrée ensuite.
+$COMPOSE exec -T db pg_restore -U "$DB_USER" -d "$TARGET_DB" --exit-on-error --no-owner --no-privileges < "$SOURCE/base.dump"
 
 echo "Restauration des fichiers dans $FILES_DIR…"
 umask 077
@@ -48,4 +49,5 @@ RESTORED="$($COMPOSE exec -T db psql -U "$DB_USER" -d "$TARGET_DB" -tAc 'SELECT 
 [[ "$EXPECTED" == "$RESTORED" ]] || { echo "Migrations : $RESTORED restaurées, $EXPECTED attendues" >&2; exit 1; }
 
 echo "Restauration terminée : base $TARGET_DB ($RESTORED migrations), fichiers dans $FILES_DIR."
+echo "Droits du rôle applicatif non restaurés : lancer scripts/ops/app-role.sql sur cette base avant de l'utiliser (docs/04, section 8)."
 echo "Contrôle conseillé : scripts/ops/verify-restore.sh $LIVE_DB $TARGET_DB (si la base d'origine est disponible)."

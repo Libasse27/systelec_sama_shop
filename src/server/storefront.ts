@@ -4,12 +4,16 @@ import { getServerEnv } from "@/lib/env";
 import { db } from "@/server/db/client";
 import { logger } from "@/server/logger";
 import { loadCategoryIndex } from "@/server/modules/catalog/queries";
+import { listServiceFamilyLinks } from "@/server/modules/services/queries";
 import { settingsDefaults, type SettingValue } from "@/server/modules/settings/schemas";
 import { msUntilNextChange, selectVisible, type VisibleAnnouncement } from "@/server/modules/announcements/visibility";
 import { getSetting } from "@/server/modules/settings/service";
 
 /** Index des catégories visibles, chargé une seule fois par requête. */
 export const getCategoryIndex = cache(() => loadCategoryIndex(db));
+
+/** Familles de services présentables (menu du navbar FUTANI TECH), chargées une seule fois par requête. */
+export const getServiceFamilyLinks = cache(() => listServiceFamilyLinks(db));
 
 /**
  * Coordonnées de l'entreprise, lues une fois par requête. Une valeur invalide en base ne doit

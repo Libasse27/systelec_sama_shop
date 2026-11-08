@@ -5,9 +5,11 @@ import { cache } from "react";
 import { PaymentMethodIcons } from "@/components/brand/payment-method-icons";
 import { Breadcrumbs } from "@/components/layout/breadcrumbs";
 import { JsonLd } from "@/components/seo/json-ld";
+import { primaryActionClass, secondaryActionClass } from "@/components/services/service-action-styles";
 import { BRAND } from "@/lib/brand";
 import { servicePriceLabel } from "@/lib/labels";
 import { ACCEPTED_PAYMENT_METHODS } from "@/lib/payment-methods";
+import { serviceFamilyPath, serviceQuotePath } from "@/lib/service-paths";
 import { db } from "@/server/db/client";
 import { toParagraphs } from "@/server/modules/content/queries";
 import { getServiceDetail } from "@/server/modules/services/queries";
@@ -29,8 +31,6 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   };
 }
 
-const actionClass = "inline-flex justify-center rounded-lg px-4 py-2.5 text-sm font-semibold";
-
 export default async function ServicePage({ params }: Props) {
   const service = await loadService((await params).slug);
   if (!service) notFound();
@@ -44,16 +44,18 @@ export default async function ServicePage({ params }: Props) {
         ]}
       />
       <header className="flex flex-col gap-2">
-        <p className="text-sm font-medium text-brand-blue">{service.category.name}</p>
+        <Link href={serviceFamilyPath(service.category.slug)} className="inline-flex min-h-11 w-fit items-center text-sm font-medium text-brand-blue hover:underline">
+          {service.category.name}
+        </Link>
         <h1 className="text-2xl font-bold">{service.name}</h1>
         <p className="text-lg font-semibold text-brand-navy">{servicePriceLabel(service.pricingMode, service.price)}</p>
       </header>
 
       <div className="flex flex-col gap-3 sm:flex-row">
-        <Link href={`/devis/demande?service=${service.slug}`} className={`${actionClass} bg-brand-blue text-white hover:bg-brand-blue-dark`}>
+        <Link href={serviceQuotePath(service.slug)} className={primaryActionClass}>
           Demander un devis ou une intervention
         </Link>
-        <Link href="/contact" className={`${actionClass} border border-line bg-surface`}>
+        <Link href="/contact" className={secondaryActionClass}>
           Nous contacter
         </Link>
       </div>

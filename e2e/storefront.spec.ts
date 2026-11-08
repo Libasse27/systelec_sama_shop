@@ -66,7 +66,8 @@ test.describe("boutique publique", () => {
   test("une prestation mène à la demande de devis du service, et au contact", async ({ page }) => {
     await page.goto("/services");
     await expect(page.getByRole("heading", { name: "Vidéosurveillance", level: 2 })).toBeVisible();
-    await page.getByRole("link", { name: /Installation de caméras/ }).click();
+    await page.getByRole("link", { name: /^Vidéosurveillance/ }).click();
+    await page.getByRole("link", { name: /^Installation de caméras/ }).click();
     await expect(page).toHaveURL(/\/services\/installation-de-cameras$/);
     await expect(page.locator("header").getByText("Sur devis", { exact: true })).toBeVisible();
     await expect(page.getByRole("link", { name: "Nous contacter" })).toBeVisible();
@@ -87,7 +88,7 @@ test.describe("boutique publique", () => {
 });
 
 test.describe("affichage responsive (§20 n° 27)", () => {
-  for (const path of ["/", "/categories/informatique", LAPTOP, "/recherche?q=routeur", "/services", "/contact", "/connexion"]) {
+  for (const path of ["/", "/categories/informatique", LAPTOP, "/recherche?q=routeur", "/services", "/services/categorie/maintenance-informatique", "/contact", "/connexion"]) {
     test(`${path} ne déborde pas horizontalement`, async ({ page }) => {
       await page.goto(path);
       const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);

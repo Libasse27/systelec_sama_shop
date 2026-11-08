@@ -19,6 +19,16 @@ const HEADER_LOGO_PARTS = {
   text: { src: "/logos/futani-shop-texte.png", width: 177, height: 75 },
 } as const;
 
+/**
+ * Éléments du logo FUTANI TECH découpés de la même façon dans futani-tech.png : l'emblème (F et circuit, lignes 0 à 103)
+ * et le texte « FUTANI TECH » (lignes 104 à 158), séparés là où ne restent que des halos presque transparents.
+ * Dimensions intrinsèques des fichiers.
+ */
+const TECH_HEADER_LOGO_PARTS = {
+  emblem: { src: "/logos/futani-tech-embleme.png", width: 133, height: 108 },
+  text: { src: "/logos/futani-tech-texte.png", width: 146, height: 59 },
+} as const;
+
 export type BrandLogoVariant = keyof typeof BRAND_LOGOS;
 
 interface BrandLogoProps {
@@ -83,13 +93,15 @@ export function HeaderLogo({ shopName, logoUrl }: Omit<LogoProps, "priority">) {
       <span className="flex min-h-[50px] items-center lg:hidden">
         <BrandLogo variant="shop" bare className="h-12" />
       </span>
-      {/* Hauteur minimale 50 px : le navbar garde ses 74 px (2 × 12 px de marge + 50 px). */}
-      <span className="hidden min-h-[50px] items-center gap-0.5 lg:-ml-3 lg:flex xl:ml-0">
+      {/* Zone cliquable sur toute la hauteur du navbar (74 px) ; « -my-3 » la ramène à 50 px dans le flux : le navbar
+          garde ses 74 px (2 × 12 px de marge + 50 px). */}
+      <span className="-my-3 hidden min-h-[74px] items-center gap-0.5 lg:-ml-3 lg:flex xl:ml-0">
         {/* Réserve dans le flux la largeur de l'emblème (96 px × 179/149). */}
         <span aria-hidden className="block h-1 w-[116px] shrink-0" />
         {/* Sans « left » : l'emblème reste à sa position naturelle, au début du lien. z-10 : au-dessus du contenu
-            de la page, sous le menu Catalogue (z-20) et la recherche déployée (z-30). */}
-        <Image src={emblem.src} alt="" width={emblem.width} height={emblem.height} className="absolute top-1.5 z-10 block h-24 w-auto" />
+            de la page, sous le menu Catalogue (z-20) et la recherche déployée (z-30). « pointer-events-none » : sous le
+            navbar, les clics atteignent le contenu ; dans le navbar, ils atteignent la zone cliquable du lien, dessous. */}
+        <Image src={emblem.src} alt="" width={emblem.width} height={emblem.height} className="pointer-events-none absolute top-1.5 z-10 block h-24 w-auto" />
         {/* Texte centré dans la ligne (centre à 37 px) puis descendu : bas à 70 px, soit 32 px de haut (lg, décalage
             17 px) ou 48 px de haut (xl, décalage 9 px). */}
         <Image
@@ -99,6 +111,37 @@ export function HeaderLogo({ shopName, logoUrl }: Omit<LogoProps, "priority">) {
           height={text.height}
           className="relative top-[17px] block h-8 w-auto xl:top-[9px] xl:h-12"
         />
+      </span>
+    </>
+  );
+}
+
+/**
+ * Logo du navbar dans l'espace FUTANI TECH, même traitement que HeaderLogo (sans logo téléversé : celui-ci est propre
+ * à la boutique). Sous « lg », le logo complet ; à partir de « lg », l'emblème (96 px de haut, haut à 6 px du haut du
+ * navbar, donc 28 px sous le navbar ; place réservée par « lg:mb-5 » sur l'en-tête) et le texte « FUTANI TECH » à côté,
+ * bas à 70 px du haut du navbar de 74 px. Les images sont décoratives : le lien parent porte le nom accessible.
+ * Navigation FUTANI TECH plus large que celle de la boutique : le texte garde sa taille « lg » (32 px de haut) même à
+ * partir de « xl », et la marge négative sous « xl » est celle de HeaderLogo ; ainsi, connecté avec le rôle ADMIN,
+ * le navbar tient sur une ligne à 1024 et 1280 px (vérifié par e2e/footer.spec.ts).
+ * Prérequis et absence de « priority » : voir HeaderLogo.
+ */
+export function TechHeaderLogo() {
+  const { emblem, text } = TECH_HEADER_LOGO_PARTS;
+  return (
+    <>
+      <span className="flex min-h-[50px] items-center lg:hidden">
+        <BrandLogo variant="tech" bare className="h-12" />
+      </span>
+      {/* Zone cliquable sur toute la hauteur du navbar (74 px), ramenée à 50 px dans le flux, comme dans HeaderLogo. */}
+      <span className="-my-3 hidden min-h-[74px] items-center gap-0.5 lg:-ml-3 lg:flex xl:ml-0">
+        {/* Réserve dans le flux la largeur de l'emblème (96 px × 133/108). */}
+        <span aria-hidden className="block h-1 w-[119px] shrink-0" />
+        {/* Mêmes règles d'empilement et de clic que l'emblème de HeaderLogo. */}
+        <Image src={emblem.src} alt="" width={emblem.width} height={emblem.height} className="pointer-events-none absolute top-1.5 z-10 block h-24 w-auto" />
+        {/* Texte centré dans la ligne (centre à 37 px) puis descendu de 17 px : bas à 70 px, 32 px de haut à toute largeur
+            (pas d'agrandissement en « xl », contrairement à HeaderLogo : voir plus haut). */}
+        <Image src={text.src} alt="" width={text.width} height={text.height} className="relative top-[17px] block h-8 w-auto" />
       </span>
     </>
   );

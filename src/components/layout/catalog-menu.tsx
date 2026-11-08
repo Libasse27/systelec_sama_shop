@@ -7,23 +7,28 @@ import { useEffect, useRef, useState, type MouseEvent, type PointerEvent } from 
 /** Délai avant fermeture quand la souris quitte le menu : laisse franchir l'espace entre « Catalogue » et la liste. */
 const CLOSE_DELAY_MS = 150;
 
-export interface CatalogFamily {
-  id: string;
-  slug: string;
+/** Entrée du menu : adresse calculée côté serveur (seules des valeurs sérialisables traversent la frontière). */
+export interface CatalogMenuItem {
+  key: string;
+  href: string;
   name: string;
 }
 
 interface CatalogMenuViewProps {
-  families: readonly CatalogFamily[];
+  /** Libellé du bouton (« Catalogue » sur FUTANI SHOP, « Services » sur FUTANI TECH). */
+  label: string;
+  items: readonly CatalogMenuItem[];
+  /** Dernier lien du menu, mis en valeur (« Tous les produits », « Tous les services »). */
+  allLink: { href: string; label: string };
   /** Classes du lien de navigation, fournies par l'en-tête pour ne pas dupliquer la constante. */
   linkClass: string;
 }
 
 /**
- * Menu des familles de produits : <details> natif (utilisable sans JavaScript).
+ * Menu des familles (produits ou services) : <details> natif (utilisable sans JavaScript).
  * Avec JavaScript, il s'ouvre aussi au survol de la souris ; le clavier et le tactile gardent le comportement natif.
  */
-export function CatalogMenuView({ families, linkClass }: CatalogMenuViewProps) {
+export function CatalogMenuView({ label, items, allLink, linkClass }: CatalogMenuViewProps) {
   const [open, setOpen] = useState(false);
   const detailsRef = useRef<HTMLDetailsElement>(null);
   const summaryRef = useRef<HTMLElement>(null);
@@ -109,20 +114,20 @@ export function CatalogMenuView({ families, linkClass }: CatalogMenuViewProps) {
         }}
         onClick={onSummaryClick}
       >
-        Catalogue
+        {label}
         <ChevronDown aria-hidden className="size-4 transition group-open:rotate-180" />
       </summary>
       <ul className="absolute left-0 z-20 mt-1 w-72 max-w-[calc(100vw-2rem)] rounded-xl border border-line bg-surface p-2 text-ink shadow-lg">
-        {families.map((family) => (
-          <li key={family.id}>
-            <Link href={`/categories/${family.slug}`} onClick={close} className="block rounded-lg px-3 py-2 text-sm hover:bg-surface-muted">
-              {family.name}
+        {items.map((item) => (
+          <li key={item.key}>
+            <Link href={item.href} onClick={close} className="block rounded-lg px-3 py-2 text-sm hover:bg-surface-muted">
+              {item.name}
             </Link>
           </li>
         ))}
         <li>
-          <Link href="/recherche" onClick={close} className="block rounded-lg px-3 py-2 text-sm font-medium text-brand-blue hover:bg-surface-muted">
-            Tous les produits
+          <Link href={allLink.href} onClick={close} className="block rounded-lg px-3 py-2 text-sm font-medium text-brand-blue hover:bg-surface-muted">
+            {allLink.label}
           </Link>
         </li>
       </ul>
