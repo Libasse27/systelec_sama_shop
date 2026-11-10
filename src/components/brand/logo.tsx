@@ -121,9 +121,9 @@ export function HeaderLogo({ shopName, logoUrl }: Omit<LogoProps, "priority">) {
  * à la boutique). Sous « lg », le logo complet ; à partir de « lg », l'emblème (96 px de haut, haut à 6 px du haut du
  * navbar, donc 28 px sous le navbar ; place réservée par « lg:mb-5 » sur l'en-tête) et le texte « FUTANI TECH » à côté,
  * bas à 70 px du haut du navbar de 74 px. Les images sont décoratives : le lien parent porte le nom accessible.
- * Navigation FUTANI TECH plus large que celle de la boutique : le texte garde sa taille « lg » (32 px de haut) même à
- * partir de « xl », et la marge négative sous « xl » est celle de HeaderLogo ; ainsi, connecté avec le rôle ADMIN,
- * le navbar tient sur une ligne à 1024 et 1280 px (vérifié par e2e/footer.spec.ts).
+ * Texte à la taille de celui de HeaderLogo (32 px de haut sous « xl », 48 px à partir de « xl ») et même marge
+ * négative sous « xl » ; connecté avec le rôle ADMIN, le navbar tient sur une ligne à 1024 et 1280 px, à 16 px au
+ * moins de la navigation (vérifié par e2e/footer.spec.ts).
  * Prérequis et absence de « priority » : voir HeaderLogo.
  */
 export function TechHeaderLogo() {
@@ -139,9 +139,14 @@ export function TechHeaderLogo() {
         <span aria-hidden className="block h-1 w-[119px] shrink-0" />
         {/* Mêmes règles d'empilement et de clic que l'emblème de HeaderLogo. */}
         <Image src={emblem.src} alt="" width={emblem.width} height={emblem.height} className="pointer-events-none absolute top-1.5 z-10 block h-24 w-auto" />
-        {/* Texte centré dans la ligne (centre à 37 px) puis descendu de 17 px : bas à 70 px, 32 px de haut à toute largeur
-            (pas d'agrandissement en « xl », contrairement à HeaderLogo : voir plus haut). */}
-        <Image src={text.src} alt="" width={text.width} height={text.height} className="relative top-[17px] block h-8 w-auto" />
+        {/* Mêmes tailles et décalages que le texte de HeaderLogo : bas à 70 px, 32 px de haut (lg) ou 48 px (xl). */}
+        <Image
+          src={text.src}
+          alt=""
+          width={text.width}
+          height={text.height}
+          className="relative top-[17px] block h-8 w-auto xl:top-[9px] xl:h-12"
+        />
       </span>
     </>
   );
