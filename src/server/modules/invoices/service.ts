@@ -8,7 +8,7 @@ import type { Db } from "@/server/db/client";
 import { AppError } from "@/server/errors";
 import { lockOrderRow } from "@/server/modules/orders/lock";
 import type { Contact, ShippingAddress } from "@/server/modules/orders/schemas";
-import { canViewDocument, companyHeader, ownershipOf, type CompanyHeader, type DocumentViewer } from "@/server/modules/payments/queries";
+import { canViewDocument, frozenCompanyHeader, issuedCompanyHeader, ownershipOf, type CompanyHeader, type DocumentViewer } from "@/server/modules/payments/queries";
 import { lockInterventionRow } from "@/server/modules/payments/targets";
 import { nextBusinessNumber } from "@/server/modules/sequences/service";
 import { getSetting } from "@/server/modules/settings/service";
@@ -39,6 +39,7 @@ async function createInvoice(
   total: number,
 ): Promise<{ number: string }> {
   const number = await nextBusinessNumber(tx, "invoice", businessYear());
+  const tax = await getSetting("tax", tx);
   const invoice = await tx.invoice.create({
     data: {
       number,
@@ -46,6 +47,9 @@ async function createInvoice(
       lines: lines as unknown as Prisma.InputJsonValue,
       customer: customer as unknown as Prisma.InputJsonValue,
       total,
+      // En-tête société et TVA figés : un changement ultérieur des paramètres ne modifie pas la facture.
+      company: await frozenCompanyHeader(tx),
+      vatRate: tax.vatDetailEnabled ? tax.vatRate : null,
       issuedById: actor.id,
     },
     select: { id: true },
@@ -57,7 +61,8 @@ async function createInvoice(
 /**
  * Émet la facture d'une intervention terminée (interventions.manage) : lignes du devis
  * accepté, ou une ligne unique au montant convenu. Lignes et client sont figés ; une seule
- * facture par intervention ; la facture n'est jamais modifiée (ajout seul en base).
+ * facture par intervention ; la facture n'est jamais modifiée (ajout seul en base). En-tête société
+ * et taux de TVA sont figés aussi.
  */
 export async function issueInvoice(client: PrismaClient, actor: Actor, interventionId: string): Promise<{ number: string }> {
   await assertPermission(client, actor, "interventions.manage");
@@ -164,6 +169,8 @@ const INVOICE_OWNER_SELECT = {
   lines: true,
   customer: true,
   total: true,
+  company: true,
+  vatRate: true,
   order: { select: { id: true, number: true, createdAt: true, amountPaid: true, refundedAmount: true, customer: { select: { userId: true } } } },
   intervention: {
     select: {
@@ -177,6 +184,16 @@ const INVOICE_OWNER_SELECT = {
 } satisfies Prisma.InvoiceSelect;
 
 /**
+ * Taux de TVA d'une facture : celui figé à son émission (null : détail désactivé). Facture émise
+ * avant ce figeage (en-tête société null) : réglage TVA actuel, comme avant.
+ */
+async function issuedVatRate(client: Db, invoice: { company: Prisma.JsonValue | null; vatRate: number | null }): Promise<number | null> {
+  if (invoice.company !== null) return invoice.vatRate;
+  const tax = await getSetting("tax", client);
+  return tax.vatDetailEnabled ? tax.vatRate : null;
+}
+
+/**
  * Facture, pour le personnel autorisé, le titulaire du compte, ou l'invité muni du lien de sa
  * commande (ou de son devis / sa demande pour une intervention). Sinon null (réponse 404).
  */
@@ -186,15 +203,15 @@ export async function getInvoice(client: Db, viewer: DocumentViewer, number: str
   const { order, intervention } = invoice;
   const staff = order ? (["orders.read", "payments.read"] as const) : (["interventions.read", "interventions.manage", "payments.read"] as const);
   if (!canViewDocument(viewer, ownershipOf(order, intervention), staff)) return null;
-  const tax = await getSetting("tax", client);
+  const vatRate = await issuedVatRate(client, invoice);
   const base = {
     number: invoice.number,
     issuedAt: invoice.issuedAt,
     lines: invoice.lines as unknown as InvoiceLine[],
     total: invoice.total,
-    vat: tax.vatDetailEnabled ? { rate: tax.vatRate, amount: includedVat(invoice.total, tax.vatRate) } : null,
+    vat: vatRate === null ? null : { rate: vatRate, amount: includedVat(invoice.total, vatRate) },
     customer: invoice.customer as unknown as InvoiceCustomer,
-    company: await companyHeader(client),
+    company: await issuedCompanyHeader(client, invoice.company),
   };
   if (order) {
     return { ...base, document: { label: "Commande", number: order.number }, quoteNumber: null, amountPaid: order.amountPaid + order.refundedAmount, refunded: order.refundedAmount };

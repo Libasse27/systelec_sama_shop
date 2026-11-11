@@ -3,8 +3,11 @@ import { beforeEach, describe, expect, it } from "vitest";
 import type { Actor } from "@/server/authz/service";
 import { syncRolesAndPermissions } from "@/server/authz/sync";
 import { db } from "@/server/db/client";
+import { Prisma } from "@/generated/prisma/client";
+import { includedVat } from "@/lib/money";
 import { orderAccessToken } from "@/server/modules/orders/access-token";
 import { createReturn, decideReturn, refundReturn } from "@/server/modules/returns/service";
+import { settingsDefaults } from "@/server/modules/settings/schemas";
 import { updateSetting } from "@/server/modules/settings/service";
 import { resetDatabase } from "../../../../tests/setup/db";
 import { actorWith } from "../../../../tests/support/actors";
@@ -69,6 +72,47 @@ describe("factures de commandes (PostgreSQL)", () => {
     expect((await renderInvoicePdf(invoice!)).subarray(0, 5).toString()).toBe("%PDF-");
   });
 
+  it("figée : un changement ultérieur de la raison sociale, du NINEA, du RCCM ou de la TVA ne modifie pas la facture", async () => {
+    const company = { ...settingsDefaults.company, companyName: "FUTANI GROUP", ninea: "123456789", rccm: "SN-DKR-2026-A-1", address: "Dakar" };
+    await updateSetting("company", company, null);
+    await updateSetting("tax", { vatDetailEnabled: true, vatRate: 18 }, null);
+    const order = await closedPickupOrder(fixtures, manager, cashier);
+    const { number } = await issueOrderInvoice(db, manager, order.id);
+
+    await updateSetting("company", { ...company, companyName: "AUTRE RAISON", ninea: "999", rccm: null, address: "Thiès" }, null);
+    await updateSetting("tax", { vatDetailEnabled: false, vatRate: 20 }, null);
+    const invoice = await getInvoice(db, { user: manager }, number);
+    expect(invoice?.company).toMatchObject({ name: "FUTANI GROUP", ninea: "123456789", rccm: "SN-DKR-2026-A-1", address: "Dakar" });
+    expect(invoice?.vat).toEqual({ rate: 18, amount: 7_627 });
+
+    // Détail TVA désactivé à l'émission : aucune TVA, même s'il est réactivé ensuite.
+    const other = await closedPickupOrder(fixtures, manager, cashier);
+    const { number: withoutVat } = await issueOrderInvoice(db, manager, other.id);
+    await updateSetting("tax", { vatDetailEnabled: true, vatRate: 18 }, null);
+    expect((await getInvoice(db, { user: manager }, withoutVat))?.vat).toBeNull();
+    expect((await getInvoice(db, { user: manager }, withoutVat))?.company.name).toBe("AUTRE RAISON");
+  });
+
+  it("facture émise avant le figeage (en-tête null) : en-tête et TVA relus dans les paramètres actuels", async () => {
+    await updateSetting("company", { ...settingsDefaults.company, companyName: "RAISON ACTUELLE" }, null);
+    await updateSetting("tax", { vatDetailEnabled: true, vatRate: 18 }, null);
+    const order = await closedPickupOrder(fixtures, manager, cashier);
+    const legacy = { number: "FAC-ANCIENNE", orderId: order.id, lines: [], customer: { name: "Client", phone: "770000000", email: null, address: "" }, total: order.total, issuedById: manager.id };
+    const rollback = new Error("rollback");
+    // Ligne antérieure à la migration, recréée dans une transaction annulée : la contrainte n'y est pas encore.
+    await expect(
+      db.$transaction(async (tx) => {
+        await tx.$executeRawUnsafe('ALTER TABLE "invoices" DROP CONSTRAINT "invoices_company_check"');
+        await tx.invoice.create({ data: legacy });
+        const invoice = await getInvoice(tx, { user: manager }, legacy.number);
+        expect(invoice?.company.name).toBe("RAISON ACTUELLE");
+        expect(invoice?.vat).toEqual({ rate: 18, amount: includedVat(order.total, 18) });
+        throw rollback;
+      }),
+    ).rejects.toBe(rollback);
+    expect(await db.invoice.count({ where: { number: legacy.number } })).toBe(0);
+  });
+
   it("accès : personnel autorisé, titulaire du compte, invité muni du jeton de SA commande ; sinon rien", async () => {
     const userId = randomUUID();
     await db.user.create({ data: { id: userId, name: "Client", email: `${userId}@example.sn` } });
@@ -94,8 +138,12 @@ describe("factures de commandes (PostgreSQL)", () => {
     const cancelled = await confirmedOrder(fixtures, manager);
     await db.order.update({ where: { id: cancelled.id }, data: { status: "CANCELLED" } });
     await expect(issueOrderInvoice(db, manager, cancelled.id)).rejects.toThrow(/annulée/);
-    const base = { lines: [], customer: {}, total: 0, issuedById: manager.id };
+    const base = { lines: [], customer: {}, total: 0, issuedById: manager.id, company: { name: "FUTANI GROUP" } };
     await expect(db.invoice.create({ data: { ...base, number: "FAC-T-1", orderId: cancelled.id } })).rejects.toThrow(/doit être soldée/);
     await expect(db.invoice.create({ data: { ...base, number: "FAC-T-2" } })).rejects.toThrow(/invoices_target_check/);
+    const settled = await closedPickupOrder(fixtures, manager, cashier);
+    await expect(db.invoice.create({ data: { ...base, number: "FAC-T-3", orderId: settled.id, company: undefined } })).rejects.toThrow(/invoices_company_check/);
+    await expect(db.invoice.create({ data: { ...base, number: "FAC-T-5", orderId: settled.id, company: Prisma.JsonNull } })).rejects.toThrow(/invoices_company_check/);
+    await expect(db.invoice.create({ data: { ...base, number: "FAC-T-4", orderId: settled.id, vatRate: 101 } })).rejects.toThrow(/invoices_vat_rate_check/);
   });
 });

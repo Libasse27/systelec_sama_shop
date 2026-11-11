@@ -19,6 +19,8 @@ import { recordOrderPayment, voidPayment } from "./service";
 
 const TOTAL = 50_000; // 2 × 25 000, retrait sans frais
 const contact = { name: "Awa Diop", phone: "77 123 45 67", email: "awa@example.sn" };
+/** En-tête figé minimal pour les écritures insérées directement en base. */
+const FROZEN = { name: "FUTANI GROUP" };
 
 let pickupPointId: string;
 let manager: Actor;
@@ -363,7 +365,7 @@ describe("encaissements en espèces (§20 n° 15, 16 et 26, PostgreSQL)", () => 
 
     it("la base refuse une ligne mobile sans référence et des espèces avec référence", async () => {
       const { id } = await order();
-      const base = { orderId: id, amount: 1000, balanceAfter: 0, recordedById: cashier.id };
+      const base = { orderId: id, amount: 1000, balanceAfter: 0, recordedById: cashier.id, company: FROZEN };
       await expect(db.payment.create({ data: { ...base, receiptNumber: "REC-RAW-1", method: "WAVE" } })).rejects.toThrow(/payments_transaction_reference_check/);
       await expect(db.payment.create({ data: { ...base, receiptNumber: "REC-RAW-2", method: "CASH", transactionReference: REF } })).rejects.toThrow(/payments_transaction_reference_check/);
     });
@@ -375,19 +377,29 @@ describe("encaissements en espèces (§20 n° 15, 16 et 26, PostgreSQL)", () => 
       const { id: paymentId } = await pay(cashier, id, TOTAL);
       await expect(db.payment.update({ where: { id: paymentId }, data: { amount: 1 } })).rejects.toThrow();
       await expect(db.payment.delete({ where: { id: paymentId } })).rejects.toThrow();
-      const reversal = { receiptNumber: "REC-TEST-1", orderId: id, balanceAfter: 0, recordedById: cashier.id, reversesPaymentId: paymentId, reason: "Test" };
+      const reversal = { receiptNumber: "REC-TEST-1", orderId: id, balanceAfter: 0, recordedById: cashier.id, reversesPaymentId: paymentId, reason: "Test", company: FROZEN };
       await expect(db.payment.create({ data: { ...reversal, amount: -1 } })).rejects.toThrow(/incohérente/);
       await expect(db.payment.create({ data: { ...reversal, amount: -TOTAL, reason: " " } })).rejects.toThrow();
-      await expect(db.payment.create({ data: { receiptNumber: "REC-TEST-2", orderId: id, amount: -5, balanceAfter: 0, recordedById: cashier.id } })).rejects.toThrow();
+      await expect(db.payment.create({ data: { receiptNumber: "REC-TEST-2", orderId: id, amount: -5, balanceAfter: 0, recordedById: cashier.id, company: FROZEN } })).rejects.toThrow();
       await expect(db.order.update({ where: { id }, data: { amountPaid: TOTAL + 1 } })).rejects.toThrow();
       await expect(db.order.update({ where: { id }, data: { amountPaid: -1 } })).rejects.toThrow();
+    });
+
+    it("tout nouveau reçu porte son en-tête société figé", async () => {
+      const { id } = await order();
+      await expect(
+        db.payment.create({ data: { receiptNumber: "REC-RAW-3", orderId: id, amount: 1000, balanceAfter: 0, recordedById: cashier.id } }),
+      ).rejects.toThrow(/payments_company_check/);
+      await expect(
+        db.payment.create({ data: { receiptNumber: "REC-RAW-4", orderId: id, amount: 1000, balanceAfter: 0, recordedById: cashier.id, company: [] } }),
+      ).rejects.toThrow(/payments_company_check/);
     });
 
     it("le montant encaissé d'une commande égale toujours la somme de ses écritures (contrôle différé)", async () => {
       const { id } = await order();
       await expect(db.order.update({ where: { id }, data: { amountPaid: 10_000 } })).rejects.toThrow(/différents des écritures/);
       await expect(
-        db.payment.create({ data: { receiptNumber: "REC-TEST-3", orderId: id, amount: 10_000, balanceAfter: 40_000, recordedById: cashier.id } }),
+        db.payment.create({ data: { receiptNumber: "REC-TEST-3", orderId: id, amount: 10_000, balanceAfter: 40_000, recordedById: cashier.id, company: FROZEN } }),
       ).rejects.toThrow(/différents des écritures/);
       expect(await orderState(id)).toMatchObject({ amountPaid: 0 });
       expect(await db.payment.count()).toBe(0);
@@ -440,6 +452,19 @@ describe("encaissements en espèces (§20 n° 15, 16 et 26, PostgreSQL)", () => 
       expect(await getReceipt(db, { user: null }, guestReceipt)).toBeNull();
       // La note interne n'apparaît jamais dans le reçu.
       expect(JSON.stringify(await getReceipt(db, { user: cashier }, guestReceipt))).not.toContain("Billets");
+    });
+
+    it("reçus figés : un changement d'identité de la société ne modifie pas un reçu déjà émis", async () => {
+      const company = { ...settingsDefaults.company, companyName: "FUTANI GROUP", ninea: "123456789", rccm: "SN-DKR-2026-A-1", address: "Dakar" };
+      await updateSetting("company", company, null);
+      const { id } = await order();
+      const { id: paymentId, receiptNumber } = await pay(cashier, id, TOTAL);
+      const before = { name: "FUTANI GROUP", ninea: "123456789", rccm: "SN-DKR-2026-A-1", address: "Dakar" };
+
+      await updateSetting("company", { ...company, companyName: "AUTRE RAISON", ninea: "999", rccm: null, address: "Thiès" }, null);
+      const { receiptNumber: voidNumber } = await voidPayment(db, cashier, paymentId, { reason: "Erreur de saisie" });
+      expect((await getReceipt(db, { user: cashier }, receiptNumber))?.company).toMatchObject(before);
+      expect((await getReceipt(db, { user: cashier }, voidNumber))?.company).toMatchObject({ name: "AUTRE RAISON", ninea: "999", rccm: null, address: "Thiès" });
     });
 
     it("le reçu d'annulation cite le reçu annulé et son motif ; le reçu d'origine mentionne l'annulation", async () => {

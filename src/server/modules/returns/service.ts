@@ -11,6 +11,7 @@ import { lockStock } from "@/server/modules/inventory/reservations";
 import { lockOrderRow } from "@/server/modules/orders/lock";
 import type { Contact } from "@/server/modules/orders/schemas";
 import { orderPaymentStatus } from "@/server/modules/payments/balance";
+import { frozenCompanyHeader } from "@/server/modules/payments/queries";
 import { nextBusinessNumber } from "@/server/modules/sequences/service";
 import { dispatchOrderNotifications, queueOrderNotifications } from "@/server/notifications/order-notifications";
 import { dispatchNotifications, queueNotifications } from "@/server/notifications/queue";
@@ -544,6 +545,7 @@ export async function refundReturn(client: PrismaClient, actor: Actor, returnId:
           returnId,
           reason,
           note,
+          company: await frozenCompanyHeader(tx),
         },
       });
       await tx.order.update({ where: { id: orderId }, data: { amountPaid: order.amountPaid - amount, refundedAmount: order.refundedAmount + amount } });

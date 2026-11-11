@@ -700,6 +700,9 @@ model Payment {
   reason               String?
   /// Note interne, jamais imprimée ni montrée au client.
   note                 String?
+  /// En-tête société du reçu FIGÉ à l'écriture. Obligatoire depuis le 2026-11-11 (contrainte CHECK) ;
+  /// null seulement avant : relu dans les paramètres.
+  company              Json?
   createdAt            DateTime      @default(now()) @db.Timestamptz(3)
 
   @@index([orderId, createdAt])
@@ -993,6 +996,11 @@ model Invoice {
   lines          Json
   customer       Json
   total          Int
+  /// En-tête société (raison sociale, adresse, NINEA, RCCM…) FIGÉ à l'émission. Obligatoire pour toute
+  /// facture émise depuis le 2026-11-11 (contrainte CHECK) ; null seulement avant : relu dans les paramètres.
+  company        Json?
+  /// Taux de TVA FIGÉ à l'émission si son détail était activé (D6), sinon null.
+  vatRate        Int?
   issuedById     String
 
   @@map("invoices")

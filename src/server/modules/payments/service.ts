@@ -7,6 +7,7 @@ import { recordAudit } from "@/server/audit/audit";
 import { assertPermission, type Actor } from "@/server/authz/service";
 import { isUniqueViolation } from "@/server/db/errors";
 import { AppError } from "@/server/errors";
+import { frozenCompanyHeader } from "@/server/modules/payments/queries";
 import { nextBusinessNumber } from "@/server/modules/sequences/service";
 import { getSetting } from "@/server/modules/settings/service";
 import { dispatchNotifications } from "@/server/notifications/queue";
@@ -101,7 +102,7 @@ export async function recordPayment(client: PrismaClient, actor: Actor, target: 
       const receiptNumber = await nextBusinessNumber(tx, "receipt", businessYear());
       const balanceAfter = locked.total - locked.amountPaid - amount;
       const payment = await tx.payment.create({
-        data: { receiptNumber, ...targetLink(target), amount, method, transactionReference, balanceAfter, recordedById: actor.id, idempotencyKey, note },
+        data: { receiptNumber, ...targetLink(target), amount, method, transactionReference, balanceAfter, recordedById: actor.id, idempotencyKey, note, company: await frozenCompanyHeader(tx) },
         select: { id: true },
       });
       const paymentStatus = await locked.apply(amount, actor.id, `Encaissement ${receiptNumber} : ${formatFcfa(amount)} ${paymentMethodPhrase(method)}`);
@@ -170,6 +171,7 @@ export async function voidPayment(client: PrismaClient, actor: Actor, paymentId:
           recordedById: actor.id,
           reversesPaymentId: paymentId,
           reason,
+          company: await frozenCompanyHeader(tx),
         },
         select: { id: true },
       });

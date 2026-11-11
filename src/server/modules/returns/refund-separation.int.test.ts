@@ -97,7 +97,7 @@ describe("décision 1 : séparation entre décision et remboursement (PostgreSQL
       const bypass = (refundExceptionNote: string | null) =>
         db.$transaction(async (tx) => {
           await tx.payment.create({
-            data: { receiptNumber: `R-TEST-${randomUUID()}`, orderId, amount: -25_000, balanceAfter: 0, recordedById: admin.id, idempotencyKey: randomUUID(), returnId, reason: "Contournement" },
+            data: { receiptNumber: `R-TEST-${randomUUID()}`, orderId, amount: -25_000, balanceAfter: 0, recordedById: admin.id, idempotencyKey: randomUUID(), returnId, reason: "Contournement", company: { name: "FUTANI GROUP" } },
           });
           // Montants de la commande tenus cohérents avec les écritures (contrôle différé en base).
           await tx.order.update({ where: { id: orderId }, data: { amountPaid: { decrement: 25_000 }, refundedAmount: { increment: 25_000 } } });
