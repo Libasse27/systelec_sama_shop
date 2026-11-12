@@ -12,8 +12,10 @@ import {
   signIn,
   signOut,
   signUpCustomer,
+  startSocialSignIn,
   type RequestContext,
 } from "@/server/auth/service";
+import { activeSocialProviders } from "@/server/auth/active-providers";
 import { AppError, ValidationError } from "@/server/errors";
 import { logger } from "@/server/logger";
 import { mergeCartAfterSignIn } from "@/server/modules/cart/session";
@@ -60,6 +62,18 @@ export async function signInAction(_state: FormState, formData: FormData): Promi
     const { kind, userId } = await signIn(getAuth(), fields(formData, ["email", "password"]), await requestContext());
     await mergeCartAfterSignIn(userId);
     destination = safeRedirectPath(formData.get("suivant"), kind === "STAFF" ? "/admin" : "/compte");
+  } catch (error) {
+    return toFormState(error);
+  }
+  redirect(destination);
+}
+
+/** « Continuer avec … » : redirige vers la page d'autorisation du fournisseur (clients uniquement). */
+export async function socialSignInAction(_state: FormState, formData: FormData): Promise<FormState> {
+  let destination: string;
+  try {
+    const enabled = activeSocialProviders();
+    destination = await startSocialSignIn(getAuth(), fields(formData, ["provider", "suivant"]), await requestContext(), enabled);
   } catch (error) {
     return toFormState(error);
   }

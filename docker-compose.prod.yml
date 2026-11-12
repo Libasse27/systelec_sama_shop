@@ -25,6 +25,19 @@ x-app-env: &app-env
   SMTP_PASSWORD: ${SMTP_PASSWORD:-}
   SMTP_FROM: ${SMTP_FROM:-}
 
+# Connexion sociale des clients (facultative, inactive tant que la paire identifiant / secret est vide).
+# Secrets transmis au SEUL service app : migrate et tasks n'en ont pas besoin.
+x-social-env: &social-env
+  GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+  GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+  FACEBOOK_CLIENT_ID: ${FACEBOOK_CLIENT_ID:-}
+  FACEBOOK_CLIENT_SECRET: ${FACEBOOK_CLIENT_SECRET:-}
+  APPLE_CLIENT_ID: ${APPLE_CLIENT_ID:-}
+  APPLE_CLIENT_SECRET: ${APPLE_CLIENT_SECRET:-}
+  MICROSOFT_CLIENT_ID: ${MICROSOFT_CLIENT_ID:-}
+  MICROSOFT_CLIENT_SECRET: ${MICROSOFT_CLIENT_SECRET:-}
+  MICROSOFT_TENANT_ID: ${MICROSOFT_TENANT_ID:-consumers}
+
 # Durcissement vérifié : aucune capacité Linux. « security_opt: [no-new-privileges:true] » est recommandé
 # en plus, mais à activer seulement après vérification sur le serveur cible (certains couples noyau /
 # AppArmor / Docker refusent alors tout exec, même pour les images officielles) :
@@ -71,7 +84,7 @@ services:
     tmpfs:
       - /tmp
     environment:
-      <<: *app-env
+      <<: [*app-env, *social-env]
     volumes:
       - storage:/app/storage
       - nextcache:/app/.next/cache

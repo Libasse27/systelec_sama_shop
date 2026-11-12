@@ -17,6 +17,9 @@ export const LOGIN_LIMITS = {
 
 export const SIGNUP_LIMIT_PER_IP = 10;
 export const RESET_REQUEST_LIMITS = { perEmail: 3, perIp: 10 } as const;
+/** Démarrages de connexion sociale par IP (chaque démarrage crée un état OAuth en base). */
+export const SOCIAL_START_LIMIT_PER_IP = 20;
+export const SOCIAL_START_ACTION = "auth.social.start";
 
 const windowStart = () => new Date(Date.now() - WINDOW_MINUTES * 60_000);
 
@@ -71,4 +74,12 @@ export async function isResetRequestBlocked(client: Db, email: string, ip: strin
     ip ? client.auditLog.count({ where: { action, ip, createdAt: { gte: since } } }) : Promise.resolve(0),
   ]);
   return byEmail >= RESET_REQUEST_LIMITS.perEmail || byIp >= RESET_REQUEST_LIMITS.perIp;
+}
+
+export async function isSocialStartBlocked(client: Db, ip: string | undefined): Promise<boolean> {
+  if (!ip) return false;
+  const attempts = await client.auditLog.count({
+    where: { action: SOCIAL_START_ACTION, ip, createdAt: { gte: windowStart() } },
+  });
+  return attempts >= SOCIAL_START_LIMIT_PER_IP;
 }

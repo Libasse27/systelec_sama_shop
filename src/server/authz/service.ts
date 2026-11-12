@@ -1,6 +1,7 @@
 import "server-only";
 import type { PrismaClient } from "@/generated/prisma/client";
 import { recordAudit } from "@/server/audit/audit";
+import { detachSocialAccounts } from "@/server/auth/social-accounts";
 import type { Db } from "@/server/db/client";
 import { AppError } from "@/server/errors";
 import { isPermission, type Permission } from "./permissions";
@@ -67,22 +68,47 @@ async function assertCanManageRole(client: Db, actor: Actor, roleCode: string, u
   return role.id;
 }
 
-/** Attribue un rôle (idempotent), avec audit. Le compte devient un compte du personnel (STAFF). */
+/**
+ * Le personnel ne se connecte que par e-mail et mot de passe : à la promotion, les comptes sociaux sont
+ * détachés (journalisé) et, pour un client promu ou un compte qui en avait, les sessions ouvertes sont
+ * révoquées. Retourne le nombre de sessions révoquées.
+ */
+async function detachSocialAccess(tx: Db, actorId: string, userId: string, wasCustomer: boolean): Promise<number> {
+  const providers = await detachSocialAccounts(tx, userId);
+  if (providers.length > 0) {
+    await recordAudit(tx, {
+      actorId,
+      action: "auth.social.unlink",
+      entityType: "User",
+      entityId: userId,
+      after: { providers, reason: "staff_promotion" },
+    });
+  }
+  if (!wasCustomer && providers.length === 0) return 0;
+  return (await tx.session.deleteMany({ where: { userId } })).count;
+}
+
+/**
+ * Attribue un rôle (idempotent), avec audit. Le compte devient un compte du personnel (STAFF) : ses
+ * comptes sociaux sont détachés et ses sessions de client révoquées, dans la même transaction.
+ */
 export async function assignRole(client: PrismaClient, actor: Actor, userId: string, roleCode: string): Promise<void> {
   const roleId = await assertCanManageRole(client, actor, roleCode, userId);
   await client.$transaction(async (tx) => {
-    const user = await tx.user.findUnique({ where: { id: userId }, select: { id: true } });
+    const user = await tx.user.findUnique({ where: { id: userId }, select: { id: true, kind: true } });
     if (!user) throw new AppError("NOT_FOUND", "Utilisateur introuvable.");
     const already = await tx.userRole.findUnique({ where: { userId_roleId: { userId, roleId } } });
     if (already) return;
     await tx.userRole.create({ data: { userId, roleId } });
     await tx.user.update({ where: { id: userId }, data: { kind: "STAFF" } });
+    const sessionsRevoked = await detachSocialAccess(tx, actor.id, userId, user.kind === "CUSTOMER");
     await recordAudit(tx, {
       actorId: actor.id,
       action: "rbac.role.assign",
       entityType: "User",
       entityId: userId,
-      after: { role: roleCode },
+      // Clé sans « session » : le masquage du journal (redact.ts) la viderait.
+      after: { role: roleCode, ...(sessionsRevoked > 0 && { revokedLogins: sessionsRevoked }) },
     });
   });
 }
