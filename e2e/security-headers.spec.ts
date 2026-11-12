@@ -3,7 +3,7 @@ import { expect, test, type APIResponse } from "@playwright/test";
 /**
  * Référence avant toute montée de version de Next.js : en-têtes de sécurité statiques
  * (next.config.ts, appliqués à toutes les routes) et Content-Security-Policy à nonce par requête
- * (src/proxy.ts, pages uniquement : le matcher exclut /api).
+ * (src/proxy.ts et src/lib/csp.ts, pages uniquement : le matcher exclut /api).
  */
 const STATIC_HEADERS = {
   "x-content-type-options": "nosniff",
@@ -55,6 +55,16 @@ test.describe("en-têtes de sécurité", () => {
     const nonce = nonceOf(first);
     expect(await first.text()).toContain(`nonce="${nonce}"`);
     expect(nonceOf(await request.get("/"))).not.toBe(nonce);
+  });
+
+  test("form-action : 'self' seul hors connexion ; origines des fournisseurs sur /connexion et /inscription", async ({ request }) => {
+    const formAction = async (path: string) =>
+      ((await request.get(path)).headers()["content-security-policy"] ?? "").split("; ").find((d) => d.startsWith("form-action "));
+    expect(await formAction("/")).toBe("form-action 'self'");
+    const providers =
+      "form-action 'self' https://accounts.google.com https://www.facebook.com https://appleid.apple.com https://login.microsoftonline.com https://login.live.com";
+    expect(await formAction("/connexion")).toBe(providers);
+    expect(await formAction("/inscription")).toBe(providers);
   });
 
   test("/api/health : pas de CSP (hors du matcher du proxy)", async ({ request }) => {
