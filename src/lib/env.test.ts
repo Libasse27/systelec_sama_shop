@@ -51,3 +51,47 @@ describe("configuration serveur", () => {
     expect(parseServerEnv({ ...prod, APP_URL: "https://futani.sn" }).APP_URL).toBe("https://futani.sn");
   });
 });
+
+const base64url = (value: object) => Buffer.from(JSON.stringify(value)).toString("base64url");
+const appleSecret = (payload: object) => `${base64url({ alg: "ES256", kid: "ABC123" })}.${base64url(payload)}.signature`;
+const inDays = (days: number) => Math.floor(Date.now() / 1000) + days * 24 * 3600;
+
+describe("connexion sociale (configuration)", () => {
+  it("désactivée par défaut ; une chaîne vide vaut absence ; Microsoft vise les comptes personnels", () => {
+    const env = parseServerEnv({ ...base, GOOGLE_CLIENT_ID: "", GOOGLE_CLIENT_SECRET: "" });
+    expect(env.GOOGLE_CLIENT_ID).toBeUndefined();
+    expect(env.FACEBOOK_CLIENT_ID).toBeUndefined();
+    expect(env.APPLE_CLIENT_SECRET).toBeUndefined();
+    expect(env.MICROSOFT_TENANT_ID).toBe("consumers");
+  });
+
+  it("identifiant et secret vont ensemble, pour chaque fournisseur", () => {
+    expect(parseServerEnv({ ...base, GOOGLE_CLIENT_ID: "id", GOOGLE_CLIENT_SECRET: "secret" }).GOOGLE_CLIENT_ID).toBe("id");
+    expect(() => parseServerEnv({ ...base, GOOGLE_CLIENT_ID: "id" })).toThrow(/GOOGLE_CLIENT_SECRET/);
+    expect(() => parseServerEnv({ ...base, FACEBOOK_CLIENT_SECRET: "secret" })).toThrow(/FACEBOOK_CLIENT_ID/);
+    expect(() => parseServerEnv({ ...base, MICROSOFT_CLIENT_ID: "id" })).toThrow(/MICROSOFT_CLIENT_SECRET/);
+    expect(() => parseServerEnv({ ...base, APPLE_CLIENT_SECRET: appleSecret({ exp: inDays(30) }) })).toThrow(/APPLE_CLIENT_ID/);
+  });
+
+  it("Apple : secret JWT pré-généré, refusé au démarrage s'il est mal formé ou sans expiration", () => {
+    const apple = { ...base, APPLE_CLIENT_ID: "sn.futani.web" };
+    expect(parseServerEnv({ ...apple, APPLE_CLIENT_SECRET: appleSecret({ exp: inDays(90) }) }).APPLE_CLIENT_ID).toBe("sn.futani.web");
+    expect(() => parseServerEnv({ ...apple, APPLE_CLIENT_SECRET: "pas-un-jwt" })).toThrow(/APPLE_CLIENT_SECRET/);
+    expect(() => parseServerEnv({ ...apple, APPLE_CLIENT_SECRET: "a.!!!.c" })).toThrow(/APPLE_CLIENT_SECRET/);
+    expect(() => parseServerEnv({ ...apple, APPLE_CLIENT_SECRET: appleSecret({ iss: "TEAM" }) })).toThrow(/APPLE_CLIENT_SECRET/);
+  });
+
+  it("Apple : un secret expiré n'empêche pas le démarrage (seul Apple est désactivé, social-providers.ts)", () => {
+    const expired = appleSecret({ exp: inDays(-1) });
+    expect(parseServerEnv({ ...base, APPLE_CLIENT_ID: "sn.futani.web", APPLE_CLIENT_SECRET: expired }).APPLE_CLIENT_SECRET).toBe(expired);
+  });
+
+  it("Microsoft : locataire consumers, common ou identifiant GUID uniquement", () => {
+    expect(parseServerEnv({ ...base, MICROSOFT_TENANT_ID: "common" }).MICROSOFT_TENANT_ID).toBe("common");
+    const guid = "9188040d-6c67-4c5b-b112-36a304b66dad";
+    expect(parseServerEnv({ ...base, MICROSOFT_TENANT_ID: guid }).MICROSOFT_TENANT_ID).toBe(guid);
+    expect(parseServerEnv({ ...base, MICROSOFT_TENANT_ID: "" }).MICROSOFT_TENANT_ID).toBe("consumers");
+    expect(() => parseServerEnv({ ...base, MICROSOFT_TENANT_ID: "organizations" })).toThrow(/MICROSOFT_TENANT_ID/);
+    expect(() => parseServerEnv({ ...base, MICROSOFT_TENANT_ID: "../evil" })).toThrow(/MICROSOFT_TENANT_ID/);
+  });
+});
