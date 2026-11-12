@@ -229,6 +229,8 @@ La migration `20261019090000_notification_retries` a été testée avec `pnpm te
 
 > **Installation créée avant le passage aux noms `futani` :** le projet Compose, les volumes, la base, les rôles et les images ont changé de nom par défaut. Sans précaution, `up -d` crée des volumes vides et l'application démarre sur une base vide (les anciennes données restent dans les anciens volumes). Avant la mise à jour, fixez dans `.env.production` les valeurs réellement en place : `COMPOSE_PROJECT_NAME`, `POSTGRES_DB`, `POSTGRES_USER`, `APP_DB_USER`, `APP_IMAGE` et `TOOLS_IMAGE`. Vérifiez aussi le dossier et les journaux indiqués dans la crontab (section 6), ainsi que la raison sociale dans Paramètres : la valeur par défaut est désormais FUTANI GROUP.
 
+> **Migration `20261111090000_frozen_document_company` (en-tête société et TVA figés sur les factures et reçus) :** dès qu'elle est appliquée, la base refuse toute facture ou tout reçu sans en-tête figé, donc l'ancienne version encore en service ne peut plus encaisser ni facturer. Entre l'étape 6 et le redémarrage sur la nouvelle version, ne saisir aucun encaissement, annulation, remboursement ni facture (ou arrêter `app` avant l'étape 6). Les documents émis avant cette migration gardent l'affichage d'avant (en-tête et TVA relus dans Paramètres). Ses contraintes restent volontairement non validées (`NOT VALID`) : ne jamais lancer `VALIDATE CONSTRAINT` dessus.
+
 1. **Construire** les images `NOUVELLE` (section 2). Le service continue de tourner.
 2. **Sauvegarder et vérifier la copie** :
    ```bash

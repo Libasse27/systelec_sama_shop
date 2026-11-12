@@ -191,6 +191,19 @@ export async function companyHeader(client: Db): Promise<CompanyHeader> {
   return { name: company.companyName, address: company.address, phone: company.phone, email: company.email, ninea: company.ninea, rccm: company.rccm };
 }
 
+/** En-tête société à FIGER sur un document au moment de son émission (facture, reçu). */
+export async function frozenCompanyHeader(client: Db): Promise<Prisma.InputJsonValue> {
+  return (await companyHeader(client)) as unknown as Prisma.InputJsonValue;
+}
+
+/**
+ * En-tête société d'un document émis : celui figé à son émission ; pour un document émis avant ce
+ * figeage (null), celui des paramètres actuels.
+ */
+export async function issuedCompanyHeader(client: Db, frozen: Prisma.JsonValue | null): Promise<CompanyHeader> {
+  return frozen === null ? companyHeader(client) : (frozen as unknown as CompanyHeader);
+}
+
 const OWNER_SELECT = { id: true, createdAt: true, contact: true, customer: { select: { userId: true } } } as const;
 
 /** Propriétaire d'un document réglé, pour décider qui peut voir ses reçus et factures. */
@@ -249,6 +262,7 @@ export async function getReceipt(client: Db, viewer: DocumentViewer, receiptNumb
       transactionReference: true,
       balanceAfter: true,
       reason: true,
+      company: true,
       recordedBy: { select: { name: true } },
       reverses: { select: { receiptNumber: true } },
       reversedBy: { select: { receiptNumber: true } },
@@ -285,6 +299,6 @@ export async function getReceipt(client: Db, viewer: DocumentViewer, receiptNumb
     reversal: payment.reverses ? { receiptNumber: payment.reverses.receiptNumber, reason: payment.reason ?? "" } : null,
     refund: payment.return ? { returnNumber: payment.return.number, reason: payment.reason ?? "" } : null,
     voidedBy: payment.reversedBy?.receiptNumber ?? null,
-    company: await companyHeader(client),
+    company: await issuedCompanyHeader(client, payment.company),
   };
 }

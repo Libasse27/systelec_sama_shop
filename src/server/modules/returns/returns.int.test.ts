@@ -243,7 +243,7 @@ describe("retours et remboursements (PostgreSQL)", () => {
         }),
       ).rejects.toThrow(/remboursement non enregistré/);
 
-      const payment = { receiptNumber: "REC-TEST-1", orderId: order.id, recordedById: cashier.id, balanceAfter: 0, returnId: created.id, reason: "Test" };
+      const payment = { receiptNumber: "REC-TEST-1", orderId: order.id, recordedById: cashier.id, balanceAfter: 0, returnId: created.id, reason: "Test", company: { name: "FUTANI GROUP" } };
       await expect(db.payment.create({ data: { ...payment, amount: -10_000 } })).rejects.toThrow(/incohérent avec le retour/);
       await expect(db.payment.create({ data: { ...payment, amount: 30_000 } })).rejects.toThrow(/incohérent avec le retour/);
       // Écriture négative sans retour ni contre-écriture : refusée.
