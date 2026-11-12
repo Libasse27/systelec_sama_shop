@@ -16,12 +16,42 @@ MIN_CPUS=2
 MIN_MEMORY_MB=3800
 MIN_DISK_GB=10
 SECRET_MIN=24
+APPLE_SECRET_WARN_DAYS=30
 FAILURES=0
 WARNINGS=0
 
 ok()   { echo "  OK         $1"; }
 warn() { echo "  ATTENTION  $1"; WARNINGS=$((WARNINGS + 1)); }
 fail() { echo "  ÉCHEC      $1"; FAILURES=$((FAILURES + 1)); }
+
+# Date d'expiration (exp, secondes) d'un JWT : charge utile décodée seulement, sans vérifier la signature.
+jwt_exp() {
+  local payload="${1#*.}"
+  payload="$(printf '%s' "${payload%%.*}" | tr '_-' '/+')"
+  while (( ${#payload} % 4 )); do payload="${payload}="; done
+  printf '%s' "$payload" | base64 -d 2> /dev/null | grep -o '"exp":[0-9]*' | cut -d: -f2
+}
+
+# Connexion sociale des clients : fournisseurs actifs (paire complète) et validité du secret Apple.
+check_social() {
+  local provider id_var secret_var enabled=""
+  for provider in GOOGLE FACEBOOK APPLE MICROSOFT; do
+    id_var="${provider}_CLIENT_ID"; secret_var="${provider}_CLIENT_SECRET"
+    if [[ -n "${!id_var:-}" && -n "${!secret_var:-}" ]]; then enabled="$enabled ${provider,,}"
+    elif [[ -n "${!id_var:-}" || -n "${!secret_var:-}" ]]; then fail "$id_var et $secret_var vont ensemble"; fi
+  done
+  if [[ -z "$enabled" ]]; then ok "connexion sociale désactivée (aucun fournisseur configuré)"
+  else ok "connexion sociale :$enabled (politique de confidentialité publiée ? docs/04, section 15)"; fi
+  [[ "${MICROSOFT_TENANT_ID:-consumers}" =~ ^(consumers|common|[0-9a-fA-F-]{36})$ ]] || fail "MICROSOFT_TENANT_ID invalide (consumers, common ou GUID)"
+  [[ -n "${APPLE_CLIENT_SECRET:-}" ]] || return 0
+  local exp days
+  exp="$(jwt_exp "$APPLE_CLIENT_SECRET")"
+  if [[ -z "$exp" ]]; then fail "APPLE_CLIENT_SECRET n'est pas un JWT avec une date d'expiration : l'application refusera de démarrer"; return 0; fi
+  days=$(( (exp - $(date +%s)) / 86400 ))
+  if (( exp <= $(date +%s) )); then warn "APPLE_CLIENT_SECRET expiré : connexion Apple désactivée (boutique non affectée), le régénérer (scripts/ops/apple-client-secret.ts)"
+  elif (( days < APPLE_SECRET_WARN_DAYS )); then warn "APPLE_CLIENT_SECRET expire dans $days jour(s) : le régénérer (scripts/ops/apple-client-secret.ts)"
+  else ok "APPLE_CLIENT_SECRET valable encore $days jours"; fi
+}
 
 echo "Docker"
 if ! command -v docker > /dev/null; then
@@ -71,6 +101,7 @@ else
   else
     ok "SMTP ${SMTP_HOST}:${SMTP_PORT}, expéditeur ${SMTP_FROM} (SPF, DKIM et DMARC à publier dans le DNS)"
   fi
+  check_social
   if $COMPOSE config --quiet 2> /dev/null; then ok "docker-compose.prod.yml valide avec cette configuration"; else fail "docker compose config refuse la configuration"; fi
 fi
 
