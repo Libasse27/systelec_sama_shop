@@ -60,6 +60,13 @@ export function SignUpForm() {
         hint={PASSWORD_HINT}
         errors={state.fieldErrors?.password}
       />
+      <Field
+        name="passwordConfirmation"
+        label="Confirmer le mot de passe"
+        type="password"
+        autoComplete="new-password"
+        errors={state.fieldErrors?.passwordConfirmation}
+      />
       <SubmitButton>Créer mon compte</SubmitButton>
     </form>
   );

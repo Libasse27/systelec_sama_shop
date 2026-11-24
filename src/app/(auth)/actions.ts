@@ -6,6 +6,7 @@ import { getServerEnv } from "@/lib/env";
 import { safeRedirectPath } from "@/lib/redirect";
 import { getAuth } from "@/server/auth/auth";
 import { clientIp } from "@/server/auth/client-ip";
+import { signUpFormSchema } from "@/server/auth/schemas";
 import {
   requestPasswordReset,
   resetPassword,
@@ -19,6 +20,7 @@ import { activeSocialProviders } from "@/server/auth/active-providers";
 import { AppError, ValidationError } from "@/server/errors";
 import { logger } from "@/server/logger";
 import { mergeCartAfterSignIn } from "@/server/modules/cart/session";
+import { parseInput } from "@/server/validation";
 
 export interface FormState {
   error?: string;
@@ -46,9 +48,15 @@ function toFormState(error: unknown): FormState {
 const fields = (formData: FormData, names: string[]) =>
   Object.fromEntries(names.map((name) => [name, formData.get(name) ?? undefined]));
 
+/** Vérifie le formulaire (dont la confirmation) ; le service ne reçoit jamais la confirmation. */
+function signUpFields(formData: FormData): Record<string, FormDataEntryValue | undefined> {
+  parseInput(signUpFormSchema, fields(formData, ["name", "email", "phone", "password", "passwordConfirmation"]), "Formulaire");
+  return fields(formData, ["name", "email", "phone", "password"]);
+}
+
 export async function signUpAction(_state: FormState, formData: FormData): Promise<FormState> {
   try {
-    const { userId } = await signUpCustomer(getAuth(), fields(formData, ["name", "email", "phone", "password"]), await requestContext());
+    const { userId } = await signUpCustomer(getAuth(), signUpFields(formData), await requestContext());
     await mergeCartAfterSignIn(userId);
   } catch (error) {
     return toFormState(error);

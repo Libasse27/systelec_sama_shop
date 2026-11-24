@@ -8,7 +8,8 @@ async function signUp(page: Page, email: string): Promise<void> {
   await page.goto("/inscription");
   await page.getByLabel("Nom complet").fill("Client E2E");
   await page.getByLabel("E-mail").fill(email);
-  await page.getByLabel("Mot de passe").fill(PASSWORD);
+  await page.getByLabel("Mot de passe", { exact: true }).fill(PASSWORD);
+  await page.getByLabel("Confirmer le mot de passe").fill(PASSWORD);
   await page.getByRole("button", { name: "Créer mon compte" }).click();
   await expect(page).toHaveURL(/\/compte$/);
 }
@@ -85,9 +86,21 @@ test.describe("compte client (§20 n° 1)", () => {
     await page.goto("/inscription");
     await page.getByLabel("Nom complet").fill("Client E2E");
     await page.getByLabel("E-mail").fill(uniqueEmail());
-    await page.getByLabel("Mot de passe").fill("court");
+    await page.getByLabel("Mot de passe", { exact: true }).fill("court");
+    await page.getByLabel("Confirmer le mot de passe").fill("court");
     await page.getByRole("button", { name: "Créer mon compte" }).click();
     await expect(page.getByText("Le mot de passe doit contenir au moins 10 caractères")).toBeVisible();
+  });
+
+  test("refuse une confirmation différente du mot de passe à l'inscription", async ({ page }) => {
+    await page.goto("/inscription");
+    await page.getByLabel("Nom complet").fill("Client E2E");
+    await page.getByLabel("E-mail").fill(uniqueEmail());
+    await page.getByLabel("Mot de passe", { exact: true }).fill(PASSWORD);
+    await page.getByLabel("Confirmer le mot de passe").fill(`${PASSWORD}-different`);
+    await page.getByRole("button", { name: "Créer mon compte" }).click();
+    await expect(page.getByText("Les mots de passe ne correspondent pas")).toBeVisible();
+    await expect(page).toHaveURL(/\/inscription$/);
   });
 });
 

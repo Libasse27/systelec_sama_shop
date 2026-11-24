@@ -19,7 +19,8 @@ async function signUpStaff(page: Page, roles: string[]): Promise<void> {
   await page.goto("/inscription");
   await page.getByLabel("Nom complet").fill("Gestionnaire E2E");
   await page.getByLabel("E-mail").fill(email);
-  await page.getByLabel("Mot de passe").fill(PASSWORD);
+  await page.getByLabel("Mot de passe", { exact: true }).fill(PASSWORD);
+  await page.getByLabel("Confirmer le mot de passe").fill(PASSWORD);
   await page.getByRole("button", { name: "Créer mon compte" }).click();
   await expect(page).toHaveURL(/\/compte$/);
   for (const role of roles) await grantRole(email, role);
