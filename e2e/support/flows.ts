@@ -7,7 +7,8 @@ export async function signUp(page: Page, email: string, name = "Client E2E"): Pr
   await page.goto("/inscription");
   await page.getByLabel("Nom complet").fill(name);
   await page.getByLabel("E-mail").fill(email);
-  await page.getByLabel("Mot de passe").fill(PASSWORD);
+  await page.getByLabel("Mot de passe", { exact: true }).fill(PASSWORD);
+  await page.getByLabel("Confirmer le mot de passe").fill(PASSWORD);
   await page.getByRole("button", { name: "Créer mon compte" }).click();
   await expect(page).toHaveURL(/\/compte$/);
 }

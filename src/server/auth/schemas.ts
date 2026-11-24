@@ -23,6 +23,26 @@ export const signUpSchema = z.object({
   password: newPassword,
 });
 
+export const PASSWORD_MISMATCH_MESSAGE = "Les mots de passe ne correspondent pas";
+
+// Schéma du formulaire d'inscription : signUpSchema + confirmation (jamais transmise au service).
+// `when` : par défaut Zod 4 saute les refinements d'objet si un autre champ est invalide ; on force
+// la comparaison dès que les deux valeurs sont des chaînes, pour signaler l'écart en même temps
+// que les autres erreurs. Chaînes brutes, sans trim (les mots de passe ne sont pas normalisés).
+const hasPasswordPair = (value: unknown): boolean =>
+  typeof value === "object" &&
+  value !== null &&
+  typeof (value as Record<string, unknown>).password === "string" &&
+  typeof (value as Record<string, unknown>).passwordConfirmation === "string";
+
+export const signUpFormSchema = signUpSchema
+  .extend({ passwordConfirmation: z.string() })
+  .refine((form) => form.password === form.passwordConfirmation, {
+    error: PASSWORD_MISMATCH_MESSAGE,
+    path: ["passwordConfirmation"],
+    when: ({ value }) => hasPasswordPair(value),
+  });
+
 export const signInSchema = z.object({
   email,
   password: z.string().min(1, "Saisissez votre mot de passe").max(PASSWORD_MAX_LENGTH),
