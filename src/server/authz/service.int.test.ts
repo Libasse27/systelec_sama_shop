@@ -151,3 +151,42 @@ describe("RBAC (PostgreSQL)", () => {
     expect(await db.userRole.count({ where: { role: { code: SUPER_ADMIN }, user: { isActive: true } } })).toBe(1);
   });
 });
+
+describe("promotion au personnel et connexion sociale (PostgreSQL)", () => {
+  beforeEach(async () => {
+    await resetDatabase();
+    await syncRolesAndPermissions(db);
+  });
+
+  it("détache les comptes sociaux et révoque les sessions du client promu, dans la même transaction", async () => {
+    const admin = await actorFor(await createUser(["ADMIN"]));
+    const target = await createUser();
+    await db.account.createMany({
+      data: [
+        { id: randomUUID(), userId: target, providerId: "credential", accountId: target, password: "hash" },
+        { id: randomUUID(), userId: target, providerId: "google", accountId: "google-sub" },
+      ],
+    });
+    await db.session.create({ data: { id: randomUUID(), token: randomUUID(), userId: target, expiresAt: new Date(Date.now() + 3_600_000) } });
+
+    await assignRole(db, admin, target, "STOCK_MANAGER");
+
+    expect((await db.account.findMany({ where: { userId: target } })).map((account) => account.providerId)).toEqual(["credential"]);
+    expect(await db.session.count({ where: { userId: target } })).toBe(0);
+    const unlink = await db.auditLog.findFirstOrThrow({ where: { action: "auth.social.unlink", entityId: target } });
+    expect(unlink).toMatchObject({ actorId: admin.id, after: { providers: ["google"], reason: "staff_promotion" } });
+    const assign = await db.auditLog.findFirstOrThrow({ where: { action: "rbac.role.assign", entityId: target } });
+    expect(assign.after).toEqual({ role: "STOCK_MANAGER", revokedLogins: 1 });
+  });
+
+  it("n'interrompt pas les sessions d'un membre du personnel qui reçoit un rôle de plus", async () => {
+    const admin = await actorFor(await createUser(["ADMIN"]));
+    const staff = await createUser(["TECHNICIAN"]);
+    await db.session.create({ data: { id: randomUUID(), token: randomUUID(), userId: staff, expiresAt: new Date(Date.now() + 3_600_000) } });
+
+    await assignRole(db, admin, staff, "STOCK_MANAGER");
+
+    expect(await db.session.count({ where: { userId: staff } })).toBe(1);
+    expect(await db.auditLog.count({ where: { action: "auth.social.unlink" } })).toBe(0);
+  });
+});

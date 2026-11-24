@@ -76,6 +76,7 @@ Restent à remplir à la main si besoin : `SMTP_*`, et `APP_PORT` si le port 300
 | `TRUSTED_PROXY_HOPS` | `1` derrière un seul reverse proxy (Caddy). `0`, ou une valeur supérieure au nombre réel de proxys, désactive **sans avertissement** les limites par adresse IP (connexion, commande, devis, retours, contact) : `preflight.sh` affiche la valeur sans la juger. Contrôle réel : section 14 |
 | `SMTP_*` | voir « E-mails » ci-dessous ; sans `SMTP_HOST`, aucun e-mail n'est envoyé (tracé, jamais simulé) |
 | `DATABASE_POOL_MAX` | `10` (suffisant, voir section 10) |
+| `GOOGLE_*`, `FACEBOOK_*`, `APPLE_*`, `MICROSOFT_*` | facultatifs : connexion sociale des clients (section 15) ; vides = désactivée |
 
 `.env.production` n'est jamais versionné (`.gitignore`).
 
@@ -323,6 +324,7 @@ Les seuils sont écrits dans `scripts/perf/load-test.js` ; la commande échoue s
 - [ ] Sauvegarde nocturne planifiée **et copiée hors serveur** ; premier exercice de restauration réussi
 - [ ] Sonde externe et alerte d'espace disque en place
 - [ ] Test `no-new-privileges` fait sur le serveur ; option activée si possible
+- [ ] Connexion sociale (section 15) : désactivée (variables vides) tant que la politique de confidentialité n'est pas publiée ; sinon, contrôles de la section 15 faits
 - [ ] Module Contact (section 14) : migration `20261031090000_contact_messages` appliquée puis `db:seed` relancé ; e-mail de l'entreprise renseigné ; message d'essai reçu dans « Messages » avec une adresse IP réelle dans le journal d'audit
 
 ## 14. Module Contact (formulaire et rubrique « Messages »)
@@ -392,3 +394,118 @@ Ne pas placer de CDN devant Caddy sans revoir ce réglage : tous les visiteurs p
 4. Connecté avec un compte Service client ou Administrateur : le message figure dans « Messages » ; « Prendre en charge », une note interne puis « Marquer comme traité » fonctionnent.
 5. Adresse IP réelle dans le journal d'audit (requête ci-dessus).
 6. Avec un compte sans la permission : `/admin/messages` redirige vers `/acces-refuse`.
+
+## 15. Connexion avec Google, Facebook, Apple, Microsoft
+
+Boutons « Continuer avec … » sur `/connexion` et `/inscription`, **pour les clients uniquement**. Chaque fournisseur est facultatif et ne s'active que si son identifiant **et** son secret sont renseignés dans `.env.production` ; sans aucune variable, la fonctionnalité est inerte (route de retour en 404). Les fournisseurs non configurés restent affichés sous forme de boutons désactivés « Bientôt disponible », sans formulaire ni action serveur. Les procédures ci-dessous n'ont pas été exécutées avec de vrais comptes de fournisseur ; le parcours est vérifié par les tests d'intégration (`src/server/auth/social.int.test.ts`, échange de code simulé) et E2E (`e2e/social-login.spec.ts`, fournisseur intercepté).
+
+### Prérequis
+
+- **Politique de confidentialité publiée** (lot distinct) avant toute activation : les consoles des fournisseurs l'exigent (URL publique) et les clients doivent savoir quelles données sont reçues.
+- Domaine définitif en https (`APP_URL`) : les URI de redirection sont déclarées chez chaque fournisseur et doivent correspondre exactement.
+
+### Comportement retenu
+
+- **Personnel exclu** : un compte du personnel (rôle attribué) ne peut ni se connecter, ni être relié, ni être créé par un fournisseur ; il garde l'e-mail et le mot de passe. Lors de l'attribution d'un premier rôle, les comptes sociaux du client promu sont détachés et ses sessions révoquées (journal : `auth.social.unlink`).
+- **Liaison automatique** à un compte existant seulement si le fournisseur atteste l'adresse e-mail **et** si l'e-mail du compte local est déjà vérifié. Sinon, le client voit « Un compte existe déjà avec cette adresse e-mail. Connectez-vous avec votre e-mail et votre mot de passe. »
+- **Facebook et (le plus souvent) Microsoft n'attestent pas l'adresse e-mail** : un compte créé par eux a un e-mail non vérifié et n'est jamais relié automatiquement à un compte existant (Facebook : jamais, quelle que soit sa réponse). Le client vérifie son e-mail par « Mot de passe oublié ».
+- **Vérifier son e-mail** : un client existant le fait par « Mot de passe oublié ». La réinitialisation marque l'e-mail vérifié (`auth.email_verified`), détache tous ses comptes sociaux (`auth.social.unlink`) et, s'il y en avait, révoque ses sessions : l'un d'eux a pu être créé par un tiers avant cette preuve. Un fournisseur qui atteste l'e-mail se reliera de nouveau à la connexion suivante. Cette réconciliation est idempotente et exécutée deux fois (rappel de Better Auth, puis service) : si la première échoue, une ligne d'erreur « Réconciliation après réinitialisation échouée » apparaît dans le journal de l'application et la seconde la rattrape.
+- **Données minimales** : portées par défaut (e-mail et profil ; Microsoft : `openid profile email`). Aucun jeton du fournisseur n'est conservé, ni photo de profil. Seuls le nom, l'e-mail et l'identifiant du compte chez le fournisseur sont enregistrés.
+- **Journal d'audit** : `auth.social.start`, `auth.social.signup`, `auth.social.link`, `auth.social.login`, `auth.social.blocked` (refusé), avec le fournisseur et l'identifiant interne du compte ; jamais de jeton, de code, d'état ni d'adresse e-mail.
+- **Limite** : 20 démarrages de connexion sociale par adresse IP et par quart d'heure, comptés dans le journal d'audit (`auth.social.start`), comme les autres limites : comptage non atomique (quelques démarrages simultanés peuvent dépasser le plafond de peu) et **aucune limite sans adresse IP fiable** (`TRUSTED_PROXY_HOPS=0` ou supérieur au nombre réel de proxys, section 3).
+- **Route de retour** `/api/auth/callback/<fournisseur>` : réponse jamais mise en cache (`Cache-Control: no-store`). Elle n'est pas limitée par l'application : le limiteur intégré de Better Auth repère l'adresse IP par une liste d'adresses de proxys (`advanced.ipAddress.trustedProxies`), incompatible avec le réglage par nombre de proxys (`TRUSTED_PROXY_HOPS`) ; il n'est donc pas configuré. Limiter cette route au reverse proxy (ci-dessous).
+- **Journal Better Auth** : erreurs seulement, et leur message seul (jamais l'état OAuth, le code ni le profil reçus), dans le journal de l'application.
+
+### URI de redirection
+
+Une par fournisseur actif, à déclarer telle quelle (remplacer le domaine) :
+
+| Fournisseur | URI de redirection |
+|---|---|
+| Google | `https://<domaine>/api/auth/callback/google` |
+| Facebook | `https://<domaine>/api/auth/callback/facebook` |
+| Apple | `https://<domaine>/api/auth/callback/apple` |
+| Microsoft | `https://<domaine>/api/auth/callback/microsoft` |
+
+### Google
+
+1. Google Cloud Console : créer (ou choisir) un projet, puis **Écran de consentement OAuth** : type « Externe », nom de la boutique, e-mail d'assistance, domaine autorisé, URL de la politique de confidentialité. Portées : `openid`, `email`, `profile` uniquement. Publier l'application (« En production »).
+2. **Identifiants → Créer des identifiants → ID client OAuth**, type « Application Web ». URI de redirection autorisée : celle du tableau. Aucune origine JavaScript n'est nécessaire.
+3. Reporter `GOOGLE_CLIENT_ID` et `GOOGLE_CLIENT_SECRET`.
+
+### Facebook
+
+1. Meta for Developers : créer une application de type « Consommateur » (connexion Facebook), renseigner l'URL de la politique de confidentialité et l'URL de suppression des données.
+2. **Facebook Login → Paramètres** : « URI de redirection OAuth valides » = celle du tableau ; laisser activés « Connexion OAuth Web » et « Mode strict pour les URI de redirection ».
+3. Autorisations : `email` et `public_profile` seulement (pas d'examen d'application nécessaire). Passer l'application en mode « En ligne ».
+4. Reporter l'identifiant de l'application dans `FACEBOOK_CLIENT_ID` et la clé secrète dans `FACEBOOK_CLIENT_SECRET`.
+
+### Apple
+
+1. Apple Developer (compte payant) : **Identifiers → App IDs**, activer « Sign in with Apple » sur l'App ID principal.
+2. **Identifiers → Services IDs** : créer un Services ID (par exemple `sn.domaine.web`), activer « Sign in with Apple », configurer le domaine (sans `https://`) et l'URL de retour du tableau. Cet identifiant est `APPLE_CLIENT_ID`.
+3. **E-mails relayés** : les clients peuvent masquer leur adresse (`…@privaterelay.appleid.com`). Pour que les e-mails de la boutique leur parviennent, déclarer le domaine et l'expéditeur `SMTP_FROM` dans **Services → Sign in with Apple for Email Communication**, et publier SPF et DKIM pour ce domaine (section 3).
+4. **Keys** : créer une clé « Sign in with Apple » liée à l'App ID ; télécharger le fichier `AuthKey_<KEYID>.p8` (une seule fois) et le ranger dans le coffre, jamais sur le serveur ni dans le dépôt.
+5. Générer le secret sur un poste d'administration (aucune dépendance supplémentaire), clé en mode 600 (le script avertit sinon), sortie vers un fichier privé plutôt qu'à l'écran :
+   ```bash
+   chmod 600 chemin/AuthKey_<KEYID>.p8
+   umask 077
+   APPLE_TEAM_ID=<TEAMID> APPLE_KEY_ID=<KEYID> APPLE_CLIENT_ID=<Services ID> \
+     pnpm exec tsx scripts/ops/apple-client-secret.ts chemin/AuthKey_<KEYID>.p8 180 > apple-client-secret.txt
+   ```
+   Le contenu du fichier va dans `APPLE_CLIENT_SECRET` ; supprimer ensuite le fichier.
+6. **Rotation tous les 6 mois au plus** : le secret expire (180 jours maximum). `preflight.sh` prévient 30 jours avant. Un secret **expiré** désactive seulement Apple (bouton désactivé « Bientôt disponible », route de retour en 404, une ligne d'erreur « Connexion Apple désactivée » dans le journal) : la boutique et les autres fournisseurs continuent. Un secret **mal formé** (pas un JWT, sans expiration) empêche en revanche le démarrage. Régénérer, mettre à jour `.env.production`, puis `$C up -d app`.
+7. Apple renvoie la réponse par formulaire (POST) : la route de retour l'accepte pour Apple seulement.
+
+### Microsoft
+
+1. Portail Azure, **Microsoft Entra ID → Inscriptions d'applications → Nouvelle inscription**. Types de comptes : « **Comptes Microsoft personnels uniquement** » (Outlook, Hotmail, Live). URI de redirection, plateforme « Web » : celle du tableau.
+2. **Certificats et secrets → Nouveau secret client** ; noter sa date d'expiration (24 mois au plus) et planifier son renouvellement.
+3. **Autorisations d'API** : `openid`, `profile`, `email` (déléguées) suffisent.
+4. Reporter l'« ID d'application (client) » dans `MICROSOFT_CLIENT_ID`, la valeur du secret dans `MICROSOFT_CLIENT_SECRET`. Laisser `MICROSOFT_TENANT_ID=consumers` (comptes personnels uniquement, valeur par défaut). `common` admettrait aussi les comptes professionnels de n'importe quelle organisation : à éviter.
+
+### Reverse proxy : limite et journaux de la route de retour
+
+- **Limiter** `/api/auth/callback/*` au reverse proxy (par exemple 30 requêtes par minute et par adresse). Caddy n'a pas de limitation de débit en standard : module `rate_limit` (github.com/mholt/caddy-ratelimit, image Caddy construite avec `xcaddy`), ou limitation par le pare-feu. Exemple avec le module :
+  ```
+  rate_limit {
+      zone oauth_callback {
+          match {
+              path /api/auth/callback/*
+          }
+          key    {remote_host}
+          events 30
+          window 1m
+      }
+  }
+  ```
+- **Journaux d'accès** : ne pas conserver la chaîne de requête de `/api/auth/callback/*`. Elle porte le `code` et l'`state` OAuth, et Apple y place à la première connexion le nom et l'e-mail du client (`user`). Avec Caddy, filtrer ces paramètres dans le bloc `log` (syntaxe à confirmer selon la version de Caddy) :
+  ```
+  log {
+      format filter {
+          request>uri query {
+              delete code
+              delete state
+              delete user
+              delete id_token
+              delete error_description
+          }
+      }
+  }
+  ```
+  Contrôle : après une connexion d'essai, `grep callback` dans le journal d'accès ne doit montrer aucune valeur de `code`, `state` ni `user`.
+
+### Activation
+
+1. Renseigner les variables du ou des fournisseurs dans `.env.production` (paires complètes), puis `scripts/ops/preflight.sh` : la ligne « connexion sociale » liste les fournisseurs actifs ; aucune paire incomplète ; secret Apple valable.
+2. `$C up -d app` (redémarrage nécessaire pour relire la configuration). Une paire incomplète ou un secret Apple mal formé fait échouer le démarrage avec un message explicite (`$C logs --since 5m app`). Les secrets des fournisseurs ne sont transmis qu'au service `app` (pas à `migrate` ni à `tasks`).
+
+### Contrôles après déploiement
+
+1. `/connexion` et `/inscription` affichent les quatre boutons : ceux des fournisseurs actifs sont cliquables, les autres désactivés « Bientôt disponible ».
+2. Depuis un poste extérieur, en navigation privée, avec un compte personnel de test par fournisseur : « Continuer avec … », consentement, retour sur `/compte`. Dans l'administration, le compte créé est un **Client**.
+3. Journal d'audit : `auth.social.signup` puis `auth.social.login` pour ce compte, avec une adresse IP réelle.
+4. Avec l'adresse e-mail d'un compte du personnel : la connexion sociale est refusée (message « Un compte existe déjà… ») et une ligne `auth.social.blocked` apparaît.
+5. `curl -s -o /dev/null -w '%{http_code}\n' https://<domaine>/api/auth/get-session` répond `404`, de même que `/api/auth/callback/<fournisseur inactif>`.
+6. `curl -sI 'https://<domaine>/api/auth/callback/google?code=x'` : en-tête `cache-control: no-store` ; journal d'accès du reverse proxy sans le paramètre `code`.
+7. Désactivation d'urgence d'un fournisseur : vider sa paire dans `.env.production` puis `$C up -d app` ; les comptes déjà reliés restent accessibles par e-mail et mot de passe (« Mot de passe oublié » si le client n'en a jamais choisi).

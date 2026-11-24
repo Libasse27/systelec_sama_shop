@@ -39,7 +39,22 @@ export default defineConfig({
     // Serveur exposé directement (aucun reverse proxy) : X-Forwarded-For n'est pas fiable.
     // Même base et même dossier de fichiers que la préparation globale (les variables du processus
     // l'emportent sur .env pour Next.js, Prisma et les scripts).
-    env: { TRUSTED_PROXY_HOPS: "0", DATABASE_URL: E2E_DATABASE_URL, STORAGE_LOCAL_DIR: E2E_STORAGE_DIR },
+    // Connexion sociale : FAUX identifiants Google et Microsoft (aucun appel réel, voir e2e/social-login.spec.ts) ;
+    // Facebook et Apple restent inactifs (vides, au cas où .env les définirait).
+    env: {
+      TRUSTED_PROXY_HOPS: "0",
+      DATABASE_URL: E2E_DATABASE_URL,
+      STORAGE_LOCAL_DIR: E2E_STORAGE_DIR,
+      GOOGLE_CLIENT_ID: "e2e-google-client",
+      GOOGLE_CLIENT_SECRET: "e2e-google-secret",
+      MICROSOFT_CLIENT_ID: "e2e-microsoft-client",
+      MICROSOFT_CLIENT_SECRET: "e2e-microsoft-secret",
+      MICROSOFT_TENANT_ID: "consumers",
+      FACEBOOK_CLIENT_ID: "",
+      FACEBOOK_CLIENT_SECRET: "",
+      APPLE_CLIENT_ID: "",
+      APPLE_CLIENT_SECRET: "",
+    },
     // Préparation de la base E2E, construction puis démarrage.
     timeout: 300_000,
   },
