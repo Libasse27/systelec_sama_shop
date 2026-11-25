@@ -121,7 +121,7 @@ function FieldShell({ name, label, required, hint, children, className }: FieldS
   const id = `champ-${name.replace(/\W/g, "-")}-${useId().replace(/\W/g, "")}`;
   const describedBy = [hint && `${id}-aide`, errors && `${id}-erreur`].filter(Boolean).join(" ") || undefined;
   return (
-    <div className={cn("flex flex-col gap-1", className)}>
+    <div className={cn("flex max-w-full flex-col gap-1", className)}>
       <label htmlFor={id} className="text-sm font-medium">
         {label}
         {!required && <span className="font-normal text-ink-muted"> (facultatif)</span>}
@@ -141,8 +141,9 @@ function FieldShell({ name, label, required, hint, children, className }: FieldS
   );
 }
 
+// « w-full » : une liste déroulante se règle sinon sur son option la plus longue et élargit toute la page sur téléphone.
 const inputClass = (invalid: boolean) =>
-  cn("rounded-lg border border-line bg-surface px-3 py-2 text-base", invalid && "border-red-600");
+  cn("w-full min-w-0 rounded-lg border border-line bg-surface px-3 py-2 text-base", invalid && "border-red-600");
 
 interface TextFieldProps {
   name: string;

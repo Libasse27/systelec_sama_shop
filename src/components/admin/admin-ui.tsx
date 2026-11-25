@@ -14,7 +14,7 @@ export function PageHeader({ title, children }: { title: string; children?: Reac
 export function Section({ title, children, id }: { title: string; children: React.ReactNode; id?: string }) {
   const headingId = `${id ?? title.replace(/\W+/g, "-").toLowerCase()}-titre`;
   return (
-    <section aria-labelledby={headingId} className="rounded-xl border border-line bg-surface p-4 sm:p-5">
+    <section aria-labelledby={headingId} className="min-w-0 rounded-xl border border-line bg-surface p-4 sm:p-5">
       <h2 id={headingId} className="mb-4 text-lg font-semibold">
         {title}
       </h2>

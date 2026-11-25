@@ -27,7 +27,7 @@ export default async function ReturnsPage({ searchParams }: { searchParams: Sear
         Un retour se déclare depuis la fiche d&apos;une commande remise au client ; il s&apos;examine et se décide sur sa propre fiche.
       </p>
       <form method="get" className="mb-4 flex flex-wrap items-end gap-3">
-        <div className="flex flex-col gap-1">
+        <div className="flex max-w-full flex-col gap-1">
           <label htmlFor="filtre-statut-retour" className="text-sm font-medium">
             Statut
           </label>
@@ -40,7 +40,7 @@ export default async function ReturnsPage({ searchParams }: { searchParams: Sear
             ))}
           </select>
         </div>
-        <div className="flex flex-col gap-1">
+        <div className="flex max-w-full flex-col gap-1">
           <label htmlFor="filtre-delai-retour" className="text-sm font-medium">
             Délai de déclaration
           </label>

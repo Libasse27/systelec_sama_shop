@@ -19,6 +19,9 @@ const linkClass = "rounded-md px-3 py-2 text-sm font-medium text-ink/90 hover:bg
 /** Liens de la navigation FUTANI TECH (quatre entrées) : marges de 8 px sous « sm », pour tenir sur une ligne à 320 px. */
 const techLinkClass = `${linkClass} max-sm:px-2`;
 
+/** Liens du compte : mêmes marges réduites sous « sm », pour limiter la hauteur de l'en-tête fixe une fois connecté. */
+const accountLinkClass = `${linkClass} max-sm:px-2`;
+
 /** Retour à FUTANI SHOP depuis l'espace FUTANI TECH : lien encadré, distinct des liens de la rubrique. */
 const shopReturnClass = `${techLinkClass} flex items-center gap-1 border border-brand-navy/20`;
 
@@ -118,8 +121,10 @@ export async function SiteHeader() {
           <div className="order-5 ml-auto lg:order-none lg:ml-0">
             <HeaderSearch />
           </div>
-          <nav aria-label="Compte" className="order-2 ml-auto flex items-center gap-1 lg:order-none lg:ml-0">
-            <Link href="/panier" className={`${linkClass} flex items-center gap-1`}>
+          {/* « max-lg:flex-wrap » : connecté avec l'accès à l'administration, les quatre entrées ne tiennent pas sur une ligne à
+              320 et 360 px ; elles passent à la ligne au lieu de sortir de l'écran. */}
+          <nav aria-label="Compte" className="order-2 ml-auto flex items-center gap-x-1 max-lg:flex-wrap max-lg:justify-end lg:order-none lg:ml-0">
+            <Link href="/panier" className={`${accountLinkClass} flex items-center gap-1`}>
               <BrandIcon name="panier" className="size-8" />
               {/* Libellé masqué (mais lu) entre « lg » et « xl » : l'icône reste, la place revient aux liens. */}
               <span className="sr-only sm:not-sr-only lg:sr-only xl:not-sr-only">Panier</span>
@@ -130,21 +135,21 @@ export async function SiteHeader() {
             {user ? (
               <>
                 {user.permissions.has("admin.access") && (
-                  <Link href="/admin" className={linkClass}>
+                  <Link href="/admin" className={accountLinkClass}>
                     Administration
                   </Link>
                 )}
-                <Link href="/compte" className={linkClass}>
+                <Link href="/compte" className={accountLinkClass}>
                   Mon compte
                 </Link>
                 <form action={signOutAction}>
-                  <button type="submit" className={linkClass}>
+                  <button type="submit" className={accountLinkClass}>
                     Se déconnecter
                   </button>
                 </form>
               </>
             ) : (
-              <Link href="/connexion" className={`${linkClass} flex items-center gap-1`}>
+              <Link href="/connexion" className={`${accountLinkClass} flex items-center gap-1`}>
                 <BrandIcon name="mon-compte" className="size-8" />
                 <span className="sr-only whitespace-nowrap sm:not-sr-only">Se connecter</span>
               </Link>

@@ -60,7 +60,7 @@ export default async function HomePage() {
                   className="flex h-full flex-col items-start gap-3 rounded-xl border border-line bg-surface p-4 hover:border-brand-blue"
                 >
                   <BrandIcon name={icon} className="size-10" />
-                  <span className="text-sm font-medium">{family.name}</span>
+                  <span className="max-w-full wrap-anywhere max-sm:hyphens-auto text-sm font-medium">{family.name}</span>
                 </Link>
               </li>
             );

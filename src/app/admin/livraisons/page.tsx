@@ -29,7 +29,7 @@ export default async function DeliveriesPage({ searchParams }: { searchParams: S
         </Link>
       </PageHeader>
       <form method="get" className="mb-4 flex flex-wrap items-end gap-3">
-        <div className="flex flex-col gap-1">
+        <div className="flex max-w-full flex-col gap-1">
           <label htmlFor="filtre-statut-livraison" className="text-sm font-medium">
             Statut
           </label>
@@ -42,7 +42,7 @@ export default async function DeliveriesPage({ searchParams }: { searchParams: S
             ))}
           </select>
         </div>
-        <div className="flex flex-col gap-1">
+        <div className="flex max-w-full flex-col gap-1">
           <label htmlFor="filtre-livreur" className="text-sm font-medium">
             Livreur
           </label>
